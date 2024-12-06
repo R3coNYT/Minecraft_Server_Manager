@@ -1,4 +1,0 @@
-# Exécuter le fichier Linux.sh pour créer le serveur et le lancer
-
-# Le panel web se trouve sur http://localhost:5000
-# Vous pourrez démarrer le serveur minecraft sur le panel web et le serveur Minecraft sera accessible sur localhost:25565
