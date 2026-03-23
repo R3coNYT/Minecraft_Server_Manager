@@ -1,1 +1,1 @@
-# Minecraft-Server-Manager
+# Minecraft_Server_Manager
