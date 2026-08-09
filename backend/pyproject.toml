@@ -1,0 +1,92 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "msm"
+version = "2.0.0.dev0"
+description = "Minecraft Server Manager — panneau de contrôle multi-serveurs"
+requires-python = ">=3.11"
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.35",
+    "alembic>=1.14",
+    "aiosqlite>=0.20",
+    "argon2-cffi>=23.1",
+    "cryptography>=43.0",
+    "psutil>=6.1",
+    "structlog>=24.4",
+    "python-multipart>=0.0.12",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# Dépendances spécifiques à Windows : arbre de processus atomique (Job Object)
+# et pseudo-terminal (ConPTY). Facultatives — repli automatique via psutil.
+windows = [
+    "pywin32>=306; sys_platform == 'win32'",
+    "pywinpty>=2.0; sys_platform == 'win32'",
+]
+postgres = ["asyncpg>=0.30"]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "httpx>=0.27",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[project.scripts]
+msm = "msm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["msm*"]
+
+# --------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = ["error::DeprecationWarning:msm.*"]
+markers = [
+    "posix_only: test dépendant de primitives POSIX",
+    "windows_only: test dépendant de primitives Windows",
+    "slow: test impliquant de réelles temporisations de processus",
+]
+
+# --------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "PTH", "RUF", "S"]
+ignore = [
+    "S101",   # assert : légitime dans les tests
+    "B008",   # Depends() en valeur par défaut : idiome FastAPI
+    "UP042",  # `str, Enum` plutôt que StrEnum : conserve la compatibilité avec
+              # SQLAlchemy `Enum(..., native_enum=False)` et la sérialisation JSON
+    "N818",   # noms d'exceptions sans suffixe `Error` : `ServerAlreadyRunning`
+              # se lit mieux que `ServerAlreadyRunningError` sur les sites d'appel
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "N802", "E501"]
+# Les valeurs de l'énumération d'audit ressemblent à des secrets pour le linter.
+"msm/db/models/audit.py" = ["S105"]
+
+# --------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["psutil.*", "win32api.*", "win32job.*", "win32con.*", "winpty.*"]
+ignore_missing_imports = true

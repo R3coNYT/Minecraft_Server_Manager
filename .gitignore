@@ -1,0 +1,36 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# --- MSM runtime data (ne JAMAIS committer) ---
+.env
+config.yaml
+data/
+logs/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+uploads/
+quarantine/
+cache/skins/
+
+# --- OS / éditeurs ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

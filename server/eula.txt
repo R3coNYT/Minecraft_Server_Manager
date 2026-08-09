@@ -1,3 +1,0 @@
-En changeant ce paramètre sur true, vous acceptez notre EULA (https://account.mojang.com/documents/minecraft_eula).
-2024-11-18
-eula=true
