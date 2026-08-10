@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import (
     JSON,
     Boolean,
-    DateTime,
     Enum,
     Float,
     ForeignKey,
@@ -22,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from msm.core.restart_policy import AutoRestartMode
 from msm.core.states import ServerState
 from msm.db.base import Base, TimestampMixin
+from msm.db.types import UtcDateTime
 from msm.minecraft.types import ServerType
 
 if TYPE_CHECKING:
@@ -140,8 +140,8 @@ class ServerRuntimeStateRow(Base):
     group_id: Mapped[int | None] = mapped_column(Integer)
     process_create_time: Mapped[float | None] = mapped_column(Float)
 
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    stopped_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     last_exit_code: Mapped[int | None] = mapped_column(Integer)
     consecutive_crashes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     stop_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, MetaData, func
+from sqlalchemy import MetaData, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from msm.db.types import UtcDateTime
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -40,10 +42,10 @@ class TimestampMixin:
     """Colonnes de création et de mise à jour, gérées par la base."""
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        UtcDateTime, server_default=func.now(), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UtcDateTime,
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,

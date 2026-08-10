@@ -51,14 +51,26 @@ class Subscription:
 
     def __init__(self, bus: EventBus, topics: frozenset[str], maxsize: int) -> None:
         self._bus = bus
-        self._topics = topics
+        self._topics: set[str] = set(topics)
         self._queue: asyncio.Queue[Event] = asyncio.Queue(maxsize=maxsize)
         self._dropped = 0
         self._closed = False
 
     @property
     def topics(self) -> frozenset[str]:
-        return self._topics
+        return frozenset(self._topics)
+
+    def add_topic(self, topic: str) -> None:
+        """Étend l'abonnement en cours de route.
+
+        Une connexion WebSocket peut suivre plusieurs serveurs : une file
+        unique par connexion, aux sujets modifiables, évite d'avoir à
+        surveiller autant de files que de serveurs suivis.
+        """
+        self._topics.add(topic)
+
+    def remove_topic(self, topic: str) -> None:
+        self._topics.discard(topic)
 
     @property
     def dropped(self) -> int:

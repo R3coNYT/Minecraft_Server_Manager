@@ -15,7 +15,6 @@ from typing import Any
 from sqlalchemy import (
     JSON,
     Boolean,
-    DateTime,
     ForeignKey,
     Integer,
     String,
@@ -28,6 +27,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from msm.db.base import Base, TimestampMixin
+from msm.db.types import UtcDateTime
 
 
 class Player(Base):
@@ -44,8 +44,8 @@ class Player(Base):
     uuid: Mapped[str | None] = mapped_column(String(36), index=True)
     username: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
 
-    first_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_seen: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    last_seen: Mapped[datetime | None] = mapped_column(UtcDateTime)
     total_sessions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     is_op: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -67,7 +67,7 @@ class SkinCache(Base):
     texture_url: Mapped[str | None] = mapped_column(String(512))
     #: Chemin local de l'avatar mis en cache, relatif au dossier de données.
     avatar_path: Mapped[str | None] = mapped_column(String(512))
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    fetched_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
     #: Marqué quand l'API externe n'a rien renvoyé : évite de la solliciter en boucle.
     not_found: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -116,8 +116,8 @@ class EventRun(Base):
     )
     current_step: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_steps: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     log: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
     error: Mapped[str | None] = mapped_column(Text)
 
@@ -146,7 +146,7 @@ class Backup(Base):
         nullable=False,
         default=BackupStatus.PENDING,
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     error: Mapped[str | None] = mapped_column(Text)
 

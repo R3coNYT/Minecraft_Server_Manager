@@ -19,7 +19,8 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 ## État d'avancement
 
 - [x] **Phase 0** — fondations : configuration, logging, erreurs, base de données, CI
-- [ ] **Phase 1** — cœur : process manager, console, WebSocket, auth, frontend *(en cours)*
+- [x] **Phase 1 (backend)** — process manager, authentification, RBAC, audit, CRUD serveurs, console, WebSocket
+- [ ] **Phase 1 (frontend)** — interface React *(prochaine étape)*
 - [ ] **Phase 2** — Minecraft : détection, EULA, joueurs, skins, actions
 - [ ] **Phase 3** — fichiers : mods, plugins, configs, server.properties
 - [ ] **Phase 4** — événements
@@ -39,6 +40,26 @@ python -m venv .venv
 # Linux/macOS : source .venv/bin/activate
 # Windows     : .venv\Scripts\activate
 pip install -e ".[dev]"
+```
+
+Préparer la base et le premier compte, puis démarrer :
+
+```bash
+python -m msm.cli migrate
+```
+
+```bash
+python -m msm.cli createadmin flavien
+```
+
+```bash
+python -m msm.cli serve
+```
+
+L'API répond alors sur <http://127.0.0.1:8000/api/v1/health> et sa documentation
+interactive sur <http://127.0.0.1:8000/api/docs>.
+
+```bash
 pytest
 ```
 

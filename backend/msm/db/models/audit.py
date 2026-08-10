@@ -14,11 +14,12 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
 from msm.db.base import Base
+from msm.db.types import UtcDateTime
 
 
 class AuditAction(str, Enum):
@@ -89,7 +90,7 @@ class AuditLog(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ts: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
 
     #: Nul pour les actions du système (redémarrage automatique, tâche planifiée).
     actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))

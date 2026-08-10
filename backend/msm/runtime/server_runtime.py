@@ -130,6 +130,15 @@ class ServerRuntime:
         return self._handle.pid if self._handle else None
 
     @property
+    def group_id(self) -> int | None:
+        return self._handle.group_id if self._handle else None
+
+    @property
+    def process_create_time(self) -> float | None:
+        """Date de création du processus, comparée au PID lors d'une réadoption."""
+        return self._handle.create_time if self._handle else None
+
+    @property
     def stats(self) -> ProcessStats:
         return self._stats
 
