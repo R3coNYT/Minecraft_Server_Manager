@@ -223,11 +223,26 @@ l'emporte.**
 
 ### Système de fichiers
 
-Résolution stricte : la cible finale doit rester sous la racine du serveur, y
-compris après résolution des liens symboliques. Sous Windows, la comparaison est
-insensible à la casse — sans quoi `MODS/../..` contournerait un test de préfixe.
-Les uploads sont limités en taille, filtrés par extension, renommés de façon sûre,
-écrits en quarantaine puis déplacés atomiquement, et **jamais rendus exécutables**.
+Toute opération passe par `resolve_within` — aucune route ne construit de chemin
+elle-même. La comparaison porte sur le chemin **résolu**, donc après résolution
+des liens symboliques : un lien `mods/evasion` pointant vers `/etc` désigne bien
+`/etc` et se fait refuser, là où une vérification de préfixe textuel l'aurait
+laissé passer. Sous Windows, la comparaison est normalisée en casse, sans quoi
+`MODS/../..` contournerait le contrôle.
+
+Les noms de fichiers téléversés sont **reconstruits**, jamais réutilisés : seuls
+les caractères reconnus sont conservés, l'extension est vérifiée contre une liste
+courte propre à chaque dossier, les noms réservés de Windows sont refusés, et le
+bit d'exécution est retiré. MSM ne lance jamais un fichier reçu.
+
+**Les écritures sont atomiques** : fichier temporaire du même dossier puis
+remplacement. Une coupure ne peut pas laisser un `server.properties` tronqué,
+ce qui empêcherait le serveur de redémarrer.
+
+L'éditeur de configurations **valide sans jamais reformater** : le contenu soumis
+est vérifié syntaxiquement puis écrit tel quel, fins de ligne comprises. Passer
+par un analyseur puis un sérialiseur détruirait les commentaires dont dépendent
+la plupart des configurations de mods.
 
 ### Audit
 

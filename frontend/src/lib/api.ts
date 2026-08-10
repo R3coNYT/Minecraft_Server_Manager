@@ -19,8 +19,12 @@ import type {
   Detection,
   Health,
   LauncherInfo,
+  ConfigEntry,
+  ConfigFile,
   LogsPage,
+  ManagedFile,
   Me,
+  PropertiesPage,
   Player,
   PlayerActionResult,
   Server,
@@ -141,6 +145,34 @@ function safeParse(text: string): unknown {
   }
 }
 
+async function sendForm<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = {}
+  const csrf = readCookie('msm_csrf')
+  if (csrf) headers['X-CSRF-Token'] = csrf
+
+  let response: Response
+  try {
+    response = await fetch(`${BASE}${path}`, {
+      method: 'POST',
+      headers,
+      credentials: 'same-origin',
+      body: form,
+    })
+  } catch (error) {
+    throw new NetworkError(error instanceof Error ? error.message : String(error))
+  }
+
+  const text = await response.text()
+  const payload = text ? safeParse(text) : null
+  if (!response.ok) {
+    throw new ApiError(response.status, (payload as ApiErrorBody) ?? {
+      code: `HTTP_${response.status}`,
+      message: 'Erreur inattendue',
+    })
+  }
+  return payload as T
+}
+
 function playerAction(
   serverId: number,
   username: string,
@@ -226,6 +258,49 @@ export const api = {
       playerAction(serverId, username, 'give', { item, count }),
     teleport: (serverId: number, username: string, destination: string) =>
       playerAction(serverId, username, 'teleport', { destination }),
+  },
+
+  files: {
+    list: (serverId: number, area: string) =>
+      request<ManagedFile[]>(`/servers/${serverId}/files/${area}`),
+    remove: (serverId: number, area: string, name: string) =>
+      request<{ status: string }>(
+        `/servers/${serverId}/files/${area}/${encodeURIComponent(name)}`,
+        { method: 'DELETE' },
+      ),
+    toggle: (serverId: number, area: string, name: string, enabled: boolean) =>
+      request<ManagedFile>(
+        `/servers/${serverId}/files/${area}/${encodeURIComponent(name)}/toggle`,
+        { method: 'POST', body: { enabled } },
+      ),
+    /** Le téléversement passe par `FormData` : pas de JSON pour un binaire. */
+    upload: async (serverId: number, area: string, file: File, overwrite = false) => {
+      const form = new FormData()
+      form.append('file', file)
+      form.append('overwrite', String(overwrite))
+      return sendForm<ManagedFile>(`/servers/${serverId}/files/${area}`, form)
+    },
+  },
+
+  configs: {
+    browse: (serverId: number, path?: string) =>
+      request<ConfigEntry[]>(`/servers/${serverId}/configs`, { params: { path } }),
+    read: (serverId: number, path: string) =>
+      request<ConfigFile>(`/servers/${serverId}/configs/file`, { params: { path } }),
+    write: (serverId: number, path: string, content: string) =>
+      request<{ path: string; size_bytes: number; modified_at: string }>(
+        `/servers/${serverId}/configs/file`,
+        { method: 'PUT', params: { path }, body: { content } },
+      ),
+  },
+
+  properties: {
+    read: (serverId: number) => request<PropertiesPage>(`/servers/${serverId}/properties`),
+    update: (serverId: number, changes: Record<string, string>) =>
+      request<{ updated: string[]; requires_restart: boolean }>(
+        `/servers/${serverId}/properties`,
+        { method: 'PUT', body: { changes } },
+      ),
   },
 
   users: {

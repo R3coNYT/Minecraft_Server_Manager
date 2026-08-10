@@ -15,6 +15,9 @@ import { OverviewPage } from '@/pages/server/OverviewPage'
 import { ConsolePage } from '@/pages/server/ConsolePage'
 import { PlayersPage } from '@/pages/server/PlayersPage'
 import { ComingSoonPage } from '@/pages/server/ComingSoonPage'
+import { FilesPage } from '@/pages/server/FilesPage'
+import { ConfigsPage } from '@/pages/server/ConfigsPage'
+import { PropertiesPage } from '@/pages/server/PropertiesPage'
 
 /**
  * Garde d'accès.
@@ -63,36 +66,10 @@ export function App() {
           <Route index element={<OverviewPage />} />
           <Route path="console" element={<ConsolePage />} />
           <Route path="players" element={<PlayersPage />} />
-          <Route
-            path="mods"
-            element={
-              <ComingSoonPage
-                title="Gestion des mods"
-                phase="phase 3"
-                description="Lister, téléverser, activer ou désactiver les fichiers du dossier mods/. La désactivation renommera le fichier plutôt que de le supprimer."
-              />
-            }
-          />
-          <Route
-            path="plugins"
-            element={
-              <ComingSoonPage
-                title="Gestion des plugins"
-                phase="phase 3"
-                description="Même principe que les mods, appliqué au dossier plugins/ des serveurs compatibles Bukkit."
-              />
-            }
-          />
-          <Route
-            path="configs"
-            element={
-              <ComingSoonPage
-                title="Éditeur de configurations"
-                phase="phase 3"
-                description="Édition des fichiers .json, .toml, .yaml et .properties avec coloration et validation syntaxique, plus une interface dédiée à server.properties."
-              />
-            }
-          />
+          <Route path="mods" element={<FilesPage area="mods" label="Mods" />} />
+          <Route path="plugins" element={<FilesPage area="plugins" label="Plugins" />} />
+          <Route path="properties" element={<PropertiesPage />} />
+          <Route path="configs" element={<ConfigsPage />} />
           <Route
             path="events"
             element={

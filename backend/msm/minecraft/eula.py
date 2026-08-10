@@ -16,13 +16,12 @@ Deux règles strictes :
 
 from __future__ import annotations
 
-import os
 import re
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 from msm.logging_conf import get_logger
+from msm.utils.files import atomic_write_bytes
 
 logger = get_logger(__name__)
 
@@ -108,22 +107,6 @@ def accept(directory: Path) -> bool:
     if not modified:  # pragma: no cover - incohérent avec read_status
         return False
 
-    _atomic_write(path, b"".join(lines))
+    atomic_write_bytes(path, b"".join(lines))
     logger.info("eula_accepted", path=str(path))
     return True
-
-
-def _atomic_write(path: Path, content: bytes) -> None:
-    """Écrit le contenu via un fichier temporaire du même dossier, puis remplace."""
-    directory = path.parent
-    descriptor, temporary = tempfile.mkstemp(dir=directory, prefix=".eula-", suffix=".tmp")
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            handle.write(content)
-            handle.flush()
-            os.fsync(handle.fileno())
-        # Le remplacement est atomique sur POSIX comme sous Windows.
-        Path(temporary).replace(path)
-    except BaseException:
-        Path(temporary).unlink(missing_ok=True)
-        raise

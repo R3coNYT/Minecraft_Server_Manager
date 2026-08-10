@@ -8,7 +8,16 @@
  */
 
 import { NavLink, Outlet, useParams } from 'react-router-dom'
-import { Terminal, Users, Package, Puzzle, Settings, FileCog, CalendarClock } from 'lucide-react'
+import {
+  CalendarClock,
+  FileCog,
+  Package,
+  Puzzle,
+  Settings,
+  Settings2,
+  Terminal,
+  Users,
+} from 'lucide-react'
 import { hasPermission, useMe, useServer, useServerStatus } from '@/hooks/useApi'
 import { useServerSubscription } from '@/hooks/useServerSubscription'
 import { formatUptime, formatMemory, formatPercent } from '@/lib/format'
@@ -32,6 +41,7 @@ const TABS: TabDefinition[] = [
   { to: 'players', label: 'Joueurs', icon: Users, capability: 'players' },
   { to: 'mods', label: 'Mods', icon: Package, capability: 'mods' },
   { to: 'plugins', label: 'Plugins', icon: Puzzle, capability: 'plugins' },
+  { to: 'properties', label: 'Réglages', icon: Settings2, capability: 'properties' },
   { to: 'configs', label: 'Configurations', icon: FileCog, capability: 'configs' },
   { to: 'events', label: 'Événements', icon: CalendarClock, capability: 'events' },
 ]

@@ -132,6 +132,51 @@ export interface PlayerActionResult {
   command: string
 }
 
+export interface ManagedFile {
+  name: string
+  size_bytes: number
+  modified_at: string
+  enabled: boolean
+}
+
+export interface ConfigEntry {
+  name: string
+  path: string
+  is_directory: boolean
+  size_bytes: number
+  modified_at: string
+  format: string
+  editable: boolean
+}
+
+export interface ConfigFile {
+  path: string
+  name: string
+  format: string
+  content: string
+  encoding: string
+  size_bytes: number
+  modified_at: string
+}
+
+export interface ServerProperty {
+  key: string
+  value: string
+  known: boolean
+  label: string
+  type: 'boolean' | 'integer' | 'string' | 'enum'
+  choices: string[]
+  minimum: number | null
+  maximum: number | null
+  requires_restart: boolean
+  help: string
+}
+
+export interface PropertiesPage {
+  exists: boolean
+  entries: ServerProperty[]
+}
+
 export interface SystemStats {
   cpu_percent: number
   cpu_count: number
