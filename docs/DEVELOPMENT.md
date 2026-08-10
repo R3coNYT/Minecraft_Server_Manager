@@ -125,6 +125,52 @@ interactive sur <http://127.0.0.1:8000/api/docs> (désactivée en production).
 > Minecraft. Avec plusieurs workers, chaque processus n'aurait qu'une vision
 > partielle et personne ne saurait qui possède quel PID.
 
+## Frontend
+
+```bash
+cd frontend
+```
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Le serveur de développement écoute sur le port 5173 et **relaie** `/api` et `/ws`
+vers le backend (port 8000). Ce n'est pas un simple confort : sans relais, le
+frontend et l'API seraient deux origines distinctes, et le cookie de session
+exigerait `SameSite=None; Secure` — donc HTTPS en développement. Avec le relais,
+le mode développement se comporte comme la production.
+
+Vérification des types et compilation :
+
+```bash
+npm run typecheck
+```
+
+```bash
+npm run build
+```
+
+### Organisation
+
+| Dossier | Rôle |
+|---|---|
+| `src/lib/` | client HTTP (CSRF, normalisation des erreurs), types, formatage |
+| `src/ws/` | client WebSocket : reconnexion, reprise par numéro de séquence |
+| `src/stores/` | état temps réel et notifications (zustand) |
+| `src/hooks/` | accès aux données (TanStack Query) et abonnements |
+| `src/components/` | primitives d'interface, console, actions serveur |
+| `src/pages/` | écrans, un fichier par route |
+
+Deux caches cohabitent volontairement : **TanStack Query** détient ce qui est
+configuré et se recharge à la demande ; le **store temps réel** détient ce qui
+change en continu et arrive par WebSocket. Aucun écran n'interroge l'API en
+boucle.
+
 ## Conventions
 
 | Règle | Raison |

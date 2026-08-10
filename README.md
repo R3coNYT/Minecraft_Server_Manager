@@ -19,8 +19,7 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 ## État d'avancement
 
 - [x] **Phase 0** — fondations : configuration, logging, erreurs, base de données, CI
-- [x] **Phase 1 (backend)** — process manager, authentification, RBAC, audit, CRUD serveurs, console, WebSocket
-- [ ] **Phase 1 (frontend)** — interface React *(prochaine étape)*
+- [x] **Phase 1** — process manager, authentification, RBAC, audit, CRUD serveurs, console temps réel, WebSocket, interface React
 - [ ] **Phase 2** — Minecraft : détection, EULA, joueurs, skins, actions
 - [ ] **Phase 3** — fichiers : mods, plugins, configs, server.properties
 - [ ] **Phase 4** — événements
@@ -58,6 +57,26 @@ python -m msm.cli serve
 
 L'API répond alors sur <http://127.0.0.1:8000/api/v1/health> et sa documentation
 interactive sur <http://127.0.0.1:8000/api/docs>.
+
+Dans un second terminal, l'interface :
+
+```bash
+cd frontend
+```
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+Le panneau est alors accessible sur <http://localhost:5173>. Le serveur de
+développement relaie `/api` et `/ws` vers le backend, de sorte que le cookie de
+session fonctionne exactement comme en production.
+
+Les tests :
 
 ```bash
 pytest

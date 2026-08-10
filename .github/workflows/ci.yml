@@ -61,3 +61,29 @@ jobs:
           alembic upgrade head
           # Une différence détectée ici signifie qu'un modèle a changé sans migration.
           alembic check
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Vérification des types
+        run: npm run typecheck
+
+      - name: Compilation
+        run: npm run build
