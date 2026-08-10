@@ -42,6 +42,9 @@ from msm.runtime.stats import EMPTY_STATS, ProcessStats, StatsCollector
 
 logger = get_logger(__name__)
 
+#: Plafond du vestibule d'UUID en attente de connexion confirmée.
+_MAX_PENDING_UUIDS = 64
+
 
 @dataclass(frozen=True, slots=True)
 class ServerRuntimeConfig:
@@ -105,6 +108,8 @@ class ServerRuntime:
         self._restart_task: asyncio.Task[None] | None = None
 
         self._online_players: dict[str, str | None] = {}
+        #: UUID annoncés mais dont la connexion n'est pas encore confirmée.
+        self._pending_uuids: dict[str, str] = {}
 
     # ------------------------------------------------------------------ #
     #  Lecture d'état
@@ -145,6 +150,11 @@ class ServerRuntime:
     @property
     def online_players(self) -> tuple[str, ...]:
         return tuple(sorted(self._online_players))
+
+    @property
+    def online_player_map(self) -> dict[str, str | None]:
+        """Joueurs connectés et leur UUID quand le serveur l'a annoncé."""
+        return dict(self._online_players)
 
     @property
     def uptime_s(self) -> float:
@@ -262,6 +272,7 @@ class ServerRuntime:
         self._started_at = datetime.now(UTC)
         self._stats_collector = StatsCollector(spawned.pid)
         self._online_players.clear()
+        self._pending_uuids.clear()
 
         self._reader_task = asyncio.create_task(
             self._pump_output(handle), name=f"msm-logs-{self.id}"
@@ -523,6 +534,7 @@ class ServerRuntime:
 
         self._stats = EMPTY_STATS
         self._online_players.clear()
+        self._pending_uuids.clear()
         self._publish_players()
 
         decision = self._config.restart_policy.evaluate(
@@ -601,26 +613,30 @@ class ServerRuntime:
                     self._set_state(ServerState.STOPPING, reason="Arrêt en cours.")
 
             case MinecraftEventKind.PLAYER_JOIN if event.username:
-                self._online_players.setdefault(event.username, None)
+                # L'UUID a été annoncé quelques lignes plus tôt : on le récupère
+                # dans le vestibule plutôt que de le perdre.
+                uuid = self._pending_uuids.pop(event.username, None)
+                self._online_players[event.username] = uuid
                 self._bus.publish(
                     topics.server_topic(self.id, topics.PLAYER_JOIN),
-                    {"server_id": self.id, "username": event.username},
+                    {"server_id": self.id, "username": event.username, "uuid": uuid},
                 )
                 self._publish_players()
 
             case MinecraftEventKind.PLAYER_LEAVE if event.username:
-                self._online_players.pop(event.username, None)
+                uuid = self._online_players.pop(event.username, None)
                 self._bus.publish(
                     topics.server_topic(self.id, topics.PLAYER_LEAVE),
-                    {"server_id": self.id, "username": event.username},
+                    {"server_id": self.id, "username": event.username, "uuid": uuid},
                 )
                 self._publish_players()
 
             case MinecraftEventKind.PLAYER_UUID if event.username:
-                # L'UUID précède la connexion effective : on le mémorise sans
-                # considérer le joueur comme connecté.
-                if event.username in self._online_players:
-                    self._online_players[event.username] = event.uuid
+                # « UUID of player X is … » précède « X joined the game » de
+                # quelques lignes. Le joueur n'est donc pas encore connu : on
+                # met l'UUID de côté en attendant sa connexion effective.
+                if event.uuid:
+                    self._remember_uuid(event.username, event.uuid)
 
             case MinecraftEventKind.PLAYER_LIST:
                 self._online_players = {
@@ -667,6 +683,20 @@ class ServerRuntime:
 
     def _publish_line(self, line: LogLine) -> None:
         self._bus.publish(topics.server_topic(self.id, topics.LOG), line)
+
+    def _remember_uuid(self, username: str, uuid: str) -> None:
+        """Mémorise un UUID annoncé, en bornant le vestibule.
+
+        Une tentative de connexion peut échouer après l'annonce de l'UUID (liste
+        blanche, bannissement) : sans limite, ces entrées s'accumuleraient pour
+        la durée de vie du serveur.
+        """
+        if username in self._online_players:
+            self._online_players[username] = uuid
+            return
+        if len(self._pending_uuids) >= _MAX_PENDING_UUIDS:
+            self._pending_uuids.pop(next(iter(self._pending_uuids)), None)
+        self._pending_uuids[username] = uuid
 
     def _publish_players(self) -> None:
         self._bus.publish(

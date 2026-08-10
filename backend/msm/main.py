@@ -30,6 +30,7 @@ from msm.runtime.agent import LocalAgent
 from msm.runtime.backends import get_backend
 from msm.runtime.stats import system_stats
 from msm.runtime.supervisor import Supervisor
+from msm.services.player_recorder import PlayerRecorder
 from msm.services.server_service import ServerService
 from msm.ws import websocket_router
 
@@ -74,6 +75,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     stats_task = asyncio.create_task(_publish_system_stats(settings), name="msm-system-stats")
 
+    # Consomme les événements joueur du bus pour en tenir l'historique en base.
+    recorder = PlayerRecorder(get_event_bus())
+    recorder.start()
+
     logger.info(
         "msm_started",
         version=__version__,
@@ -89,6 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         stats_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await stats_task
+        await recorder.stop()
         # Les serveurs Minecraft ne sont PAS arrêtés : redémarrer le panel ne doit
         # pas déconnecter les joueurs. Ils seront réadoptés au prochain démarrage.
         await supervisor.shutdown(stop_servers=False)

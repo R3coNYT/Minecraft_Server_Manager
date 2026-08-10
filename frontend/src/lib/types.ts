@@ -111,6 +111,27 @@ export interface Server {
   status: ServerStatus | null
 }
 
+export interface Player {
+  username: string
+  uuid: string | null
+  online: boolean
+  is_op: boolean
+  is_banned: boolean
+  is_whitelisted: boolean
+  op_level: number | null
+  ban_reason: string | null
+  first_seen: string | null
+  last_seen: string | null
+  total_sessions: number
+  /** Toujours nul : Minecraft n'expose pas le ping par joueur. */
+  ping_ms: number | null
+}
+
+export interface PlayerActionResult {
+  username: string
+  command: string
+}
+
 export interface SystemStats {
   cpu_percent: number
   cpu_count: number

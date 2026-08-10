@@ -22,9 +22,16 @@ Six exigences déterminent l'essentiel des choix. Tout le reste en découle.
 ### Trois limites assumées et documentées
 
 **Le ping par joueur n'existe pas en Minecraft vanilla.** Aucune commande console
-ne le fournit. L'abstraction `PlayerDataProvider` permet à un fournisseur RCON ou
-à un plugin de l'apporter plus tard ; en son absence, l'interface affiche `—`
-plutôt qu'une valeur inventée.
+ne le fournit. Le champ `ping_ms` existe dans l'API et vaut toujours `null` ;
+l'interface affiche `—` plutôt qu'une valeur inventée. Un fournisseur RCON ou un
+plugin pourra le renseigner sans changer le contrat.
+
+**Les statuts des joueurs viennent des fichiers du serveur, pas des logs.**
+`ops.json`, `banned-players.json`, `whitelist.json` et `usercache.json` sont la
+seule source fiable : la console n'annonce pas qui est opérateur, et rejouer
+l'historique des commandes serait faux dès qu'un fichier a été édité à la main.
+Ces fichiers sont lus, jamais écrits — accorder un statut passe toujours par une
+commande console, pour que le serveur en tienne compte immédiatement.
 
 **`run.sh` et l'entrée standard.** Écrire dans l'entrée d'un script fonctionne
 seulement si celui-ci ne la redirige pas et ne met pas Java en arrière-plan. Trois

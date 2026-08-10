@@ -21,6 +21,8 @@ import type {
   LauncherInfo,
   LogsPage,
   Me,
+  Player,
+  PlayerActionResult,
   Server,
   StopResult,
   SystemStats,
@@ -139,6 +141,18 @@ function safeParse(text: string): unknown {
   }
 }
 
+function playerAction(
+  serverId: number,
+  username: string,
+  action: string,
+  body?: unknown,
+): Promise<PlayerActionResult> {
+  return request<PlayerActionResult>(
+    `/servers/${serverId}/players/${encodeURIComponent(username)}/${action}`,
+    { method: 'POST', body: body ?? {} },
+  )
+}
+
 /** Surface complète de l'API, groupée par domaine. */
 export const api = {
   auth: {
@@ -189,6 +203,29 @@ export const api = {
         method: 'POST',
         body: { command },
       }),
+  },
+
+  players: {
+    list: (serverId: number, includeOffline = true) =>
+      request<Player[]>(`/servers/${serverId}/players`, {
+        params: { include_offline: includeOffline },
+      }),
+    /** URL du skin, relayée par MSM — jamais un appel direct à un tiers. */
+    skinUrl: (serverId: number, username: string) =>
+      `${BASE}/servers/${serverId}/players/${encodeURIComponent(username)}/skin.png`,
+
+    op: (serverId: number, username: string) => playerAction(serverId, username, 'op'),
+    deop: (serverId: number, username: string) => playerAction(serverId, username, 'deop'),
+    kill: (serverId: number, username: string) => playerAction(serverId, username, 'kill'),
+    unban: (serverId: number, username: string) => playerAction(serverId, username, 'unban'),
+    kick: (serverId: number, username: string, reason = '') =>
+      playerAction(serverId, username, 'kick', { reason }),
+    ban: (serverId: number, username: string, reason = '') =>
+      playerAction(serverId, username, 'ban', { reason }),
+    give: (serverId: number, username: string, item: string, count: number) =>
+      playerAction(serverId, username, 'give', { item, count }),
+    teleport: (serverId: number, username: string, destination: string) =>
+      playerAction(serverId, username, 'teleport', { destination }),
   },
 
   users: {

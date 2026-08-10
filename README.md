@@ -20,7 +20,7 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 
 - [x] **Phase 0** — fondations : configuration, logging, erreurs, base de données, CI
 - [x] **Phase 1** — process manager, authentification, RBAC, audit, CRUD serveurs, console temps réel, WebSocket, interface React
-- [ ] **Phase 2** — Minecraft : détection, EULA, joueurs, skins, actions
+- [x] **Phase 2** — joueurs : identité et historique, skins, statuts (opérateur, banni, liste blanche), modération
 - [ ] **Phase 3** — fichiers : mods, plugins, configs, server.properties
 - [ ] **Phase 4** — événements
 - [ ] **Phase 5** — administration : audit, utilisateurs, monitoring, sauvegardes
