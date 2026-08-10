@@ -67,6 +67,37 @@ class PosixProcessBackend(ProcessBackend):
     def kill_tree(self, spawned: SpawnedProcess) -> bool:
         return self._signal_group(spawned, signal.SIGKILL)
 
+    def terminate_external(
+        self,
+        pid: int,
+        group_id: int | None = None,
+        create_time: float | None = None,
+        *,
+        force: bool = False,
+    ) -> bool:
+        """Signale le groupe d'un processus réadopté.
+
+        ``SIGTERM`` déclenche les crochets d'arrêt de la JVM : un serveur
+        Minecraft sauvegarde son monde puis s'arrête proprement, même sans accès
+        à sa console.
+        """
+        if not self.is_alive(pid, create_time):
+            return False
+
+        target = group_id or pid
+        if target in (0, os.getpgrp()):
+            logger.error("external_signal_refused", reason="groupe de MSM", group_id=target)
+            return False
+
+        try:
+            os.killpg(target, signal.SIGKILL if force else signal.SIGTERM)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            logger.error("external_signal_denied", pid=pid, group_id=target)
+            return False
+        return True
+
     def is_alive(self, pid: int, create_time: float | None = None) -> bool:
         try:
             process = psutil.Process(pid)

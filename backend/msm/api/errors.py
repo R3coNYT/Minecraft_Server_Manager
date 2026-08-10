@@ -22,7 +22,7 @@ import uuid
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from msm.exceptions import MsmError
@@ -49,8 +49,18 @@ async def msm_error_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content=exc.to_payload(trace_id))
 
 
-async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: Exception) -> Response:
     assert isinstance(exc, StarletteHTTPException)
+
+    # Un 404 sur un chemin d'interface renvoie la page : le routage de la SPA se
+    # fait côté navigateur, donc `/servers/3/console` n'existe pas côté serveur.
+    if exc.status_code == 404:
+        from msm.web import spa_response
+
+        page = spa_response(request.app, request.url.path)
+        if page is not None:
+            return page
+
     return JSONResponse(
         status_code=exc.status_code,
         content={

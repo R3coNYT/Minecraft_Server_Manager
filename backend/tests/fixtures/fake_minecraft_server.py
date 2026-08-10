@@ -19,6 +19,7 @@ Options de simulation :
 ``--exit-code N``       code de sortie à utiliser en cas de plantage simulé
 ``--spawn-child``       lancer un sous-processus enfant (simule ``run.sh`` → Java)
 ``--heartbeat S``       émettre une ligne de log toutes les S secondes
+``--survive-eof``       continuer après fermeture de l'entrée standard
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--exit-code", type=int, default=1)
     parser.add_argument("--spawn-child", action="store_true")
     parser.add_argument("--heartbeat", type=float, default=None)
+    parser.add_argument("--survive-eof", action="store_true")
     parser.add_argument("--name", default="FakeServer")
     return parser.parse_args(argv)
 
@@ -173,6 +175,13 @@ def main(argv: list[str] | None = None) -> int:
         except (KeyboardInterrupt, ValueError):
             break
         if not raw:  # EOF : le parent a fermé le tube
+            if args.survive_eof:
+                # Comportement d'un vrai serveur Minecraft : la fin de son flux
+                # d'entrée arrête la lecture des commandes, pas le serveur. C'est
+                # ce qui lui permet de survivre à l'arrêt de MSM.
+                emit("Server thread", "INFO", "Console input closed; server keeps running")
+                while True:
+                    time.sleep(3600)
             break
         command = raw.strip()
         if not command:

@@ -82,6 +82,23 @@ class ProcessBackend(ABC):
         """Termine le processus **et sa descendance**, sans toucher au reste."""
 
     @abstractmethod
+    def terminate_external(
+        self,
+        pid: int,
+        group_id: int | None = None,
+        create_time: float | None = None,
+        *,
+        force: bool = False,
+    ) -> bool:
+        """Arrête un processus dont MSM ne détient plus les tubes.
+
+        C'est le cas d'un serveur réadopté après un redémarrage du panneau :
+        l'objet ``Process`` d'origine a disparu avec le processus précédent, mais
+        le PID et le groupe restent connus. La garde anti-PID recyclé s'applique
+        exactement comme pour un processus lancé par MSM.
+        """
+
+    @abstractmethod
     def is_alive(self, pid: int, create_time: float | None = None) -> bool:
         """Le processus existe-t-il toujours et est-ce bien le même ?
 

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from msm.config import Settings
 from msm.core.restart_policy import AutoRestartMode, RestartPolicy
+from msm.core.states import ServerState
 from msm.db.models.audit import AuditAction
 from msm.db.models.server import Server, ServerSettings
 from msm.db.models.user import User
@@ -317,6 +318,52 @@ class ServerService:
                 )
         logger.info("servers_registered", count=registered)
         return registered
+
+    async def adopt_running(self) -> int:
+        """Réadopte les serveurs qui ont survécu à un redémarrage de MSM.
+
+        Appelée une fois au démarrage, après :meth:`register_all`. Un serveur
+        dont le processus est toujours vivant reprend son suivi ; les autres
+        voient leur état remis à zéro, sans quoi le tableau de bord afficherait
+        indéfiniment « en ligne » des serveurs éteints depuis longtemps.
+        """
+        adopted = 0
+        for server in await self._servers.list_all(only_enabled=True):
+            state = server.runtime_state
+            runtime = self._supervisor.find(server.id)
+            if runtime is None or state is None:
+                continue
+
+            if state.pid is None or not state.state.is_running:
+                continue
+
+            if await runtime.adopt(
+                state.pid,
+                group_id=state.group_id,
+                create_time=state.process_create_time,
+                started_at=state.started_at,
+            ):
+                adopted += 1
+                logger.info(
+                    "server_readopted",
+                    server_id=server.id,
+                    server=server.name,
+                    pid=state.pid,
+                )
+            else:
+                # Le processus a disparu, ou son PID a été réattribué à un
+                # programme sans rapport : l'état persistant est périmé.
+                await self._servers.save_runtime_state(server.id, state=ServerState.OFFLINE)
+                logger.info(
+                    "server_state_reset",
+                    server_id=server.id,
+                    server=server.name,
+                    stale_pid=state.pid,
+                )
+
+        if adopted:
+            logger.info("servers_readopted", count=adopted)
+        return adopted
 
     # ------------------------------------------------------------------ #
     #  Validation

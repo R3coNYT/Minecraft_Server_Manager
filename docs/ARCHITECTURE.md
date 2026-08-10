@@ -38,11 +38,17 @@ seulement si celui-ci ne la redirige pas et ne met pas Java en arrière-plan. Tr
 parades : détection du vrai processus Java descendant, mode PTY optionnel, repli
 RCON. Quand aucune ne s'applique, la console passe en lecture seule **et le dit**.
 
-**Redémarrage de MSM pendant qu'un serveur tourne.** Les tubes sont perdus. Le
-couple `pid` + `date de création` est persisté ; au démarrage, un serveur encore
-vivant est réadopté en mode dégradé (état `UNKNOWN`, logs par lecture du fichier,
-commandes par RCON si configuré). L'arrêt reste possible : le groupe de processus
-est connu.
+**Redémarrage de MSM pendant qu'un serveur tourne.** Les tubes sont perdus, et
+définitivement : ils appartenaient au processus MSM précédent. Le couple `pid` +
+`date de création` est persisté à chaque changement d'état ; au démarrage, un
+serveur encore vivant est **réadopté** — état `UNKNOWN`, console alimentée par
+lecture de `logs/latest.log`, arrêt possible via le groupe de processus. La
+console reste en lecture seule et l'interface l'annonce, plutôt que de laisser
+croire qu'une commande a été transmise.
+
+La comparaison de la date de création n'est pas décorative : sans elle, un PID
+réattribué par le système ferait adopter — puis arrêter — un programme sans
+aucun rapport.
 
 ---
 

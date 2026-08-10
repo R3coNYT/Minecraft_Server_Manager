@@ -34,8 +34,9 @@ from msm.launchers import LaunchContext
 from msm.launchers import registry as launcher_registry
 from msm.logging_conf import get_logger
 from msm.minecraft import eula as eula_module
-from msm.runtime.backends import ProcessBackend
+from msm.runtime.backends import ProcessBackend, get_backend
 from msm.runtime.log_pipeline import LogPipeline
+from msm.runtime.log_tailer import LogTailer, default_log_path
 from msm.runtime.process_handle import ProcessHandle, StopOutcome, StopStage
 from msm.runtime.ring_buffer import RingBuffer
 from msm.runtime.stats import EMPTY_STATS, ProcessStats, StatsCollector
@@ -44,6 +45,9 @@ logger = get_logger(__name__)
 
 #: Plafond du vestibule d'UUID en attente de connexion confirmée.
 _MAX_PENDING_UUIDS = 64
+
+#: Fréquence de vérification de survie d'un processus réadopté.
+_ADOPTED_POLL_INTERVAL_S = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +73,20 @@ class ServerRuntimeConfig:
     restart_policy: RestartPolicy = field(default_factory=RestartPolicy)
 
 
+@dataclass(frozen=True, slots=True)
+class AdoptedProcess:
+    """Un processus retrouvé vivant après un redémarrage de MSM.
+
+    Ses tubes sont définitivement perdus — ils appartenaient au processus MSM
+    précédent — mais son identité reste connue, ce qui suffit à le surveiller et
+    à l'arrêter.
+    """
+
+    pid: int
+    group_id: int | None
+    create_time: float | None
+
+
 class ServerRuntime:
     """Pilote d'un serveur : démarrage, arrêt, console, statistiques, redémarrage."""
 
@@ -82,6 +100,8 @@ class ServerRuntime:
         self._config = config
         self._bus = bus or get_event_bus()
         self._backend = backend
+        #: Backend résolu, utilisé pour agir sur un processus réadopté.
+        self._backend_ref = backend or get_backend()
 
         self._state = ServerState.OFFLINE
         self._state_since = datetime.now(UTC)
@@ -111,6 +131,11 @@ class ServerRuntime:
         #: UUID annoncés mais dont la connexion n'est pas encore confirmée.
         self._pending_uuids: dict[str, str] = {}
 
+        #: Processus réadopté, sans tubes ; exclusif de ``_handle``.
+        self._adopted: AdoptedProcess | None = None
+        self._tailer: LogTailer | None = None
+        self._liveness_task: asyncio.Task[None] | None = None
+
     # ------------------------------------------------------------------ #
     #  Lecture d'état
     # ------------------------------------------------------------------ #
@@ -132,16 +157,27 @@ class ServerRuntime:
 
     @property
     def pid(self) -> int | None:
+        if self._adopted is not None:
+            return self._adopted.pid
         return self._handle.pid if self._handle else None
 
     @property
     def group_id(self) -> int | None:
+        if self._adopted is not None:
+            return self._adopted.group_id
         return self._handle.group_id if self._handle else None
 
     @property
     def process_create_time(self) -> float | None:
         """Date de création du processus, comparée au PID lors d'une réadoption."""
+        if self._adopted is not None:
+            return self._adopted.create_time
         return self._handle.create_time if self._handle else None
+
+    @property
+    def adopted(self) -> bool:
+        """Le serveur tourne-t-il sans que MSM ne détienne ses tubes ?"""
+        return self._adopted is not None
 
     @property
     def stats(self) -> ProcessStats:
@@ -176,6 +212,7 @@ class ServerRuntime:
             "players": list(self.online_players),
             "consecutive_crashes": self._consecutive_crashes,
             "console_writable": bool(self._handle and self._handle.stdin_available),
+            "adopted": self._adopted is not None,
             "last_error": self._last_error,
             "stats": self._stats.to_dict(),
             "log_seq": self._pipeline.last_seq,
@@ -208,6 +245,18 @@ class ServerRuntime:
             await self._start_locked(actor=actor)
 
     async def _start_locked(self, *, actor: str | None) -> None:
+        if self._adopted is not None and self._backend_ref.is_alive(
+            self._adopted.pid, self._adopted.create_time
+        ):
+            raise ServerAlreadyRunning(
+                f"Le serveur « {self._config.name} » tourne déjà.",
+                cause=(
+                    f"Un processus (PID {self._adopted.pid}) survivant à un redémarrage "
+                    "de MSM est toujours actif."
+                ),
+                remediation="Arrêter ce serveur avant de le relancer.",
+            )
+
         if self._state.is_running:
             raise ServerAlreadyRunning(
                 f"Le serveur « {self._config.name} » est déjà en cours d'exécution.",
@@ -269,6 +318,7 @@ class ServerRuntime:
             self._pipeline.emit_system(warning, level=LogLevel.WARN)
 
         self._handle = handle
+        self._adopted = None
         self._started_at = datetime.now(UTC)
         self._stats_collector = StatsCollector(spawned.pid)
         self._online_players.clear()
@@ -334,12 +384,161 @@ class ServerRuntime:
         logger.warning("server_start_failed", server_id=self.id, cause=cause)
 
     # ------------------------------------------------------------------ #
+    #  Réadoption après un redémarrage de MSM
+    # ------------------------------------------------------------------ #
+    async def adopt(
+        self,
+        pid: int,
+        *,
+        group_id: int | None = None,
+        create_time: float | None = None,
+        started_at: datetime | None = None,
+    ) -> bool:
+        """Reprend la surveillance d'un processus survivant à MSM.
+
+        Renvoie ``False`` si le processus n'existe plus, ou si le PID a été
+        recyclé par le système — la comparaison de la date de création est ce
+        qui évite d'adopter un processus totalement étranger.
+
+        L'état résultant est ``UNKNOWN`` et non ``ONLINE`` : MSM sait que le
+        processus vit, mais ne peut ni lui parler ni garantir qu'il a fini de
+        démarrer. Le prétendre en ligne serait une information inventée.
+        """
+        if not self._backend_ref.is_alive(pid, create_time):
+            return False
+
+        self._adopted = AdoptedProcess(pid=pid, group_id=group_id, create_time=create_time)
+        self._started_at = started_at or datetime.now(UTC)
+        self._stats_collector = StatsCollector(pid)
+
+        self._pipeline.emit_system(
+            f"Serveur réadopté après un redémarrage de MSM (PID {pid}). "
+            "La console est en lecture seule : les commandes ne peuvent plus être "
+            "transmises, mais l'arrêt reste possible.",
+            level=LogLevel.WARN,
+        )
+
+        self._set_state(ServerState.UNKNOWN, reason="Réadopté après un redémarrage de MSM.")
+
+        self._start_log_tailing()
+        self._stats_task = asyncio.create_task(self._pump_stats(), name=f"msm-stats-{self.id}")
+        self._liveness_task = asyncio.create_task(
+            self._watch_adopted(), name=f"msm-liveness-{self.id}"
+        )
+
+        logger.info("server_adopted", server_id=self.id, server=self._config.name, pid=pid)
+        return True
+
+    def _start_log_tailing(self) -> None:
+        """Suit ``logs/latest.log`` : seule fenêtre restante sur l'activité."""
+        path = default_log_path(self._config.directory)
+        if not path.parent.is_dir():
+            self._pipeline.emit_system(
+                f"Aucun dossier de logs trouvé ({path.parent}) : la console restera "
+                "vide tant que le serveur n'en écrira pas.",
+                level=LogLevel.WARN,
+            )
+        self._tailer = LogTailer(path, self._pipeline.ingest)
+        self._tailer.start(name=f"msm-log-tail-{self.id}")
+
+    async def _watch_adopted(self) -> None:
+        """Surveille la disparition d'un processus réadopté."""
+        while self._adopted is not None:
+            await asyncio.sleep(_ADOPTED_POLL_INTERVAL_S)
+            adopted = self._adopted
+            if adopted is None:
+                return
+            if self._backend_ref.is_alive(adopted.pid, adopted.create_time):
+                continue
+
+            self._pipeline.emit_system("Le serveur réadopté s'est arrêté.")
+            await self._release_adopted()
+            self._set_state(ServerState.OFFLINE, reason="Le processus réadopté a disparu.")
+            return
+
+    async def _release_adopted(self) -> None:
+        """Libère les ressources liées à un processus réadopté."""
+        self._adopted = None
+        self._stats = EMPTY_STATS
+        self._online_players.clear()
+        self._pending_uuids.clear()
+        if self._tailer is not None:
+            await self._tailer.stop()
+            self._tailer = None
+        self._cancel_task("_stats_task")
+
+    async def _stop_adopted(self, *, force: bool) -> StopOutcome:
+        """Arrête un processus réadopté, sans passer par sa console.
+
+        Sous POSIX, ``SIGTERM`` déclenche les crochets d'arrêt de la JVM : le
+        monde est sauvegardé. Sous Windows, faute d'équivalent, l'arrêt est
+        brutal — ce que la console annonce explicitement.
+        """
+        adopted = self._adopted
+        assert adopted is not None
+        loop = asyncio.get_running_loop()
+        started_at = loop.time()
+
+        if self._backend_ref.supports_graceful_signal and not force:
+            self._pipeline.emit_system(
+                "Signal d'arrêt envoyé au groupe de processus du serveur réadopté : "
+                "le monde sera sauvegardé."
+            )
+            self._backend_ref.terminate_external(
+                adopted.pid, adopted.group_id, adopted.create_time, force=False
+            )
+            if await self._wait_until_gone(adopted, self._config.stop_timeout_s):
+                return await self._finish_adopted_stop(
+                    StopStage.SIGNAL, forced=False, started_at=started_at
+                )
+
+        self._pipeline.emit_system(
+            "Terminaison forcée du serveur réadopté : le monde n'est pas sauvegardé.",
+            level=LogLevel.WARN,
+        )
+        self._backend_ref.terminate_external(
+            adopted.pid, adopted.group_id, adopted.create_time, force=True
+        )
+        await self._wait_until_gone(adopted, self._config.kill_timeout_s)
+        return await self._finish_adopted_stop(StopStage.KILL, forced=True, started_at=started_at)
+
+    async def _wait_until_gone(self, adopted: AdoptedProcess, timeout: float) -> bool:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            if not self._backend_ref.is_alive(adopted.pid, adopted.create_time):
+                return True
+            await asyncio.sleep(0.2)
+        return not self._backend_ref.is_alive(adopted.pid, adopted.create_time)
+
+    async def _finish_adopted_stop(
+        self, stage: StopStage, *, forced: bool, started_at: float
+    ) -> StopOutcome:
+        self._cancel_task("_liveness_task")
+        await self._release_adopted()
+        self._set_state(ServerState.OFFLINE, reason="Serveur arrêté.")
+        return StopOutcome(
+            stage=stage,
+            exit_code=None,
+            forced=forced,
+            duration_s=asyncio.get_running_loop().time() - started_at,
+        )
+
+    # ------------------------------------------------------------------ #
     #  Arrêt
     # ------------------------------------------------------------------ #
     async def stop(self, *, actor: str | None = None) -> StopOutcome:
         """Arrête le serveur selon la séquence graduée."""
         async with self._lock:
             self._cancel_pending_restart()
+
+            if self._adopted is not None:
+                self._set_state(ServerState.STOPPING, reason=f"Arrêt demandé par {actor or 'MSM'}")
+                self._pipeline.emit_system(
+                    f"Arrêt du serveur réadopté « {self._config.name} » demandé par "
+                    f"{actor or 'MSM'}."
+                )
+                return await self._stop_adopted(force=False)
 
             if self._handle is None or not self._handle.running:
                 raise ServerNotRunning(
@@ -381,6 +580,12 @@ class ServerRuntime:
         """Terminaison immédiate, sans arrêt propre. Réservée aux administrateurs."""
         async with self._lock:
             self._cancel_pending_restart()
+
+            if self._adopted is not None:
+                self._set_state(ServerState.STOPPING, reason=f"Arrêt forcé par {actor or 'MSM'}")
+                await self._stop_adopted(force=True)
+                return
+
             if self._handle is None or not self._handle.running:
                 raise ServerNotRunning(
                     f"Le serveur « {self._config.name} » n'est pas en cours d'exécution.",
@@ -728,7 +933,19 @@ class ServerRuntime:
         que l'interface d'administration redémarre serait le pire des comportements.
         """
         self._cancel_pending_restart()
-        for attribute in ("_readiness_task", "_stats_task", "_supervise_task", "_reader_task"):
+        for attribute in (
+            "_readiness_task",
+            "_stats_task",
+            "_supervise_task",
+            "_reader_task",
+            "_liveness_task",
+        ):
             self._cancel_task(attribute)
-        if self._handle is not None and self._handle.running:
+
+        if self._tailer is not None:
+            await self._tailer.stop()
+            self._tailer = None
+
+        running = (self._handle is not None and self._handle.running) or self._adopted is not None
+        if running and self._state is not ServerState.UNKNOWN:
             self._set_state(ServerState.UNKNOWN, reason="MSM s'est arrêté ; serveur détaché.")

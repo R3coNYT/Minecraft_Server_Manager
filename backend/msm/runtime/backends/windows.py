@@ -106,6 +106,23 @@ class WindowsProcessBackend(ProcessBackend):
 
         return self._kill_tree_via_psutil(spawned.pid, spawned.create_time)
 
+    def terminate_external(
+        self,
+        pid: int,
+        group_id: int | None = None,
+        create_time: float | None = None,
+        *,
+        force: bool = False,
+    ) -> bool:
+        """Termine l'arbre d'un processus réadopté.
+
+        Le Job Object d'origine a disparu avec le processus MSM précédent : seul
+        le parcours de l'arbre reste possible. Et faute d'équivalent au SIGTERM,
+        l'arrêt est toujours brutal — le monde n'est pas sauvegardé.
+        """
+        del group_id, force  # sans objet sous Windows
+        return self._kill_tree_via_psutil(pid, create_time)
+
     def is_alive(self, pid: int, create_time: float | None = None) -> bool:
         try:
             process = psutil.Process(pid)

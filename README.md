@@ -26,9 +26,19 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 - [ ] **Phase 5** — administration : audit, utilisateurs, monitoring, sauvegardes
 - [ ] **Phase 6** — extensions
 
+## Installation sur un serveur Linux
+
+```bash
+sudo ./install.sh
+```
+
+Utilisateur système dédié, unité systemd durcie, base initialisée, interface
+compilée et servie par MSM lui-même. Détails et options : [docs/DEPLOY.md](docs/DEPLOY.md).
+
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — conception complète, décisions techniques et justifications
+- [Déploiement](docs/DEPLOY.md) — installation, reverse proxy, sauvegarde, mise à jour
 - [Développement](docs/DEVELOPMENT.md) — installation locale, tests, conventions
 
 ## Démarrage rapide (développement)
