@@ -19,6 +19,7 @@ Trois pièges sont traités, dans cet ordre :
 from __future__ import annotations
 
 import os
+import re
 import sys
 from pathlib import Path, PurePath
 
@@ -29,6 +30,16 @@ _FORBIDDEN_SEGMENTS = {"..", ""}
 
 #: Caractères qui n'ont rien à faire dans un chemin fourni par un client.
 _FORBIDDEN_CHARS = frozenset("\x00\n\r")
+
+#: Lettre de lecteur (`C:`) ou chemin racine (`/etc`, `//serveur/partage`).
+#:
+#: `PurePath` suit la plateforme hôte : sous Linux, `C:/Windows` n'est pas un
+#: chemin absolu mais un nom de fichier acceptable, et sous Windows `/etc` n'est
+#: pas absolu faute de lecteur. Le confinement resterait assuré dans les deux
+#: cas, mais la **réponse** différerait selon la machine — refus ici, fichier
+#: créé là. On refuse donc les deux formes partout : une même requête obtient la
+#: même réponse, que MSM tourne sous Linux ou sous Windows.
+_ROOTED_RE = re.compile(r"^(?:[A-Za-z]:|/)")
 
 
 def _normalize(path: PurePath) -> str:
@@ -78,7 +89,7 @@ def resolve_within(root: Path, relative: str | None, *, must_exist: bool = False
         )
 
     candidate = PurePath(value)
-    if candidate.is_absolute() or candidate.drive or value.startswith("//"):
+    if candidate.is_absolute() or candidate.drive or _ROOTED_RE.match(value):
         raise PathTraversalError(
             "Chemin refusé.",
             cause=f"« {relative} » est un chemin absolu.",

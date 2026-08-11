@@ -34,3 +34,7 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Outillage local de l'assistant (config du serveur de dev) : sans intérêt
+# pour le dépôt, et propre à chaque poste.
+.claude/

@@ -50,6 +50,13 @@ class TestTraversal:
         ["/etc/passwd", "//serveur/partage/fichier", "C:/Windows/System32/config", "C:\\Windows"],
     )
     def test_absolute_paths_are_refused(self, root: Path, attack: str) -> None:
+        """Refusés sur **les deux** plateformes, y compris ceux de l'autre.
+
+        `C:\\Windows` n'est qu'un nom de fichier sous Linux, et `/etc` n'est pas
+        absolu sous Windows faute de lecteur : sans refus explicite, la même
+        requête obtiendrait une réponse différente selon la machine qui héberge
+        MSM. Le confinement tiendrait, mais pas la prévisibilité.
+        """
         with pytest.raises(PathTraversalError):
             resolve_within(root, attack)
 
