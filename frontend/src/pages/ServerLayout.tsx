@@ -9,6 +9,7 @@
 
 import { NavLink, Outlet, useParams } from 'react-router-dom'
 import {
+  Archive,
   CalendarClock,
   FileCog,
   Package,
@@ -44,6 +45,9 @@ const TABS: TabDefinition[] = [
   { to: 'properties', label: 'Réglages', icon: Settings2, capability: 'properties' },
   { to: 'configs', label: 'Configurations', icon: FileCog, capability: 'configs' },
   { to: 'events', label: 'Événements', icon: CalendarClock, capability: 'events' },
+  // Pas de capacité conditionnelle : tout serveur se sauvegarde, y compris celui
+  // qui n'a pas encore de monde — c'est justement le moment d'y penser.
+  { to: 'backups', label: 'Sauvegardes', icon: Archive },
 ]
 
 export function ServerLayout() {

@@ -30,7 +30,9 @@ from msm.runtime.agent import LocalAgent
 from msm.runtime.backends import get_backend
 from msm.runtime.stats import system_stats
 from msm.runtime.supervisor import Supervisor
+from msm.services.backup_service import BackupService
 from msm.services.event_service import EventService
+from msm.services.metrics_recorder import MetricsRecorder
 from msm.services.player_recorder import PlayerRecorder
 from msm.services.runtime_recorder import RuntimeStateRecorder
 from msm.services.server_service import ServerService
@@ -78,6 +80,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # restées « en cours » sont closes, sinon l'historique afficherait
             # indéfiniment un événement en train de se dérouler.
             await EventService(session, supervisor).mark_interrupted_runs()
+            # Même raison pour les sauvegardes : une archive dont l'écriture a
+            # été coupée n'est pas « en cours », elle a échoué.
+            await BackupService(session, supervisor, settings=settings).mark_interrupted()
     except Exception:  # pragma: no cover - base absente ou migrations non appliquées
         logger.exception(
             "server_registration_skipped",
@@ -92,6 +97,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     recorder.start()
     state_recorder = RuntimeStateRecorder(get_event_bus(), supervisor)
     state_recorder.start()
+    metrics_recorder = MetricsRecorder(supervisor, settings)
+    metrics_recorder.start()
 
     logger.info(
         "msm_started",
@@ -110,6 +117,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await stats_task
         await recorder.stop()
         await state_recorder.stop()
+        await metrics_recorder.stop()
         # Les serveurs Minecraft ne sont PAS arrêtés : redémarrer le panel ne doit
         # pas déconnecter les joueurs. Ils seront réadoptés au prochain démarrage.
         await supervisor.shutdown(stop_servers=False)

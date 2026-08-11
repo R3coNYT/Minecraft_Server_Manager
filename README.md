@@ -23,7 +23,7 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 - [x] **Phase 2** — joueurs : identité et historique, skins, statuts (opérateur, banni, liste blanche), modération
 - [x] **Phase 3** — fichiers : mods, plugins, éditeur de configurations, server.properties
 - [x] **Phase 4** — événements : actions immédiates, séquences enregistrées, exécution en tâche de fond annulable
-- [ ] **Phase 5** — administration : audit, utilisateurs, monitoring, sauvegardes
+- [x] **Phase 5** — administration : sauvegardes (mondes et configurations, à chaud), restauration, historique des ressources
 - [ ] **Phase 6** — extensions
 
 ## Installation sur un serveur Linux

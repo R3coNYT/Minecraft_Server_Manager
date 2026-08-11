@@ -13,6 +13,8 @@
 
 import type {
   AuditPage,
+  Backup,
+  BackupManifest,
   CommandInspection,
   CommandResult,
   Dashboard,
@@ -27,6 +29,8 @@ import type {
   LogsPage,
   ManagedFile,
   Me,
+  MetricRange,
+  MetricsHistory,
   PropertiesPage,
   Player,
   PlayerActionResult,
@@ -340,6 +344,36 @@ export const api = {
       request<{ cancelled: boolean }>(`/servers/${serverId}/events/runs/${runId}/cancel`, {
         method: 'POST',
       }),
+  },
+
+  backups: {
+    list: (serverId: number) => request<Backup[]>(`/servers/${serverId}/backups`),
+    create: (serverId: number) =>
+      request<Backup>(`/servers/${serverId}/backups`, { method: 'POST' }),
+    manifest: (serverId: number, backupId: number) =>
+      request<BackupManifest>(`/servers/${serverId}/backups/${backupId}/manifest`),
+    restore: (serverId: number, backupId: number, confirm = false) =>
+      request<Backup>(`/servers/${serverId}/backups/${backupId}/restore`, {
+        method: 'POST',
+        body: { confirm },
+      }),
+    cancel: (serverId: number, backupId: number) =>
+      request<{ cancelled: boolean }>(`/servers/${serverId}/backups/${backupId}/cancel`, {
+        method: 'POST',
+      }),
+    remove: (serverId: number, backupId: number) =>
+      request<{ status: string }>(`/servers/${serverId}/backups/${backupId}`, {
+        method: 'DELETE',
+      }),
+    // Le téléchargement passe par une navigation : le navigateur gère seul le
+    // flux et la boîte d'enregistrement, sans charger l'archive en mémoire.
+    downloadUrl: (serverId: number, backupId: number) =>
+      `${BASE}/servers/${serverId}/backups/${backupId}/download`,
+  },
+
+  metrics: {
+    history: (serverId: number, range: MetricRange) =>
+      request<MetricsHistory>(`/servers/${serverId}/metrics`, { params: { range } }),
   },
 
   users: {

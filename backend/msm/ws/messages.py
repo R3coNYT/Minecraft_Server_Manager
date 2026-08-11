@@ -43,6 +43,7 @@ class MessageType(str, Enum):
     SERVER_CRASH = "server.crash"
     SERVER_RESTART_SCHEDULED = "server.restart.scheduled"
     EVENT_RUN = "event.run"
+    BACKUP_PROGRESS = "backup.progress"
 
     LOG_TRUNCATED = "log.truncated"
     SYSTEM_STATS = "system.stats"
@@ -60,6 +61,7 @@ TOPIC_TO_MESSAGE: dict[str, MessageType] = {
     "crash": MessageType.SERVER_CRASH,
     "restart_scheduled": MessageType.SERVER_RESTART_SCHEDULED,
     "event_run": MessageType.EVENT_RUN,
+    "backup": MessageType.BACKUP_PROGRESS,
 }
 
 #: Canaux qu'un client peut demander, et sujets correspondants.
@@ -69,6 +71,7 @@ CHANNELS: dict[str, tuple[str, ...]] = {
     "stats": ("stats",),
     "players": ("players", "player_join", "player_leave"),
     "events": ("event_run",),
+    "backups": ("backup",),
 }
 
 

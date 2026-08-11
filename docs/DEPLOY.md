@@ -127,13 +127,28 @@ le panneau.
 
 ## Sauvegarde
 
-Trois éléments à sauvegarder :
+### Depuis le panneau
+
+Chaque serveur a un onglet **Sauvegardes** : l'archive emporte les mondes et les
+configurations, et **inventorie** les mods et plugins installés sans les
+embarquer — ils se retéléchargent, les mondes non. Un serveur démarré est
+sauvegardé à chaud, sans déconnecter les joueurs.
+
+Les archives sont écrites dans `/var/lib/msm/backups`, et les dix dernières par
+serveur sont conservées (`MSM_BACKUP_RETENTION`).
+
+> Une sauvegarde sur le disque qu'elle protège ne protège pas d'une panne de ce
+> disque. Pour l'écrire ailleurs, renseigner `MSM_BACKUP_DIR` **et** ajouter ce
+> chemin à `ReadWritePaths=` dans l'unité systemd : le durcissement interdit
+> sinon toute écriture hors des dossiers déclarés.
+
+### Ce que le panneau ne sauvegarde pas
 
 | Quoi | Où | Pourquoi |
 |---|---|---|
 | `/etc/msm/.env` | configuration | contient la clé secrète ; sans elle, les mots de passe RCON chiffrés deviennent illisibles |
 | `/var/lib/msm/msm.db` | base | comptes, serveurs, audit, historique des joueurs |
-| Les dossiers de serveurs | `--servers-root` | les mondes Minecraft eux-mêmes |
+| Les JAR et les mods | dossiers de serveurs | volumineux et re-téléchargeables ; leur liste figure dans chaque archive |
 
 ## Mise à jour
 

@@ -9,6 +9,13 @@ from msm.api.schemas.auth import (
     UserOut,
     UserUpdateRequest,
 )
+from msm.api.schemas.backup import (
+    BackupManifestOut,
+    BackupOut,
+    MetricPointOut,
+    MetricsOut,
+    RestoreRequest,
+)
 from msm.api.schemas.console import (
     AuditEntryOut,
     AuditPageOut,
@@ -69,6 +76,8 @@ __all__ = [
     "ActionOut",
     "AuditEntryOut",
     "AuditPageOut",
+    "BackupManifestOut",
+    "BackupOut",
     "BanRequest",
     "CommandInspectOut",
     "CommandOut",
@@ -93,6 +102,8 @@ __all__ = [
     "LogsOut",
     "ManagedFileOut",
     "MeOut",
+    "MetricPointOut",
+    "MetricsOut",
     "PasswordChangeRequest",
     "PlayerActionOut",
     "PlayerOut",
@@ -102,6 +113,7 @@ __all__ = [
     "PropertyOut",
     "QuickActionOut",
     "QuickActionRequest",
+    "RestoreRequest",
     "RunRequest",
     "ServerCreateRequest",
     "ServerOut",

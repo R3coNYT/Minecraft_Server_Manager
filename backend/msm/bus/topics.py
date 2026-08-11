@@ -22,6 +22,7 @@ PLAYER_LEAVE: Final = "player_leave"
 CRASH: Final = "crash"
 RESTART_SCHEDULED: Final = "restart_scheduled"
 EVENT_RUN: Final = "event_run"
+BACKUP: Final = "backup"
 
 # --- Événements système ----------------------------------------------------
 SYSTEM_STATS: Final = "stats"

@@ -65,6 +65,13 @@ class AuditAction(str, Enum):
     # Événements
     EVENT_RUN = "event.run"
 
+    # Sauvegardes
+    BACKUP_CREATED = "backup.created"
+    BACKUP_RESTORED = "backup.restored"
+    BACKUP_DELETED = "backup.deleted"
+    #: Une archive emporte les mondes hors de la machine : la sortie se journalise.
+    BACKUP_DOWNLOADED = "backup.downloaded"
+
     # Administration
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"

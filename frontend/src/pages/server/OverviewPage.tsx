@@ -10,6 +10,7 @@ import {
   formatRelative,
 } from '@/lib/format'
 import { Badge, Card, CardHeader } from '@/components/ui/primitives'
+import { ResourcePanel } from '@/components/metrics/ResourcePanel'
 
 function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -118,6 +119,8 @@ export function OverviewPage() {
             </dl>
           </Card>
         </div>
+
+        <ResourcePanel serverId={server.id} />
 
         <Card>
           <CardHeader

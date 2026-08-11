@@ -262,7 +262,7 @@ de dire qui a fait quoi, avec quels droits, à ce moment-là.
 
 `users` · `user_sessions` · `servers` · `server_settings` · `server_runtime_state`
 · `server_permissions` · `audit_logs` · `players` · `skin_cache` ·
-`event_definitions` · `event_runs` · `backups` · `app_settings`
+`event_definitions` · `event_runs` · `backups` · `metric_samples` · `app_settings`
 
 Deux points notables :
 
@@ -321,8 +321,8 @@ Client → serveur : `subscribe` (avec `resume_from`), `unsubscribe`, `ping`.
 
 Serveur → client : `server.status` · `server.log` (groupé toutes les 100 ms) ·
 `server.stats` · `server.players` · `server.player.join` / `.leave` ·
-`server.crash` · `server.restart.scheduled` · `event.run` · `system.stats` ·
-`notification` · `log.truncated`.
+`server.crash` · `server.restart.scheduled` · `event.run` · `backup.progress` ·
+`system.stats` · `notification` · `log.truncated`.
 
 Ce dernier message existe parce qu'un client trop lent **doit** savoir qu'il a
 perdu des lignes : tronquer en silence serait pire que tronquer.
@@ -355,7 +355,37 @@ explicite pour l'ensemble.
 
 ---
 
-## 11. Extensibilité
+## 11. Sauvegardes et historique
+
+**Une sauvegarde emporte les mondes et les configurations, pas les mods.** Un
+dossier moddé pèse plusieurs gigaoctets dont l'essentiel est re-téléchargeable ;
+les mondes, eux, sont irremplaçables. Sauvegarder le tout rendrait l'opération
+assez lente et volumineuse pour qu'on cesse de la faire — et une sauvegarde
+qu'on ne fait pas ne protège de rien. Ce qui n'est pas emporté est **inventorié**
+dans l'archive : la liste des mods et plugins installés, avec leur état, dit quoi
+réinstaller après une reconstruction.
+
+**Un serveur démarré est sauvegardé à chaud**, selon la séquence
+`save-off` → `save-all flush` → copie → `save-on`. La confirmation du serveur est
+attendue : sans elle, la copie surprendrait des régions en cours d'écriture et
+produirait un monde subtilement incohérent — la sauvegarde est alors refusée
+plutôt que douteuse. `save-on` part dans un `finally`, un serveur laissé sans
+sauvegarde automatique perdrait tout au prochain plantage.
+
+**Restaurer est traité comme destructif** : serveur arrêté obligatoire,
+confirmation explicite, sauvegarde de sécurité prise automatiquement avant, et
+mondes **remplacés** plutôt que fusionnés — extraire par-dessus laisserait des
+régions récentes mêlées à celles d'hier. Chaque membre de l'archive est validé
+avant écriture : ni chemin remontant, ni lien symbolique, ni fichier spécial.
+
+L'**historique des ressources** (`metric_samples`) est échantillonné toutes les
+30 s et purgé au-delà de sept jours. Les lectures sont agrégées **par la base**
+en paliers, et retiennent le maximum de chaque palier : une moyenne lisserait
+justement la pointe qu'on cherche.
+
+---
+
+## 12. Extensibilité
 
 Les points d'extension prévus, et ce qu'ils permettent d'ajouter sans refonte :
 
@@ -374,7 +404,7 @@ aujourd'hui.
 
 ---
 
-## 12. Déploiement
+## 13. Déploiement
 
 Production Linux : utilisateur `msm` dédié (jamais root), unité systemd durcie
 (`NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths` limité aux dossiers

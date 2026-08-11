@@ -18,6 +18,7 @@ import { FilesPage } from '@/pages/server/FilesPage'
 import { ConfigsPage } from '@/pages/server/ConfigsPage'
 import { PropertiesPage } from '@/pages/server/PropertiesPage'
 import { EventsPage } from '@/pages/server/EventsPage'
+import { BackupsPage } from '@/pages/server/BackupsPage'
 
 /**
  * Garde d'accès.
@@ -71,6 +72,7 @@ export function App() {
           <Route path="properties" element={<PropertiesPage />} />
           <Route path="configs" element={<ConfigsPage />} />
           <Route path="events" element={<EventsPage />} />
+          <Route path="backups" element={<BackupsPage />} />
         </Route>
       </Route>
 

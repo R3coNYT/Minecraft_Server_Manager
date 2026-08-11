@@ -12,7 +12,7 @@ import { realtime, type Channel } from '@/ws/client'
 // `events` est inclus d'office : il ne pousse quelque chose que pendant une
 // séquence en cours, et une progression manquée est une progression perdue —
 // l'utilisateur peut avoir quitté la page des événements entre-temps.
-const DEFAULT_CHANNELS: Channel[] = ['status', 'logs', 'stats', 'players', 'events']
+const DEFAULT_CHANNELS: Channel[] = ['status', 'logs', 'stats', 'players', 'events', 'backups']
 
 export function useServerSubscription(
   serverId: number,

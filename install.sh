@@ -156,6 +156,9 @@ step "Préparation des dossiers"
 
 install -d -o root -g "$MSM_GROUP" -m 750 "$CONFIG_DIR"
 install -d -o "$MSM_USER" -g "$MSM_GROUP" -m 750 "$DATA_DIR" "$LOG_DIR"
+# Les archives de sauvegarde vivent sous le dossier de données : c'est le seul
+# emplacement déjà autorisé en écriture par le durcissement systemd.
+install -d -o "$MSM_USER" -g "$MSM_GROUP" -m 750 "$DATA_DIR/backups"
 install -d -o root -g root -m 755 "$INSTALL_DIR"
 
 if [[ ! -d "$SERVERS_ROOT" ]]; then
@@ -257,6 +260,12 @@ MSM_LOG_DIR=${LOG_DIR}
 
 # Les dossiers de serveurs doivent se trouver sous cette racine.
 MSM_SERVER_ROOTS=${SERVERS_ROOT}
+
+# Sauvegardes : ${DATA_DIR}/backups par défaut. Pour les écrire ailleurs — un
+# autre disque protège aussi d'une panne de celui-ci — renseigner MSM_BACKUP_DIR
+# ET ajouter ce chemin à ReadWritePaths dans l'unité systemd, sans quoi le
+# service n'aura pas le droit d'y écrire.
+MSM_BACKUP_RETENTION=10
 
 # L'interface étant servie par MSM, aucune origine tierce n'est nécessaire.
 MSM_CORS_ORIGINS=
@@ -396,6 +405,7 @@ cat <<EOF
   Panneau        http://${BIND_HOST}:${BIND_PORT}
   Configuration  ${CONFIG_DIR}/.env
   Données        ${DATA_DIR}
+  Sauvegardes    ${DATA_DIR}/backups
   Journaux       ${LOG_DIR}/msm.log  ·  journalctl -u ${SERVICE_NAME} -f
   Serveurs       ${SERVERS_ROOT}
 

@@ -11,7 +11,13 @@
  */
 
 import { create } from 'zustand'
-import type { EventProgress, LogLine, ServerStatus, SystemStats } from '@/lib/types'
+import type {
+  BackupProgress,
+  EventProgress,
+  LogLine,
+  ServerStatus,
+  SystemStats,
+} from '@/lib/types'
 
 /** Nombre maximal de lignes conservées par serveur dans le navigateur. */
 export const MAX_CLIENT_LINES = 5000
@@ -36,6 +42,8 @@ interface RealtimeState {
   missedLines: Record<number, number>
   /** Dernière progression connue d'un événement, par serveur. */
   eventProgress: Record<number, EventProgress>
+  /** Dernière progression connue d'une sauvegarde, par serveur. */
+  backupProgress: Record<number, BackupProgress>
   system: SystemStats | null
 
   setConnection: (state: ConnectionState, attempts?: number) => void
@@ -45,6 +53,7 @@ interface RealtimeState {
   setPlayers: (serverId: number, players: PlayerEntry[]) => void
   noteMissed: (serverId: number | null, count: number) => void
   applyEventProgress: (progress: EventProgress) => void
+  applyBackupProgress: (progress: BackupProgress) => void
   setSystem: (stats: SystemStats) => void
   forget: (serverId: number) => void
 }
@@ -58,6 +67,7 @@ export const useRealtime = create<RealtimeState>((set) => ({
   players: {},
   missedLines: {},
   eventProgress: {},
+  backupProgress: {},
   system: null,
 
   setConnection: (connection, attempts) =>
@@ -122,6 +132,11 @@ export const useRealtime = create<RealtimeState>((set) => ({
       eventProgress: { ...state.eventProgress, [progress.server_id]: progress },
     })),
 
+  applyBackupProgress: (progress) =>
+    set((state) => ({
+      backupProgress: { ...state.backupProgress, [progress.server_id]: progress },
+    })),
+
   setSystem: (system) => set({ system }),
 
   forget: (serverId) =>
@@ -130,10 +145,12 @@ export const useRealtime = create<RealtimeState>((set) => ({
       const lastSeq = { ...state.lastSeq }
       const missedLines = { ...state.missedLines }
       const eventProgress = { ...state.eventProgress }
+      const backupProgress = { ...state.backupProgress }
       delete logs[serverId]
       delete lastSeq[serverId]
       delete missedLines[serverId]
       delete eventProgress[serverId]
-      return { logs, lastSeq, missedLines, eventProgress }
+      delete backupProgress[serverId]
+      return { logs, lastSeq, missedLines, eventProgress, backupProgress }
     }),
 }))

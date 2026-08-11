@@ -223,6 +223,64 @@ export interface EventRun {
   error: string | null
 }
 
+export interface Backup {
+  id: number
+  server_id: number
+  kind: string
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+  size_bytes: number | null
+  created_at: string
+  created_by: number | null
+  error: string | null
+  available: boolean
+}
+
+export interface BackupInventoryItem {
+  name: string
+  size_bytes: number
+  enabled: boolean
+}
+
+/** Ce que l'archive déclare contenir, lu sans rien extraire. */
+export interface BackupManifest {
+  created_at: string | null
+  msm_version: string | null
+  server: { name?: string; type?: string; minecraft_version?: string | null }
+  content: { worlds?: string[]; file_count?: number; total_bytes?: number }
+  mods: BackupInventoryItem[]
+  plugins: BackupInventoryItem[]
+}
+
+/** Progression d'une sauvegarde, poussée par le WebSocket. */
+export interface BackupProgress {
+  backup_id: number
+  server_id: number
+  status: string
+  phase: string
+  done: number
+  total: number
+  percent: number
+  error: string | null
+}
+
+export type MetricRange = '1h' | '6h' | '24h' | '7d'
+
+export interface MetricPoint {
+  ts: string
+  cpu_percent: number
+  memory_mb: number
+  players_online: number
+}
+
+export interface MetricsHistory {
+  range: string
+  bucket_s: number
+  points: MetricPoint[]
+  peak_cpu_percent: number
+  peak_memory_mb: number
+  peak_players: number
+}
+
 /** Progression poussée par le WebSocket pendant une exécution. */
 export interface EventProgress {
   run_id: number

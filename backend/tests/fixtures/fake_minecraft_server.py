@@ -13,6 +13,7 @@ Options de simulation :
 ``--startup-delay S``   temps avant le message « Done »
 ``--ready``/``--no-ready``  émettre ou non le message de fin de démarrage
 ``--ignore-stop``       ignorer la commande ``stop`` (serveur figé)
+``--ignore-save``       ne pas répondre à ``save-off``/``save-all`` (sauvegarde à chaud refusée)
 ``--ignore-signals``    ignorer SIGTERM (force le recours à la terminaison brutale)
 ``--close-stdin``       fermer l'entrée standard (script qui ne relaie pas stdin)
 ``--crash-after S``     se terminer brutalement après S secondes
@@ -47,6 +48,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--ready", dest="ready", action="store_true", default=True)
     parser.add_argument("--no-ready", dest="ready", action="store_false")
     parser.add_argument("--ignore-stop", action="store_true")
+    #: Serveur qui ne répond pas aux commandes de sauvegarde : la sauvegarde à
+    #: chaud doit alors être refusée plutôt que produire un monde incohérent.
+    parser.add_argument("--ignore-save", action="store_true")
     parser.add_argument("--ignore-signals", action="store_true")
     parser.add_argument("--close-stdin", action="store_true")
     parser.add_argument("--crash-after", type=float, default=None)
@@ -144,6 +148,16 @@ def handle_command(command: str, args: argparse.Namespace) -> bool:
         emit("Server thread", "INFO", f"{player} joined the game")
     elif command.startswith("leave "):
         emit("Server thread", "INFO", f"{command[6:].strip()} left the game")
+    elif command == "save-off":
+        if args.ignore_save:
+            return False
+        emit("Server thread", "INFO", "Automatic saving is now disabled")
+    elif command.startswith("save-all"):
+        if args.ignore_save:
+            return False
+        emit("Server thread", "INFO", "Saved the game")
+    elif command == "save-on":
+        emit("Server thread", "INFO", "Automatic saving is now enabled")
     else:
         emit("Server thread", "INFO", f"Unknown command: {command}")
     return False

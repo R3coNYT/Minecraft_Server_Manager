@@ -107,6 +107,21 @@ class Settings(BaseSettings):
     # --- Uploads ----------------------------------------------------------
     upload_max_size_mb: int = Field(default=256, ge=1)
 
+    # --- Sauvegardes ------------------------------------------------------
+    #: Vide = `<data_dir>/backups`. Doit rester **hors** des dossiers de serveur,
+    #: faute de quoi chaque sauvegarde emporterait les précédentes.
+    backup_dir: Path | None = None
+    #: Sauvegardes conservées par serveur ; les plus anciennes sont purgées.
+    backup_retention: int = Field(default=10, ge=1, le=1000)
+    #: Marge de sécurité exigée sur le disque, en plus de la taille estimée.
+    backup_free_space_margin_mb: int = Field(default=512, ge=0)
+
+    # --- Métriques --------------------------------------------------------
+    metrics_enabled: bool = True
+    #: Un point par serveur et par intervalle ; 30 s = 2 880 points par jour.
+    metrics_interval_s: float = Field(default=30.0, ge=5.0, le=3600.0)
+    metrics_retention_days: int = Field(default=7, ge=1, le=365)
+
     # --- Journalisation ---------------------------------------------------
     log_level: LogLevel = "INFO"
     log_format: LogFormat = "console"
@@ -135,6 +150,13 @@ class Settings(BaseSettings):
     @field_validator("data_dir", "log_dir")
     @classmethod
     def _absolutize(cls, value: Path) -> Path:
+        return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
+
+    @field_validator("backup_dir")
+    @classmethod
+    def _absolutize_backup_dir(cls, value: Path | None) -> Path | None:
+        if value is None:
+            return None
         return value if value.is_absolute() else (PROJECT_ROOT / value).resolve()
 
     @model_validator(mode="after")
@@ -198,9 +220,19 @@ class Settings(BaseSettings):
     def msm_log_file(self) -> Path:
         return self.log_dir / "msm.log"
 
+    @property
+    def backups_root(self) -> Path:
+        """Où sont écrites les archives de sauvegarde."""
+        return self.backup_dir or (self.data_dir / "backups")
+
     def ensure_directories(self) -> None:
         """Crée les répertoires de travail. Appelé une fois au démarrage."""
-        for directory in (self.data_dir, self.log_dir, self.data_dir / "cache"):
+        for directory in (
+            self.data_dir,
+            self.log_dir,
+            self.data_dir / "cache",
+            self.backups_root,
+        ):
             directory.mkdir(parents=True, exist_ok=True)
 
 

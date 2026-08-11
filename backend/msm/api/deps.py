@@ -39,8 +39,16 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         yield session
 
 
-def get_app_settings() -> Settings:
-    return get_settings()
+def get_app_settings(request: Request) -> Settings:
+    """Réglages de **cette** application, pas ceux du cache global.
+
+    L'application est construite avec ses réglages ; les dépendances doivent les
+    honorer. Retomber sur `get_settings()` ferait qu'une instance configurée pour
+    écrire ailleurs — une seconde instance, un test — irait tout de même lire et
+    écrire dans les dossiers par défaut.
+    """
+    settings: Settings | None = getattr(request.app.state, "settings", None)
+    return settings or get_settings()
 
 
 def get_supervisor(request: Request) -> Supervisor:
