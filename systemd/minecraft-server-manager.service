@@ -1,0 +1,51 @@
+[Unit]
+Description=Minecraft Server Manager
+Documentation=https://github.com/R3coNYT/Minecraft_Server_Manager
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=__MSM_USER__
+Group=__MSM_GROUP__
+WorkingDirectory=__MSM_HOME__
+EnvironmentFile=__MSM_CONFIG__/.env
+ExecStart=__MSM_HOME__/backend/.venv/bin/python -m msm.cli serve
+
+# Redémarrage du panneau uniquement : les serveurs Minecraft lui survivent et
+# sont réadoptés au démarrage suivant.
+Restart=on-failure
+RestartSec=5s
+
+# Délai d'arrêt généreux : MSM ne coupe pas les serveurs Minecraft, mais laisse
+# ses écritures en base s'achever proprement.
+TimeoutStopSec=30s
+KillMode=mixed
+
+# --- Durcissement -----------------------------------------------------------
+# MSM lance des processus Java qui doivent écrire dans les dossiers des serveurs :
+# les restrictions sont donc calibrées, pas maximales. Chaque ligne retirée
+# élargirait la surface d'attaque en cas de compromission du panneau.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+
+# Seuls ces chemins sont accessibles en écriture. `__MSM_SERVERS__` contient les
+# dossiers des serveurs Minecraft ; l'ajuster si vos serveurs sont ailleurs.
+ReadWritePaths=__MSM_DATA__ __MSM_LOGS__ __MSM_SERVERS__
+
+# Journalisation : MSM écrit aussi dans son propre fichier, mais journald garde
+# la trace des démarrages et des échecs.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=msm
+
+[Install]
+WantedBy=multi-user.target

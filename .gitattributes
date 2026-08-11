@@ -1,0 +1,18 @@
+# Le dépôt est développé sous Windows et déployé sous Linux : les fins de ligne
+# sont normalisées en LF dans l'index pour éviter des différences fantômes.
+* text=auto eol=lf
+
+# Les scripts déployés sur Linux doivent impérativement rester en LF :
+# un CRLF sur un shebang rend le script inexécutable.
+*.sh text eol=lf
+install.sh text eol=lf
+
+# Les scripts Windows gardent CRLF.
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binaires.
+*.jar binary
+*.png binary
+*.ico binary
+*.db binary

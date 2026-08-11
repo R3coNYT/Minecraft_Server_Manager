@@ -1,0 +1,197 @@
+"""Point d'entrée de l'application FastAPI.
+
+Une note importante sur le déploiement : MSM doit tourner en **un seul processus
+applicatif** (`uvicorn --workers 1`). Le superviseur détient les tubes d'entrée et
+de sortie des serveurs Minecraft ; avec plusieurs workers, chaque processus aurait
+sa propre vision partielle et personne ne saurait quel worker possède quel serveur.
+La montée en charge repose sur l'asynchrone, et plus tard sur des agents distants.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from msm import __version__
+from msm.api.errors import register_error_handlers
+from msm.api.v1 import api_router
+from msm.bus import get_event_bus
+from msm.bus import topics as bus_topics
+from msm.config import Settings, get_settings
+from msm.db.session import dispose_engine, init_engine, session_scope
+from msm.logging_conf import configure_logging, get_logger
+from msm.runtime.agent import LocalAgent
+from msm.runtime.backends import get_backend
+from msm.runtime.stats import system_stats
+from msm.runtime.supervisor import Supervisor
+from msm.services.backup_service import BackupService
+from msm.services.event_service import EventService
+from msm.services.metrics_recorder import MetricsRecorder
+from msm.services.notifier import Notifier
+from msm.services.player_recorder import PlayerRecorder
+from msm.services.runtime_recorder import RuntimeStateRecorder
+from msm.services.schedule_service import Scheduler
+from msm.services.server_service import ServerService
+from msm.services.settings_service import load_notification_settings
+from msm.web import mount_frontend
+from msm.ws import websocket_router
+
+logger = get_logger(__name__)
+
+
+async def _publish_system_stats(settings: Settings) -> None:
+    """Publie périodiquement les ressources de la machine, si quelqu'un écoute.
+
+    Sans abonné, rien n'est mesuré ni sérialisé : un panel ouvert sur aucune page
+    ne doit rien coûter.
+    """
+    bus = get_event_bus()
+    topic = bus_topics.system_topic(bus_topics.SYSTEM_STATS)
+    interval = max(settings.stats_interval_s, 1.0)
+    while True:
+        await asyncio.sleep(interval)
+        if bus.has_subscribers(topic):
+            bus.publish(topic, system_stats())
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Démarrage et arrêt ordonnés de l'application."""
+    settings: Settings = app.state.settings
+
+    init_engine(settings)
+    supervisor = Supervisor(bus=get_event_bus())
+    app.state.supervisor = supervisor
+    app.state.agent = LocalAgent(supervisor)
+
+    # Les serveurs configurés sont mis sous supervision au démarrage. Ceux qui
+    # ont survécu au précédent MSM sont réadoptés ; ceux qui demandent un
+    # démarrage automatique sont lancés — dans cet ordre, sans quoi on relancerait
+    # un serveur déjà en ligne et l'on couperait ses joueurs.
+    try:
+        async with session_scope() as session:
+            service = ServerService(session, settings, supervisor)
+            await service.register_all()
+            # Les serveurs ayant survécu à un arrêt du panneau reprennent leur
+            # suivi ; les états périmés sont remis à zéro.
+            await service.adopt_running()
+            # Une tâche asyncio ne survit pas au processus : les exécutions
+            # restées « en cours » sont closes, sinon l'historique afficherait
+            # indéfiniment un événement en train de se dérouler.
+            await EventService(session, supervisor).mark_interrupted_runs()
+            # Même raison pour les sauvegardes : une archive dont l'écriture a
+            # été coupée n'est pas « en cours », elle a échoué.
+            await BackupService(session, supervisor, settings=settings).mark_interrupted()
+            # En dernier : après un redémarrage de la machine, plus rien ne tourne
+            # et les serveurs voulus repartent d'eux-mêmes.
+            await service.autostart()
+    except Exception:  # pragma: no cover - base absente ou migrations non appliquées
+        logger.exception(
+            "server_registration_skipped",
+            hint="Vérifier que les migrations ont été appliquées (alembic upgrade head).",
+        )
+
+    stats_task = asyncio.create_task(_publish_system_stats(settings), name="msm-system-stats")
+
+    # Deux consommateurs du bus : l'historique des joueurs, et l'état des
+    # processus dont dépend la réadoption au prochain démarrage.
+    recorder = PlayerRecorder(get_event_bus())
+    recorder.start()
+    state_recorder = RuntimeStateRecorder(get_event_bus(), supervisor)
+    state_recorder.start()
+    metrics_recorder = MetricsRecorder(supervisor, settings)
+    metrics_recorder.start()
+    # Les tâches programmées et les notifications sortantes : deux boucles de
+    # fond, arrêtées proprement plus bas.
+    scheduler = Scheduler(supervisor, settings)
+    scheduler.start()
+    notifier = Notifier(get_event_bus(), load_notification_settings)
+    notifier.start()
+
+    logger.info(
+        "msm_started",
+        version=__version__,
+        environment=settings.environment,
+        process_backend=get_backend().name,
+        servers=len(supervisor),
+        python=sys.version.split()[0],
+    )
+
+    try:
+        yield
+    finally:
+        stats_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await stats_task
+        await recorder.stop()
+        await state_recorder.stop()
+        await metrics_recorder.stop()
+        await scheduler.stop()
+        await notifier.stop()
+        # Les serveurs Minecraft ne sont PAS arrêtés : redémarrer le panel ne doit
+        # pas déconnecter les joueurs. Ils seront réadoptés au prochain démarrage.
+        await supervisor.shutdown(stop_servers=False)
+        get_event_bus().close()
+        await dispose_engine()
+        logger.info("msm_stopped")
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    """Construit l'application. Paramétrable pour les tests."""
+    settings = settings or get_settings()
+    configure_logging(settings)
+
+    app = FastAPI(
+        title="Minecraft Server Manager",
+        description="Panneau de contrôle multi-serveurs Minecraft.",
+        version=__version__,
+        lifespan=lifespan,
+        docs_url="/api/docs" if not settings.is_production else None,
+        redoc_url=None,
+        openapi_url="/api/openapi.json" if not settings.is_production else None,
+    )
+    app.state.settings = settings
+
+    if settings.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,  # nécessaire au cookie de session
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+            allow_headers=["Content-Type", "X-CSRF-Token"],
+        )
+
+    register_error_handlers(app)
+    app.include_router(api_router)
+    app.include_router(websocket_router)
+    # Monté en dernier : la route attrape-tout du frontend ne doit jamais
+    # masquer une route d'API.
+    mount_frontend(app)
+    return app
+
+
+app = create_app()
+
+
+def main() -> None:  # pragma: no cover - point d'entrée console
+    """Démarre le serveur (`msm` en ligne de commande)."""
+    import uvicorn
+
+    settings = get_settings()
+    uvicorn.run(
+        "msm.main:app",
+        host=settings.host,
+        port=settings.port,
+        workers=1,  # contrainte structurelle, voir l'en-tête du module
+        log_config=None,  # la journalisation est déjà configurée par MSM
+    )
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()

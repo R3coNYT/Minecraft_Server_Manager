@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/**
+ * Thème sombre unique.
+ *
+ * Un panneau d'administration se consulte souvent la nuit, à côté d'un terminal.
+ * Un seul thème bien réglé vaut mieux que deux à moitié finis ; le mode clair
+ * pourra être ajouté plus tard sans rien casser puisque tout passe par ces
+ * variables.
+ */
+@theme {
+  --color-surface: oklch(0.17 0.012 265);
+  --color-surface-raised: oklch(0.21 0.013 265);
+  --color-surface-overlay: oklch(0.25 0.014 265);
+  --color-border-subtle: oklch(0.3 0.015 265);
+  --color-accent: oklch(0.72 0.16 150);
+  --color-accent-strong: oklch(0.65 0.17 150);
+
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-200 antialiased;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      'Segoe UI',
+      sans-serif;
+  }
+
+  /* Barres de défilement discrètes, indispensables dans une console. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.slate.700') transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-700;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-emerald-500/70;
+  }
+}
+
+@layer utilities {
+  .console-line {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    font-variant-ligatures: none;
+  }
+}
