@@ -4,8 +4,8 @@ Panneau de contrôle web pour administrer **plusieurs serveurs Minecraft** depui
 interface : console temps réel, joueurs, mods, plugins, configurations, événements,
 sauvegardes et tâches programmées.
 
-> Réécriture complète. La version 1 (script Flask mono-serveur) reste consultable sur la
-> branche `main` et le tag `v1.0-legacy`.
+> Réécriture complète. La version 1 (script Flask mono-serveur) reste consultable
+> au tag [`v1.0-legacy`](../../tree/v1.0-legacy).
 
 ## Principes
 
@@ -26,6 +26,7 @@ sauvegardes et tâches programmées.
 - [x] **Phase 4** — événements : actions immédiates, séquences enregistrées, exécution en tâche de fond annulable
 - [x] **Phase 5** — administration : sauvegardes (mondes et configurations, à chaud), restauration, historique des ressources
 - [x] **Phase 6** — extensions : planification, notifications Discord, installation de versions
+- [ ] **Phase 7** — agents : piloter des serveurs hébergés sur d'autres machines
 
 ## Installation sur un serveur Linux
 
