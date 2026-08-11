@@ -329,7 +329,33 @@ perdu des lignes : tronquer en silence serait pire que tronquer.
 
 ---
 
-## 10. Extensibilité
+## 10. Moteur d'événements
+
+Un événement est une suite d'étapes exécutées **dans l'ordre**, avec des pauses
+possibles. Trois décisions le structurent :
+
+**Une action se décrit elle-même.** Chaque action déclare ses champs
+(`Field`), son résumé et son niveau de risque ; l'interface construit ses
+formulaires à partir de ce catalogue (`GET /events/actions`). Ajouter une action
+côté serveur la rend disponible sans toucher au frontend.
+
+**Une séquence est validée à l'enregistrement**, pas à l'exécution. Découvrir
+qu'une étape est invalide au milieu d'un tournoi serait le pire moment ; l'erreur
+nomme donc l'étape fautive (`Étape 3 — Quantité invalide.`).
+
+**L'exécution survit à la requête HTTP.** Une séquence peut durer une heure : la
+tâche s'exécute en tâche de fond, ouvre ses propres sessions de base et publie sa
+progression sur le bus (`event.run`). Elle reste annulable à tout instant, y
+compris pendant une attente — et l'annulation est consignée avant de se propager,
+sinon l'historique garderait une exécution éternellement « en cours ».
+
+Le risque d'une séquence est celui de sa marche la plus dangereuse : une seule
+étape `kill` exige la permission `event:run_destructive` **et** une confirmation
+explicite pour l'ensemble.
+
+---
+
+## 11. Extensibilité
 
 Les points d'extension prévus, et ce qu'ils permettent d'ajouter sans refonte :
 
@@ -348,7 +374,7 @@ aujourd'hui.
 
 ---
 
-## 11. Déploiement
+## 12. Déploiement
 
 Production Linux : utilisateur `msm` dédié (jamais root), unité systemd durcie
 (`NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths` limité aux dossiers

@@ -21,6 +21,7 @@ PLAYER_JOIN: Final = "player_join"
 PLAYER_LEAVE: Final = "player_leave"
 CRASH: Final = "crash"
 RESTART_SCHEDULED: Final = "restart_scheduled"
+EVENT_RUN: Final = "event_run"
 
 # --- Événements système ----------------------------------------------------
 SYSTEM_STATS: Final = "stats"

@@ -13,9 +13,9 @@
  */
 
 import { useRealtime } from '@/stores/realtime'
-import type { LogLine, ServerStatus, SystemStats } from '@/lib/types'
+import type { EventProgress, LogLine, ServerStatus, SystemStats } from '@/lib/types'
 
-export type Channel = 'status' | 'logs' | 'stats' | 'players'
+export type Channel = 'status' | 'logs' | 'stats' | 'players' | 'events'
 
 interface Envelope {
   t: string
@@ -156,6 +156,12 @@ export class RealtimeClient {
         if (envelope.sid !== null) store.setPlayers(envelope.sid, payload.players ?? [])
         break
       }
+
+      case 'event.run':
+        // Une séquence peut durer une heure : sa progression arrive ici plutôt
+        // que d'être redemandée en boucle par la page.
+        store.applyEventProgress(envelope.d as EventProgress)
+        break
 
       case 'server.crash': {
         // L'état complet arrive par `server.status` ; on ne garde ici que le

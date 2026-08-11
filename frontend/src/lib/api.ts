@@ -19,8 +19,11 @@ import type {
   Detection,
   Health,
   LauncherInfo,
+  ActionType,
   ConfigEntry,
   ConfigFile,
+  EventRun,
+  GameEvent,
   LogsPage,
   ManagedFile,
   Me,
@@ -301,6 +304,42 @@ export const api = {
         `/servers/${serverId}/properties`,
         { method: 'PUT', body: { changes } },
       ),
+  },
+
+  events: {
+    actions: () => request<ActionType[]>('/events/actions'),
+    list: (serverId: number) => request<GameEvent[]>(`/servers/${serverId}/events`),
+    create: (serverId: number, payload: Record<string, unknown>) =>
+      request<GameEvent>(`/servers/${serverId}/events`, { method: 'POST', body: payload }),
+    update: (serverId: number, eventId: number, payload: Record<string, unknown>) =>
+      request<GameEvent>(`/servers/${serverId}/events/${eventId}`, {
+        method: 'PUT',
+        body: payload,
+      }),
+    remove: (serverId: number, eventId: number) =>
+      request<{ status: string }>(`/servers/${serverId}/events/${eventId}`, {
+        method: 'DELETE',
+      }),
+    run: (serverId: number, eventId: number, confirm = false) =>
+      request<EventRun>(`/servers/${serverId}/events/${eventId}/run`, {
+        method: 'POST',
+        body: { confirm },
+      }),
+    quick: (
+      serverId: number,
+      action: string,
+      params: Record<string, unknown>,
+      confirm = false,
+    ) =>
+      request<{ summary: string; commands: string[] }>(`/servers/${serverId}/events/quick`, {
+        method: 'POST',
+        body: { action, params, confirm },
+      }),
+    runs: (serverId: number) => request<EventRun[]>(`/servers/${serverId}/events/runs`),
+    cancel: (serverId: number, runId: number) =>
+      request<{ cancelled: boolean }>(`/servers/${serverId}/events/runs/${runId}/cancel`, {
+        method: 'POST',
+      }),
   },
 
   users: {

@@ -22,7 +22,7 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 - [x] **Phase 1** — process manager, authentification, RBAC, audit, CRUD serveurs, console temps réel, WebSocket, interface React
 - [x] **Phase 2** — joueurs : identité et historique, skins, statuts (opérateur, banni, liste blanche), modération
 - [x] **Phase 3** — fichiers : mods, plugins, éditeur de configurations, server.properties
-- [ ] **Phase 4** — événements
+- [x] **Phase 4** — événements : actions immédiates, séquences enregistrées, exécution en tâche de fond annulable
 - [ ] **Phase 5** — administration : audit, utilisateurs, monitoring, sauvegardes
 - [ ] **Phase 6** — extensions
 

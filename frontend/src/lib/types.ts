@@ -177,6 +177,63 @@ export interface PropertiesPage {
   entries: ServerProperty[]
 }
 
+export interface ActionField {
+  name: string
+  label: string
+  type: string
+  required: boolean
+  default: unknown
+  placeholder: string
+  help: string
+  minimum: number | null
+  maximum: number | null
+}
+
+export interface ActionType {
+  key: string
+  label: string
+  description: string
+  danger: DangerLevel
+  fields: ActionField[]
+}
+
+export interface EventStep {
+  action: string
+  params: Record<string, unknown>
+  summary: string
+}
+
+export interface GameEvent {
+  id: number
+  name: string
+  description: string | null
+  server_id: number | null
+  steps: EventStep[]
+  danger: DangerLevel
+}
+
+export interface EventRun {
+  id: number
+  event_id: number | null
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'
+  current_step: number
+  total_steps: number
+  started_at: string | null
+  finished_at: string | null
+  error: string | null
+}
+
+/** Progression poussée par le WebSocket pendant une exécution. */
+export interface EventProgress {
+  run_id: number
+  server_id: number
+  status: EventRun['status']
+  current_step: number
+  total_steps: number
+  summary: string
+  error: string | null
+}
+
 export interface SystemStats {
   cpu_percent: number
   cpu_count: number

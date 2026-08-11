@@ -19,6 +19,19 @@ from msm.api.schemas.console import (
     LogsOut,
     StopOut,
 )
+from msm.api.schemas.event import (
+    ActionFieldOut,
+    ActionOut,
+    EventCreateRequest,
+    EventOut,
+    EventRunOut,
+    EventUpdateRequest,
+    QuickActionOut,
+    QuickActionRequest,
+    RunRequest,
+    StepIn,
+    StepOut,
+)
 from msm.api.schemas.files import (
     ConfigEntryOut,
     ConfigFileOut,
@@ -52,6 +65,8 @@ from msm.api.schemas.server import (
 )
 
 __all__ = [
+    "ActionFieldOut",
+    "ActionOut",
     "AuditEntryOut",
     "AuditPageOut",
     "BanRequest",
@@ -66,6 +81,10 @@ __all__ = [
     "DashboardOut",
     "DetectRequest",
     "DetectionOut",
+    "EventCreateRequest",
+    "EventOut",
+    "EventRunOut",
+    "EventUpdateRequest",
     "GiveRequest",
     "JarCandidateOut",
     "KickRequest",
@@ -81,11 +100,16 @@ __all__ = [
     "PropertiesUpdateOut",
     "PropertiesUpdateRequest",
     "PropertyOut",
+    "QuickActionOut",
+    "QuickActionRequest",
+    "RunRequest",
     "ServerCreateRequest",
     "ServerOut",
     "ServerSettingsIn",
     "ServerSettingsOut",
     "ServerUpdateRequest",
+    "StepIn",
+    "StepOut",
     "StopOut",
     "TeleportRequest",
     "ToggleRequest",

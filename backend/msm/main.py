@@ -30,6 +30,7 @@ from msm.runtime.agent import LocalAgent
 from msm.runtime.backends import get_backend
 from msm.runtime.stats import system_stats
 from msm.runtime.supervisor import Supervisor
+from msm.services.event_service import EventService
 from msm.services.player_recorder import PlayerRecorder
 from msm.services.runtime_recorder import RuntimeStateRecorder
 from msm.services.server_service import ServerService
@@ -73,6 +74,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Les serveurs ayant survécu à un arrêt du panneau reprennent leur
             # suivi ; les états périmés sont remis à zéro.
             await service.adopt_running()
+            # Une tâche asyncio ne survit pas au processus : les exécutions
+            # restées « en cours » sont closes, sinon l'historique afficherait
+            # indéfiniment un événement en train de se dérouler.
+            await EventService(session, supervisor).mark_interrupted_runs()
     except Exception:  # pragma: no cover - base absente ou migrations non appliquées
         logger.exception(
             "server_registration_skipped",

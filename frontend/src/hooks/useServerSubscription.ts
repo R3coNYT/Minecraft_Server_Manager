@@ -9,7 +9,10 @@
 import { useEffect } from 'react'
 import { realtime, type Channel } from '@/ws/client'
 
-const DEFAULT_CHANNELS: Channel[] = ['status', 'logs', 'stats', 'players']
+// `events` est inclus d'office : il ne pousse quelque chose que pendant une
+// séquence en cours, et une progression manquée est une progression perdue —
+// l'utilisateur peut avoir quitté la page des événements entre-temps.
+const DEFAULT_CHANNELS: Channel[] = ['status', 'logs', 'stats', 'players', 'events']
 
 export function useServerSubscription(
   serverId: number,

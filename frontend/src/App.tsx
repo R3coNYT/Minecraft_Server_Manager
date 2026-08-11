@@ -14,10 +14,10 @@ import { ServerLayout } from '@/pages/ServerLayout'
 import { OverviewPage } from '@/pages/server/OverviewPage'
 import { ConsolePage } from '@/pages/server/ConsolePage'
 import { PlayersPage } from '@/pages/server/PlayersPage'
-import { ComingSoonPage } from '@/pages/server/ComingSoonPage'
 import { FilesPage } from '@/pages/server/FilesPage'
 import { ConfigsPage } from '@/pages/server/ConfigsPage'
 import { PropertiesPage } from '@/pages/server/PropertiesPage'
+import { EventsPage } from '@/pages/server/EventsPage'
 
 /**
  * Garde d'accès.
@@ -70,16 +70,7 @@ export function App() {
           <Route path="plugins" element={<FilesPage area="plugins" label="Plugins" />} />
           <Route path="properties" element={<PropertiesPage />} />
           <Route path="configs" element={<ConfigsPage />} />
-          <Route
-            path="events"
-            element={
-              <ComingSoonPage
-                title="Événements"
-                phase="phase 4"
-                description="Messages globaux, titres, dons d'objets et suites d'actions programmées, à déclencher en un clic."
-              />
-            }
-          />
+          <Route path="events" element={<EventsPage />} />
         </Route>
       </Route>
 

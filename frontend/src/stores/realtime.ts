@@ -11,7 +11,7 @@
  */
 
 import { create } from 'zustand'
-import type { LogLine, ServerStatus, SystemStats } from '@/lib/types'
+import type { EventProgress, LogLine, ServerStatus, SystemStats } from '@/lib/types'
 
 /** Nombre maximal de lignes conservées par serveur dans le navigateur. */
 export const MAX_CLIENT_LINES = 5000
@@ -34,6 +34,8 @@ interface RealtimeState {
   players: Record<number, PlayerEntry[]>
   /** Lignes perdues (tampon dépassé ou client trop lent), par serveur. */
   missedLines: Record<number, number>
+  /** Dernière progression connue d'un événement, par serveur. */
+  eventProgress: Record<number, EventProgress>
   system: SystemStats | null
 
   setConnection: (state: ConnectionState, attempts?: number) => void
@@ -42,6 +44,7 @@ interface RealtimeState {
   clearLogs: (serverId: number) => void
   setPlayers: (serverId: number, players: PlayerEntry[]) => void
   noteMissed: (serverId: number | null, count: number) => void
+  applyEventProgress: (progress: EventProgress) => void
   setSystem: (stats: SystemStats) => void
   forget: (serverId: number) => void
 }
@@ -54,6 +57,7 @@ export const useRealtime = create<RealtimeState>((set) => ({
   lastSeq: {},
   players: {},
   missedLines: {},
+  eventProgress: {},
   system: null,
 
   setConnection: (connection, attempts) =>
@@ -113,6 +117,11 @@ export const useRealtime = create<RealtimeState>((set) => ({
       }
     }),
 
+  applyEventProgress: (progress) =>
+    set((state) => ({
+      eventProgress: { ...state.eventProgress, [progress.server_id]: progress },
+    })),
+
   setSystem: (system) => set({ system }),
 
   forget: (serverId) =>
@@ -120,9 +129,11 @@ export const useRealtime = create<RealtimeState>((set) => ({
       const logs = { ...state.logs }
       const lastSeq = { ...state.lastSeq }
       const missedLines = { ...state.missedLines }
+      const eventProgress = { ...state.eventProgress }
       delete logs[serverId]
       delete lastSeq[serverId]
       delete missedLines[serverId]
-      return { logs, lastSeq, missedLines }
+      delete eventProgress[serverId]
+      return { logs, lastSeq, missedLines, eventProgress }
     }),
 }))
