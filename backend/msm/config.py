@@ -116,6 +116,14 @@ class Settings(BaseSettings):
     #: Marge de sécurité exigée sur le disque, en plus de la taille estimée.
     backup_free_space_margin_mb: int = Field(default=512, ge=0)
 
+    # --- Tâches programmées -----------------------------------------------
+    scheduler_enabled: bool = True
+    #: Fréquence de réveil de la boucle ; la précision d'un déclenchement ne
+    #: dépasse pas cette valeur.
+    scheduler_tick_s: float = Field(default=20.0, ge=1.0, le=300.0)
+    #: Retard au-delà duquel une exécution manquée n'est plus rattrapée.
+    scheduler_grace_minutes: int = Field(default=60, ge=0, le=24 * 60)
+
     # --- Métriques --------------------------------------------------------
     metrics_enabled: bool = True
     #: Un point par serveur et par intervalle ; 30 s = 2 880 points par jour.

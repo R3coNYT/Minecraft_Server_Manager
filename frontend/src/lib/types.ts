@@ -263,6 +263,68 @@ export interface BackupProgress {
   error: string | null
 }
 
+export type TriggerKind = 'INTERVAL' | 'DAILY' | 'WEEKLY'
+
+export type ScheduleAction = 'BACKUP' | 'RESTART' | 'START' | 'STOP' | 'EVENT' | 'COMMAND'
+
+export interface ScheduleRule {
+  trigger: TriggerKind
+  interval_minutes?: number | null
+  hour?: number | null
+  minute?: number | null
+  days?: number[] | null
+  timezone: string
+}
+
+export interface Schedule {
+  id: number
+  server_id: number
+  name: string
+  action: ScheduleAction
+  payload: Record<string, unknown>
+  rule: ScheduleRule
+  /** Résumé lisible calculé par le serveur (« Chaque jour à 04:00 »). */
+  summary: string
+  enabled: boolean
+  next_run_at: string | null
+  last_run_at: string | null
+  last_status: 'NEVER' | 'SUCCESS' | 'FAILED' | 'MISSED' | 'SKIPPED'
+  last_error: string | null
+}
+
+export interface NotificationEventType {
+  key: string
+  label: string
+}
+
+export interface NotificationSettings {
+  enabled: boolean
+  events: string[]
+  webhook_configured: boolean
+  webhook_hint: string | null
+  /** Le secret enregistré n'est plus déchiffrable : la clé applicative a changé. */
+  webhook_unreadable: boolean
+}
+
+export interface DownloadSource {
+  key: string
+  label: string
+}
+
+export interface GameVersion {
+  id: string
+  channel: string
+  minecraft_version: string
+}
+
+export interface InstallResult {
+  file: string
+  path: string
+  previous_jar: string | null
+  size_bytes: number
+  version: string
+}
+
 export type MetricRange = '1h' | '6h' | '24h' | '7d'
 
 export interface MetricPoint {

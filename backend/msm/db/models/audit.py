@@ -72,6 +72,10 @@ class AuditAction(str, Enum):
     #: Une archive emporte les mondes hors de la machine : la sortie se journalise.
     BACKUP_DOWNLOADED = "backup.downloaded"
 
+    # Tâches programmées
+    SCHEDULE_UPDATED = "schedule.updated"
+    SCHEDULE_RUN = "schedule.run"
+
     # Administration
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"

@@ -48,18 +48,30 @@ export function formatDateTime(iso: string | null | undefined): string {
   return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date)
 }
 
-/** « il y a 3 min » — pour les états qui viennent de changer. */
+/**
+ * « il y a 3 min », « dans 4 h » — pour les instants proches, passés ou à venir.
+ *
+ * Le futur compte autant que le passé depuis qu'il y a des tâches programmées :
+ * une prochaine exécution affichée « à l'instant » ferait croire à un
+ * déclenchement imminent qui n'arrivera que cette nuit.
+ */
 export function formatRelative(iso: string | null | undefined): string {
   if (!iso) return '—'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '—'
 
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (seconds < 10) return "à l'instant"
-  if (seconds < 60) return `il y a ${seconds} s`
-  if (seconds < 3600) return `il y a ${Math.floor(seconds / 60)} min`
-  if (seconds < 86400) return `il y a ${Math.floor(seconds / 3600)} h`
-  return formatDateTime(iso)
+  const magnitude = Math.abs(seconds)
+  if (magnitude < 10) return "à l'instant"
+  if (magnitude >= 86400) return formatDateTime(iso)
+
+  const value =
+    magnitude < 60
+      ? `${magnitude} s`
+      : magnitude < 3600
+        ? `${Math.floor(magnitude / 60)} min`
+        : `${Math.floor(magnitude / 3600)} h`
+  return seconds >= 0 ? `il y a ${value}` : `dans ${value}`
 }
 
 export const STATE_LABELS: Record<ServerState, string> = {

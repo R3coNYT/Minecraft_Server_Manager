@@ -17,6 +17,7 @@ import {
   Settings,
   Settings2,
   Terminal,
+  Timer,
   Users,
 } from 'lucide-react'
 import { hasPermission, useMe, useServer, useServerStatus } from '@/hooks/useApi'
@@ -48,6 +49,7 @@ const TABS: TabDefinition[] = [
   // Pas de capacité conditionnelle : tout serveur se sauvegarde, y compris celui
   // qui n'a pas encore de monde — c'est justement le moment d'y penser.
   { to: 'backups', label: 'Sauvegardes', icon: Archive },
+  { to: 'schedules', label: 'Planification', icon: Timer },
 ]
 
 export function ServerLayout() {

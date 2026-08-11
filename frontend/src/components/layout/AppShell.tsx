@@ -9,6 +9,7 @@ import {
   Menu,
   ScrollText,
   Server as ServerIcon,
+  SlidersHorizontal,
   Users,
   Wifi,
   WifiOff,
@@ -80,6 +81,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <NavLink to="/users" className={linkClass} onClick={onNavigate}>
             <Users className="size-4" />
             Utilisateurs
+          </NavLink>
+        ) : null}
+        {hasPermission(me, 'settings:manage') ? (
+          <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
+            <SlidersHorizontal className="size-4" />
+            Réglages
           </NavLink>
         ) : null}
       </nav>

@@ -723,7 +723,12 @@ class ServerRuntime:
                 topics.server_topic(self.id, topics.CRASH),
                 {
                     "server_id": self.id,
+                    # Le nom voyage avec l'événement : un consommateur hors du
+                    # navigateur — une notification Discord — n'a pas de liste de
+                    # serveurs sous la main pour le retrouver.
+                    "server": self._config.name,
                     "exit_code": exit_code,
+                    "reason": reason,
                     "consecutive_crashes": self._consecutive_crashes,
                     "last_lines": [line.to_dict() for line in self._buffer.tail(30)],
                 },
@@ -768,7 +773,12 @@ class ServerRuntime:
         )
         self._bus.publish(
             topics.server_topic(self.id, topics.RESTART_SCHEDULED),
-            {"server_id": self.id, "delay_s": delay_s, "reason": reason},
+            {
+                "server_id": self.id,
+                "server": self._config.name,
+                "delay_s": delay_s,
+                "reason": reason,
+            },
         )
         self._restart_task = asyncio.create_task(
             self._restart_after(delay_s), name=f"msm-restart-{self.id}"

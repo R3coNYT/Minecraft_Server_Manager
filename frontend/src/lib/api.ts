@@ -27,10 +27,16 @@ import type {
   EventRun,
   GameEvent,
   LogsPage,
+  DownloadSource,
+  GameVersion,
+  InstallResult,
   ManagedFile,
   Me,
   MetricRange,
   MetricsHistory,
+  NotificationEventType,
+  NotificationSettings,
+  Schedule,
   PropertiesPage,
   Player,
   PlayerActionResult,
@@ -374,6 +380,41 @@ export const api = {
   metrics: {
     history: (serverId: number, range: MetricRange) =>
       request<MetricsHistory>(`/servers/${serverId}/metrics`, { params: { range } }),
+  },
+
+  schedules: {
+    list: (serverId: number) => request<Schedule[]>(`/servers/${serverId}/schedules`),
+    create: (serverId: number, payload: Record<string, unknown>) =>
+      request<Schedule>(`/servers/${serverId}/schedules`, { method: 'POST', body: payload }),
+    update: (serverId: number, scheduleId: number, payload: Record<string, unknown>) =>
+      request<Schedule>(`/servers/${serverId}/schedules/${scheduleId}`, {
+        method: 'PUT',
+        body: payload,
+      }),
+    remove: (serverId: number, scheduleId: number) =>
+      request<{ status: string }>(`/servers/${serverId}/schedules/${scheduleId}`, {
+        method: 'DELETE',
+      }),
+    run: (serverId: number, scheduleId: number) =>
+      request<Schedule>(`/servers/${serverId}/schedules/${scheduleId}/run`, { method: 'POST' }),
+  },
+
+  notifications: {
+    get: () => request<NotificationSettings>('/notifications'),
+    events: () => request<NotificationEventType[]>('/notifications/events'),
+    update: (payload: Record<string, unknown>) =>
+      request<NotificationSettings>('/notifications', { method: 'PUT', body: payload }),
+    test: () => request<{ sent: boolean }>('/notifications/test', { method: 'POST' }),
+  },
+
+  downloads: {
+    sources: () => request<DownloadSource[]>('/downloads/sources'),
+    versions: (source: string) => request<GameVersion[]>(`/downloads/${source}/versions`),
+    install: (serverId: number, source: string, version: string) =>
+      request<InstallResult>(`/servers/${serverId}/install`, {
+        method: 'POST',
+        body: { source, version },
+      }),
   },
 
   users: {

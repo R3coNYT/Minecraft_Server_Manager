@@ -19,6 +19,8 @@ import { ConfigsPage } from '@/pages/server/ConfigsPage'
 import { PropertiesPage } from '@/pages/server/PropertiesPage'
 import { EventsPage } from '@/pages/server/EventsPage'
 import { BackupsPage } from '@/pages/server/BackupsPage'
+import { SchedulesPage } from '@/pages/server/SchedulesPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 /**
  * Garde d'accès.
@@ -62,6 +64,7 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="settings" element={<SettingsPage />} />
 
         <Route path="servers/:serverId" element={<ServerLayout />}>
           <Route index element={<OverviewPage />} />
@@ -73,6 +76,7 @@ export function App() {
           <Route path="configs" element={<ConfigsPage />} />
           <Route path="events" element={<EventsPage />} />
           <Route path="backups" element={<BackupsPage />} />
+          <Route path="schedules" element={<SchedulesPage />} />
         </Route>
       </Route>
 

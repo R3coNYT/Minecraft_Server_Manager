@@ -262,7 +262,8 @@ de dire qui a fait quoi, avec quels droits, à ce moment-là.
 
 `users` · `user_sessions` · `servers` · `server_settings` · `server_runtime_state`
 · `server_permissions` · `audit_logs` · `players` · `skin_cache` ·
-`event_definitions` · `event_runs` · `backups` · `metric_samples` · `app_settings`
+`event_definitions` · `event_runs` · `backups` · `metric_samples` · `schedules` ·
+`app_settings`
 
 Deux points notables :
 
@@ -385,7 +386,41 @@ justement la pointe qu'on cherche.
 
 ---
 
-## 12. Extensibilité
+## 12. Automatisation
+
+**Planification.** Trois formes de règles — intervalle, quotidien, hebdomadaire —
+plutôt qu'une expression cron : `0 4 * * 1,4` est illisible pour qui administre
+un serveur Minecraft sans être administrateur système. Les heures sont
+**locales** : une sauvegarde « à 4 h » reste à 4 h des deux côtés d'un changement
+d'heure, et les deux anomalies annuelles sont traitées explicitement (heure
+inexistante au printemps, heure doublée à l'automne).
+
+`next_run_at` est persisté plutôt que recalculé : c'est ce qui permet de savoir,
+après un arrêt de MSM, qu'une exécution a été manquée. Elle est rattrapée si le
+retard reste modéré, sinon marquée manquée — rejouer une sauvegarde nocturne en
+pleine affluence ne rend service à personne.
+
+Une tâche agit **au nom de son auteur, avec ses droits d'aujourd'hui**, réévalués
+à chaque déclenchement : une tâche n'est pas un moyen de conserver des droits
+perdus depuis. Programmer une action exige la même permission que la déclencher à
+la main.
+
+**Notifications.** Un webhook Discord, dont l'URL est un secret — elle autorise à
+publier dans le salon — donc chiffrée en base et jamais renvoyée par l'API. Les
+messages sont regroupés sur trois secondes : un serveur en boucle de redémarrage
+produirait sinon des dizaines d'appels par minute. Rien de ce qui se passe là ne
+peut faire échouer autre chose.
+
+**Téléchargements.** Trois sources codées en dur (Mojang, PaperMC, PurpurMC).
+Aucune URL ne vient de l'utilisateur : un champ « adresse du JAR » ferait du
+panneau un outil de téléchargement arbitraire tournant avec les droits du
+service. L'empreinte publiée est vérifiée avant d'installer, et l'hôte est
+revalidé juste avant la requête — une API compromise ne pourrait pas rediriger
+ailleurs.
+
+---
+
+## 13. Extensibilité
 
 Les points d'extension prévus, et ce qu'ils permettent d'ajouter sans refonte :
 
@@ -394,6 +429,8 @@ Les points d'extension prévus, et ce qu'ils permettent d'ajouter sans refonte :
 | `launchers/registry.py` | nouvelle méthode de démarrage |
 | `minecraft/types.py` (`Capability`) | nouvel onglet conditionné au contenu réel du dossier |
 | `events/registry.py` | nouveau type d'action d'événement |
+| `downloads/sources.py` (`SOURCES`) | nouvelle source de JAR de serveur |
+| `services/schedule_service.py` (`REQUIRED_PERMISSION`) | nouvelle action programmable |
 | `runtime/agent.py` (`Agent`) | machines distantes |
 | `minecraft/players/sources.py` | nouvelle source de données joueur (RCON, plugin, query) |
 
@@ -404,7 +441,7 @@ aujourd'hui.
 
 ---
 
-## 13. Déploiement
+## 14. Déploiement
 
 Production Linux : utilisateur `msm` dédié (jamais root), unité systemd durcie
 (`NoNewPrivileges`, `ProtectSystem=strict`, `ReadWritePaths` limité aux dossiers

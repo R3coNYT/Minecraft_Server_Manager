@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -81,11 +81,15 @@ class BackupProgress:
     done: int = 0
     total: int = 1
     error: str | None = None
+    #: Le nom accompagne l'identifiant : un consommateur hors navigateur — une
+    #: notification Discord — n'a pas de liste de serveurs pour le retrouver.
+    server_name: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "backup_id": self.backup_id,
             "server_id": self.server_id,
+            "server": self.server_name,
             "status": self.status,
             "phase": self.phase,
             "done": self.done,
@@ -502,7 +506,9 @@ async def _run_backup(
     cancelled = False
 
     def publish(progress: BackupProgress) -> None:
-        bus.publish(topic, progress.to_dict())
+        # Le nom est ajouté ici plutôt qu'à chaque appel : il est constant pour
+        # toute la durée de la sauvegarde.
+        bus.publish(topic, replace(progress, server_name=server_name).to_dict())
 
     publish(BackupProgress(backup_id, server_id, "RUNNING", "Analyse du contenu"))
 

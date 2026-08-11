@@ -142,13 +142,36 @@ serveur sont conservées (`MSM_BACKUP_RETENTION`).
 > chemin à `ReadWritePaths=` dans l'unité systemd : le durcissement interdit
 > sinon toute écriture hors des dossiers déclarés.
 
+### Automatiser
+
+L'onglet **Planification** de chaque serveur programme la sauvegarde — « chaque
+jour à 4 h » — ainsi que redémarrages, événements et commandes. Les heures sont
+locales au fuseau choisi, changement d'heure compris.
+
+Si MSM était arrêté au moment prévu, l'exécution est rattrapée tant que le retard
+reste sous `MSM_SCHEDULER_GRACE_MINUTES` (60 par défaut) ; au-delà elle est
+marquée « manquée » et l'occurrence suivante est visée.
+
 ### Ce que le panneau ne sauvegarde pas
 
 | Quoi | Où | Pourquoi |
 |---|---|---|
-| `/etc/msm/.env` | configuration | contient la clé secrète ; sans elle, les mots de passe RCON chiffrés deviennent illisibles |
-| `/var/lib/msm/msm.db` | base | comptes, serveurs, audit, historique des joueurs |
+| `/etc/msm/.env` | configuration | contient la clé secrète ; sans elle, les secrets chiffrés (webhook Discord, mots de passe RCON) deviennent illisibles |
+| `/var/lib/msm/msm.db` | base | comptes, serveurs, audit, historique des joueurs, tâches programmées |
 | Les JAR et les mods | dossiers de serveurs | volumineux et re-téléchargeables ; leur liste figure dans chaque archive |
+
+## Accès sortants
+
+MSM n'a besoin d'Internet que pour trois choses, toutes facultatives :
+
+| Vers | Pourquoi |
+|---|---|
+| `api.mojang.com`, `sessionserver.mojang.com`, `textures.minecraft.net` | pseudos et skins des joueurs |
+| `launchermeta.mojang.com`, `piston-*.mojang.com`, `api.papermc.io`, `api.purpurmc.org` | catalogue de versions et téléchargement des JAR |
+| `discord.com` | notifications, si un webhook est configuré |
+
+Aucune autre destination n'est possible : les hôtes sont codés en dur et
+revérifiés avant chaque requête.
 
 ## Mise à jour
 

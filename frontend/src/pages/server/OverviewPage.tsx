@@ -11,6 +11,9 @@ import {
 } from '@/lib/format'
 import { Badge, Card, CardHeader } from '@/components/ui/primitives'
 import { ResourcePanel } from '@/components/metrics/ResourcePanel'
+import { VersionInstaller } from '@/components/servers/VersionInstaller'
+import { hasPermission, useMe } from '@/hooks/useApi'
+import { useQueryClient } from '@tanstack/react-query'
 
 function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -23,7 +26,10 @@ function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
 
 export function OverviewPage() {
   const { server, status } = useServerContext()
+  const queryClient = useQueryClient()
+  const { data: me } = useMe()
   const settings = server.settings
+  const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
 
   return (
     <div className="h-full overflow-y-auto">
@@ -121,6 +127,19 @@ export function OverviewPage() {
         </div>
 
         <ResourcePanel serverId={server.id} />
+
+        {hasPermission(me, 'server:edit') ? (
+          <VersionInstaller
+            serverId={server.id}
+            serverName={server.name}
+            running={running}
+            currentJar={settings?.jar_path ?? null}
+            onInstalled={() => {
+              void queryClient.invalidateQueries({ queryKey: ['server', server.id] })
+              void queryClient.invalidateQueries({ queryKey: ['servers'] })
+            }}
+          />
+        ) : null}
 
         <Card>
           <CardHeader

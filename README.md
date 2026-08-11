@@ -1,7 +1,8 @@
 # Minecraft Server Manager (MSM) 2.0
 
 Panneau de contrôle web pour administrer **plusieurs serveurs Minecraft** depuis une seule
-interface : console temps réel, joueurs, mods, plugins, configurations et événements.
+interface : console temps réel, joueurs, mods, plugins, configurations, événements,
+sauvegardes et tâches programmées.
 
 > Réécriture complète. La version 1 (script Flask mono-serveur) reste consultable sur la
 > branche `main` et le tag `v1.0-legacy`.
@@ -24,7 +25,7 @@ interface : console temps réel, joueurs, mods, plugins, configurations et évé
 - [x] **Phase 3** — fichiers : mods, plugins, éditeur de configurations, server.properties
 - [x] **Phase 4** — événements : actions immédiates, séquences enregistrées, exécution en tâche de fond annulable
 - [x] **Phase 5** — administration : sauvegardes (mondes et configurations, à chaud), restauration, historique des ressources
-- [ ] **Phase 6** — extensions
+- [x] **Phase 6** — extensions : planification, notifications Discord, installation de versions
 
 ## Installation sur un serveur Linux
 

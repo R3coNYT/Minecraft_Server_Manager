@@ -33,9 +33,12 @@ from msm.runtime.supervisor import Supervisor
 from msm.services.backup_service import BackupService
 from msm.services.event_service import EventService
 from msm.services.metrics_recorder import MetricsRecorder
+from msm.services.notifier import Notifier
 from msm.services.player_recorder import PlayerRecorder
 from msm.services.runtime_recorder import RuntimeStateRecorder
+from msm.services.schedule_service import Scheduler
 from msm.services.server_service import ServerService
+from msm.services.settings_service import load_notification_settings
 from msm.web import mount_frontend
 from msm.ws import websocket_router
 
@@ -99,6 +102,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     state_recorder.start()
     metrics_recorder = MetricsRecorder(supervisor, settings)
     metrics_recorder.start()
+    # Les tâches programmées et les notifications sortantes : deux boucles de
+    # fond, arrêtées proprement plus bas.
+    scheduler = Scheduler(supervisor, settings)
+    scheduler.start()
+    notifier = Notifier(get_event_bus(), load_notification_settings)
+    notifier.start()
 
     logger.info(
         "msm_started",
@@ -118,6 +127,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await recorder.stop()
         await state_recorder.stop()
         await metrics_recorder.stop()
+        await scheduler.stop()
+        await notifier.stop()
         # Les serveurs Minecraft ne sont PAS arrêtés : redémarrer le panel ne doit
         # pas déconnecter les joueurs. Ils seront réadoptés au prochain démarrage.
         await supervisor.shutdown(stop_servers=False)

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from msm.api.v1 import (
     audit,
     auth,
+    automation,
     backups,
     console,
     events,
@@ -24,6 +25,7 @@ api_router.include_router(players.router)
 api_router.include_router(files.router)
 api_router.include_router(events.router)
 api_router.include_router(backups.router)
+api_router.include_router(automation.router)
 api_router.include_router(audit.router)
 api_router.include_router(system.router)
 

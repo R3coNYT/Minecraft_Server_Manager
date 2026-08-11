@@ -23,6 +23,10 @@ dependencies = [
     "structlog>=24.4",
     "python-multipart>=0.0.12",
     "pyyaml>=6.0",
+    # Base de fuseaux horaires : Windows n'en fournit aucune que `zoneinfo` sache
+    # lire, et une tâche « sauvegarde à 4 h » a besoin de savoir ce qu'est 4 h.
+    # Sous Linux, la base système reste prioritaire.
+    "tzdata>=2024.2",
 ]
 
 [project.optional-dependencies]
