@@ -382,7 +382,16 @@ sed -e "s|__MSM_USER__|${MSM_USER}|g" \
 
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1
-ok "Service installé et activé au démarrage."
+
+# L'activation est *vérifiée*, pas supposée : sans elle, MSM s'installe, démarre,
+# et ne revient jamais après un redémarrage de la machine — panne qui ne se
+# découvrirait qu'à la première coupure de courant.
+systemctl is-enabled --quiet "${SERVICE_NAME}" || fail \
+  "Le service n'a pas pu être activé au démarrage." \
+  "systemctl enable ${SERVICE_NAME} a échoué : MSM ne redémarrerait pas après un reboot." \
+  "Consulter : systemctl status ${SERVICE_NAME} ; puis relancer : systemctl enable ${SERVICE_NAME}"
+
+ok "Service installé et activé au démarrage de la machine."
 
 # --------------------------------------------------------------------------- #
 #  12. Démarrage
@@ -412,6 +421,9 @@ cat <<EOF
   État du service    systemctl status ${SERVICE_NAME}
   Redémarrer         systemctl restart ${SERVICE_NAME}
   Créer un compte    sudo -u ${MSM_USER} ${VENV}/bin/python -m msm.cli createadmin NOM
+
+  MSM redémarre automatiquement avec la machine. Pour que vos serveurs
+  Minecraft repartent aussi, cocher « Démarrer avec MSM » dans leurs réglages.
 
 EOF
 

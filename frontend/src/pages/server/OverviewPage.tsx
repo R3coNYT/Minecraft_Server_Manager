@@ -13,7 +13,9 @@ import { Badge, Card, CardHeader } from '@/components/ui/primitives'
 import { ResourcePanel } from '@/components/metrics/ResourcePanel'
 import { VersionInstaller } from '@/components/servers/VersionInstaller'
 import { hasPermission, useMe } from '@/hooks/useApi'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { api } from '@/lib/api'
+import { useToasts } from '@/stores/toasts'
 
 function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -30,6 +32,27 @@ export function OverviewPage() {
   const { data: me } = useMe()
   const settings = server.settings
   const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
+  const canEdit = hasPermission(me, 'server:edit')
+  const push = useToasts((state) => state.push)
+  const pushError = useToasts((state) => state.pushError)
+
+  // Le seul réglage modifiable depuis cet écran : il conditionne ce qui se passe
+  // après une coupure de courant, et n'a pas à se chercher dans un formulaire.
+  const autostart = useMutation({
+    mutationFn: (value: boolean) =>
+      api.servers.update(server.id, { settings: { autostart_on_boot: value } }),
+    onSuccess: (updated) => {
+      push({
+        kind: 'success',
+        title: updated.settings?.autostart_on_boot
+          ? 'Ce serveur démarrera avec la machine'
+          : 'Ce serveur ne démarrera plus automatiquement',
+      })
+      void queryClient.invalidateQueries({ queryKey: ['server', server.id] })
+      void queryClient.invalidateQueries({ queryKey: ['servers'] })
+    },
+    onError: (error) => pushError(error),
+  })
 
   return (
     <div className="h-full overflow-y-auto">
@@ -122,6 +145,24 @@ export function OverviewPage() {
                 label="CLUF automatique"
                 value={settings?.auto_accept_eula ? 'Oui' : 'Non'}
               />
+              <div className="flex items-start justify-between gap-4 px-5 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm text-slate-500">Démarrer avec MSM</p>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    Relance ce serveur au démarrage de la machine, dès que MSM est prêt.
+                  </p>
+                </div>
+                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    className="size-4 rounded border-slate-600 bg-slate-900 text-emerald-600 focus:ring-emerald-600"
+                    checked={settings?.autostart_on_boot ?? false}
+                    disabled={!canEdit || autostart.isPending}
+                    onChange={(event) => autostart.mutate(event.target.checked)}
+                  />
+                  {settings?.autostart_on_boot ? 'Oui' : 'Non'}
+                </label>
+              </div>
             </dl>
           </Card>
         </div>

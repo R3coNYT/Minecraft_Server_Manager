@@ -365,6 +365,45 @@ class ServerService:
             logger.info("servers_readopted", count=adopted)
         return adopted
 
+    async def autostart(self) -> int:
+        """Démarre les serveurs marqués « démarrer au démarrage de la machine ».
+
+        Appelée après :meth:`adopt_running`, et jamais avant : un serveur qui a
+        survécu à un simple redémarrage du panneau est déjà en ligne, le relancer
+        lui ferait perdre son port et couperait les joueurs connectés.
+
+        Un échec est **isolé** : trois serveurs sur quatre doivent démarrer même
+        si le quatrième a un JAR manquant. La cause est journalisée et reste
+        visible dans l'interface.
+        """
+        started = 0
+        for server in await self._servers.list_all(only_enabled=True):
+            settings = server.settings
+            if settings is None or not settings.autostart_on_boot:
+                continue
+
+            runtime = self._supervisor.find(server.id)
+            if runtime is None or runtime.state.is_running:
+                continue
+
+            try:
+                await runtime.start(actor="démarrage automatique")
+            except Exception as exc:  # un serveur en panne ne bloque pas les autres
+                logger.error(
+                    "server_autostart_failed",
+                    server_id=server.id,
+                    server=server.name,
+                    error=str(getattr(exc, "cause", None) or exc),
+                )
+                continue
+
+            started += 1
+            logger.info("server_autostarted", server_id=server.id, server=server.name)
+
+        if started:
+            logger.info("servers_autostarted", count=started)
+        return started
+
     # ------------------------------------------------------------------ #
     #  Validation
     # ------------------------------------------------------------------ #

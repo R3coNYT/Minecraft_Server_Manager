@@ -142,6 +142,24 @@ serveur sont conservées (`MSM_BACKUP_RETENTION`).
 > chemin à `ReadWritePaths=` dans l'unité systemd : le durcissement interdit
 > sinon toute écriture hors des dossiers déclarés.
 
+## Redémarrage de la machine
+
+`install.sh` active le service : **MSM repart tout seul au démarrage de la
+machine**, et le script vérifie que l'activation a bien pris — sans quoi la panne
+ne se découvrirait qu'à la première coupure de courant.
+
+Que MSM redémarre ne relance pas pour autant les serveurs Minecraft. Deux cas
+distincts :
+
+| Situation | Ce qui se passe |
+|---|---|
+| Redémarrage de **MSM seul** (mise à jour, `systemctl restart`) | Les serveurs Minecraft continuent de tourner et sont **réadoptés** : les joueurs ne sont pas déconnectés. |
+| Redémarrage de **la machine** | Tout est éteint. Au retour, MSM relance les serveurs dont l'option **« Démarrer avec MSM »** est cochée (onglet Aperçu du serveur). |
+
+L'option est décochée par défaut : rien ne démarre sans qu'on l'ait demandé. Un
+serveur dont le démarrage échoue — dossier sur un disque non remonté, par
+exemple — est signalé sans empêcher les autres de repartir.
+
 ### Automatiser
 
 L'onglet **Planification** de chaque serveur programme la sauvegarde — « chaque

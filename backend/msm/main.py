@@ -70,8 +70,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.supervisor = supervisor
     app.state.agent = LocalAgent(supervisor)
 
-    # Les serveurs configurés sont mis sous supervision au démarrage ; aucun n'est
-    # lancé automatiquement à ce stade (le démarrage au boot arrivera en phase 5).
+    # Les serveurs configurés sont mis sous supervision au démarrage. Ceux qui
+    # ont survécu au précédent MSM sont réadoptés ; ceux qui demandent un
+    # démarrage automatique sont lancés — dans cet ordre, sans quoi on relancerait
+    # un serveur déjà en ligne et l'on couperait ses joueurs.
     try:
         async with session_scope() as session:
             service = ServerService(session, settings, supervisor)
@@ -86,6 +88,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # Même raison pour les sauvegardes : une archive dont l'écriture a
             # été coupée n'est pas « en cours », elle a échoué.
             await BackupService(session, supervisor, settings=settings).mark_interrupted()
+            # En dernier : après un redémarrage de la machine, plus rien ne tourne
+            # et les serveurs voulus repartent d'eux-mêmes.
+            await service.autostart()
     except Exception:  # pragma: no cover - base absente ou migrations non appliquées
         logger.exception(
             "server_registration_skipped",
