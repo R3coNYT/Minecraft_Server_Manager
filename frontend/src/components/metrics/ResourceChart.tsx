@@ -21,26 +21,43 @@ interface ResourceChartProps {
   points: MetricPoint[]
   /** Valeur à tracer pour un point donné. */
   value: (point: MetricPoint) => number
-  /** Maximum de l'axe vertical ; sinon calculé sur les données. */
-  max?: number
+  /**
+   * Plancher de l'axe vertical. L'échelle s'adapte toujours aux données
+   * au-dessus de cette valeur : un plafond fixe écrêterait la courbe, et une
+   * pointe écrêtée ressemble à un plateau — exactement l'inverse de ce qu'elle
+   * est. Le plancher évite seulement qu'un serveur au repos affiche une montagne
+   * pour trois pour cent.
+   */
+  floor?: number
   format: (value: number) => string
   color: string
   label: string
+  /** Précision affichée sous le titre — l'unité, quand elle n'est pas évidente. */
+  hint?: string
 }
+
+//: Paliers d'échelle : arrondir à la puissance de dix supérieure donnerait 2000
+//: pour une pointe à 1081, et la courbe n'occuperait que la moitié de la
+//: hauteur. Ces paliers intermédiaires gardent un axe lisible **et** une courbe
+//: qui remplit son cadre.
+const STEPS = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]
 
 function niceMax(value: number): number {
   if (value <= 0) return 1
   const magnitude = 10 ** Math.floor(Math.log10(value))
-  return Math.ceil(value / magnitude) * magnitude
+  const normalised = value / magnitude
+  const step = STEPS.find((candidate) => candidate >= normalised) ?? 10
+  return step * magnitude
 }
 
 export function ResourceChart({
   points,
   value,
-  max,
+  floor,
   format,
   color,
   label,
+  hint,
 }: ResourceChartProps) {
   const gradientId = useId()
 
@@ -53,7 +70,8 @@ export function ResourceChart({
   }
 
   const values = points.map(value)
-  const ceiling = max ?? niceMax(Math.max(...values))
+  const peak = Math.max(...values)
+  const ceiling = Math.max(floor ?? 0, niceMax(peak))
   const innerWidth = WIDTH - PADDING.left - PADDING.right
   const innerHeight = HEIGHT - PADDING.top - PADDING.bottom
 
@@ -74,10 +92,13 @@ export function ResourceChart({
 
   return (
     <figure className="m-0">
-      <figcaption className="mb-1 flex items-baseline justify-between text-xs">
-        <span className="text-slate-400">{label}</span>
-        <span className="tabular-nums text-slate-500">
-          max {format(Math.max(...values))}
+      <figcaption className="mb-1 flex items-baseline justify-between gap-3 text-xs">
+        <span className="min-w-0 truncate text-slate-400">
+          {label}
+          {hint ? <span className="ml-1.5 text-slate-600">{hint}</span> : null}
+        </span>
+        <span className="shrink-0 tabular-nums text-slate-500">
+          pointe {format(peak)}
         </span>
       </figcaption>
 
@@ -139,7 +160,9 @@ export function ResourceChart({
 
       <div className="flex justify-between text-[11px] tabular-nums text-slate-600">
         <span>{hour(first.ts)}</span>
-        <span>{format(ceiling)} max</span>
+        {/* « échelle » et non « max » : c'est le haut de l'axe, pas une mesure.
+            La pointe réellement observée est annoncée dans le titre. */}
+        <span>échelle 0 – {format(ceiling)}</span>
         <span>{hour(last.ts)}</span>
       </div>
     </figure>

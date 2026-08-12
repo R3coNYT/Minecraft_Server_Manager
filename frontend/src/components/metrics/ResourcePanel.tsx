@@ -67,13 +67,18 @@ export function ResourcePanel({ serverId }: { serverId: number }) {
           <LoadingBlock />
         ) : (
           <>
+            {/* 100 % désigne **un cœur** saturé, pas la machine entière : la
+                mesure est la somme des processus du serveur, et psutil compte
+                par cœur. Un serveur Minecraft qui compile ses chunks dépasse
+                donc couramment 100 %, et l'échelle doit suivre. */}
             <ResourceChart
               points={points}
               value={(point) => point.cpu_percent}
-              max={100}
+              floor={100}
               format={(value) => `${Math.round(value)} %`}
               color="#38bdf8"
               label="Processeur"
+              hint="100 % = un cœur"
             />
             <ResourceChart
               points={points}
@@ -81,10 +86,14 @@ export function ResourcePanel({ serverId }: { serverId: number }) {
               format={formatMemory}
               color="#a78bfa"
               label="Mémoire"
+              hint="réellement occupée par le serveur"
             />
             <ResourceChart
               points={points}
               value={(point) => point.players_online}
+              // Plancher à 1 : sans lui, un serveur sans joueur donnerait une
+              // échelle 0–0 et une ligne au milieu de nulle part.
+              floor={1}
               format={(value) => `${Math.round(value)}`}
               color="#34d399"
               label="Joueurs connectés"
