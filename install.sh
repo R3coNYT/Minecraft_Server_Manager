@@ -311,29 +311,21 @@ ok "Schéma de base appliqué."
 # --------------------------------------------------------------------------- #
 step "Compte administrateur"
 
-EXISTING_USERS="$(run_as_msm "$VENV/bin/python" - <<'PYTHON' 2>/dev/null || echo 0
-import asyncio
+# `count-users` n'écrit que son résultat sur la sortie standard ; sa
+# journalisation part sur la sortie d'erreur, écartée ici.
+EXISTING_USERS="$(run_as_msm "$VENV/bin/python" -m msm.cli count-users 2>/dev/null | tail -n1)"
 
-from msm.config import get_settings
-from msm.db.session import dispose_engine, init_engine, session_scope
-from msm.services.auth_service import AuthService
-
-
-async def main() -> None:
-    settings = get_settings()
-    init_engine(settings)
-    async with session_scope() as session:
-        print(await AuthService(session, settings).count_users())
-    await dispose_engine()
-
-
-asyncio.run(main())
-PYTHON
-)"
+# Ceinture et bretelles : une sortie inattendue ne doit jamais faire croire qu'il
+# n'y a aucun compte — on redemanderait d'en créer un à chaque mise à jour.
+if ! [[ "$EXISTING_USERS" =~ ^[0-9]+$ ]]; then
+  warn "Le nombre de comptes n'a pas pu être déterminé."
+  warn "Aucun compte ne sera créé ; en ajouter un au besoin avec createadmin."
+  EXISTING_USERS=1
+fi
 
 if [[ "$SKIP_ADMIN" -eq 1 ]]; then
   warn "Création du compte ignorée (--skip-admin)."
-elif [[ "${EXISTING_USERS:-0}" -gt 0 ]]; then
+elif [[ "$EXISTING_USERS" -gt 0 ]]; then
   ok "${EXISTING_USERS} compte(s) déjà présent(s) — aucun compte créé."
 else
   read -r -p "  Nom du compte administrateur [admin] : " ADMIN_NAME

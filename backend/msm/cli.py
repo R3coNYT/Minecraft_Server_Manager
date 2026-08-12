@@ -5,6 +5,10 @@ Deux commandes sont indispensables au premier démarrage :
 * ``msm migrate``     — applique le schéma de base de données ;
 * ``msm createadmin`` — crée le premier compte administrateur.
 
+Les commandes destinées aux scripts (``count-users``) n'écrivent que leur
+résultat sur la sortie standard : la journalisation part sur la sortie d'erreur,
+pour qu'un appelant puisse lire la réponse sans la démêler des logs.
+
 Le mot de passe n'est jamais accepté en argument de ligne de commande : il
 apparaîtrait dans l'historique du shell et dans la liste des processus. Il est
 demandé de façon masquée, ou lu dans la variable ``MSM_ADMIN_PASSWORD`` pour les
@@ -50,6 +54,10 @@ def _build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("purge-sessions", help="Supprimer les sessions expirées")
     subparsers.add_parser("secret", help="Générer une clé secrète pour le fichier .env")
+    subparsers.add_parser(
+        "count-users",
+        help="Afficher le nombre de comptes (un entier seul, pour les scripts)",
+    )
 
     return parser
 
@@ -84,6 +92,8 @@ async def _run_async_command(args: argparse.Namespace, settings: object) -> int:
             return await _create_admin(args, settings)
         if args.command == "purge-sessions":
             return await _purge_sessions(settings)
+        if args.command == "count-users":
+            return await _count_users(settings)
     finally:
         await dispose_engine()
     return 1
@@ -109,6 +119,22 @@ async def _create_admin(args: argparse.Namespace, settings: object) -> int:
             return 1
 
     print(f"Compte « {user.username} » créé avec le rôle {user.role.value}.")
+    return 0
+
+
+async def _count_users(settings: object) -> int:
+    """Écrit le nombre de comptes sur la sortie standard, et **rien d'autre**.
+
+    Destinée aux scripts : `install.sh` s'en sert pour savoir s'il doit proposer
+    la création d'un compte. La journalisation part sur la sortie d'erreur —
+    c'est déjà le cas une fois `configure_logging` appelé, ce que la commande
+    embarquée qu'elle remplace ne faisait pas : structlog non configuré écrit sur
+    la sortie standard, et l'appelant recevait des lignes de log là où il
+    attendait un entier.
+    """
+    async with session_scope() as session:
+        count = await AuthService(session, settings).count_users()  # type: ignore[arg-type]
+    print(count)
     return 0
 
 
