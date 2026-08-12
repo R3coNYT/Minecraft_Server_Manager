@@ -15,11 +15,11 @@ import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from msm.exceptions import ConfigurationError
 
@@ -76,7 +76,13 @@ class Settings(BaseSettings):
     # --- Réseau -----------------------------------------------------------
     host: str = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535)
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    # `NoDecode` : sans lui, pydantic-settings interprète la valeur d'une liste
+    # comme du JSON **avant** que les validateurs ci-dessous ne la voient. Une
+    # variable d'environnement écrite naturellement — vide, ou séparée par des
+    # virgules — ferait alors échouer le démarrage sur une erreur JSON obscure.
+    cors_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
 
     # --- Sécurité ---------------------------------------------------------
     secret_key: str = ""
@@ -93,7 +99,7 @@ class Settings(BaseSettings):
     # --- Chemins ----------------------------------------------------------
     data_dir: Path = Path("./data")
     log_dir: Path = Path("./logs")
-    server_roots: list[Path] = Field(default_factory=list)
+    server_roots: Annotated[list[Path], NoDecode] = Field(default_factory=list)
 
     # --- Processus Minecraft ---------------------------------------------
     default_stop_timeout_s: float = Field(default=60.0, gt=0)
