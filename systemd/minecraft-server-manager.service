@@ -12,25 +12,25 @@ WorkingDirectory=__MSM_HOME__
 EnvironmentFile=__MSM_CONFIG__/.env
 ExecStart=__MSM_HOME__/backend/.venv/bin/python -m msm.cli serve
 
-# Redémarrage du panneau uniquement : les serveurs Minecraft lui survivent et
-# sont réadoptés au démarrage suivant.
+# Restarts the panel only: the Minecraft servers outlive it and are re-adopted
+# at the next start.
 Restart=on-failure
 RestartSec=5s
 
-# Délai d'arrêt généreux : MSM ne coupe pas les serveurs Minecraft, mais laisse
-# ses écritures en base s'achever proprement.
+# Generous stop timeout: MSM does not stop the Minecraft servers, but lets its
+# database writes finish cleanly.
 TimeoutStopSec=30s
-# Seul MSM est arrêté. Les serveurs Minecraft font partie du même groupe de
-# contrôle : avec `mixed` ou `control-group`, systemd les tuerait (SIGKILL, sans
-# sauvegarde du monde) à chaque redémarrage ou mise à jour du panneau. Ils lui
-# survivent ainsi, et sont réadoptés au démarrage suivant. systemd signalera ces
-# processus « restants » au redémarrage : c'est attendu.
+# Only MSM is stopped. The Minecraft servers belong to the same control group:
+# with `mixed` or `control-group`, systemd would kill them (SIGKILL, without
+# saving the world) on every restart or update of the panel. This way they
+# outlive it, and are re-adopted at the next start. systemd will report these
+# "left-over" processes on restart: that is expected.
 KillMode=process
 
-# --- Durcissement -----------------------------------------------------------
-# MSM lance des processus Java qui doivent écrire dans les dossiers des serveurs :
-# les restrictions sont donc calibrées, pas maximales. Chaque ligne retirée
-# élargirait la surface d'attaque en cas de compromission du panneau.
+# --- Hardening --------------------------------------------------------------
+# MSM launches Java processes that must write to the server folders: the
+# restrictions are therefore calibrated, not maximal. Each line removed would
+# widen the attack surface if the panel were compromised.
 NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
@@ -42,12 +42,12 @@ RestrictSUIDSGID=yes
 RestrictRealtime=yes
 LockPersonality=yes
 
-# Seuls ces chemins sont accessibles en écriture. `__MSM_SERVERS__` contient les
-# dossiers des serveurs Minecraft ; l'ajuster si vos serveurs sont ailleurs.
+# Only these paths are writable. `__MSM_SERVERS__` holds the Minecraft server
+# folders; adjust it if your servers live elsewhere.
 ReadWritePaths=__MSM_DATA__ __MSM_LOGS__ __MSM_SERVERS__
 
-# Journalisation : MSM écrit aussi dans son propre fichier, mais journald garde
-# la trace des démarrages et des échecs.
+# Logging: MSM also writes to its own file, but journald keeps track of starts
+# and failures.
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=msm

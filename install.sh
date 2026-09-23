@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Installation de Minecraft Server Manager sur un serveur Linux.
+# Installs Minecraft Server Manager on a Linux server.
 #
-# Le script est **idempotent** : le relancer met à jour une installation
-# existante sans écraser la configuration, la base de données ni les serveurs.
-# Pour une mise à jour, préférer update.sh : il sauvegarde la base avant de
-# migrer et revient en arrière tout seul si quelque chose échoue.
+# The script is **idempotent**: running it again updates an existing
+# installation without overwriting the configuration, the database or the
+# servers. For an update, prefer update.sh: it backs up the database before
+# migrating and rolls back on its own if something fails.
 #
 #   sudo ./install.sh
 #   sudo ./install.sh --dir /srv/msm --servers-root /data/minecraft
@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # --------------------------------------------------------------------------- #
-#  Valeurs par défaut
+#  Defaults
 # --------------------------------------------------------------------------- #
 MSM_USER="msm"
 MSM_GROUP="msm"
@@ -32,7 +32,7 @@ FROM_UPDATE=0
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # --------------------------------------------------------------------------- #
-#  Affichage
+#  Output
 # --------------------------------------------------------------------------- #
 if [[ -t 1 ]]; then
   BOLD="\033[1m"; GREEN="\033[32m"; YELLOW="\033[33m"; RED="\033[31m"; RESET="\033[0m"
@@ -45,32 +45,32 @@ info()  { printf "  %s\n" "$*"; }
 ok()    { printf "  ${GREEN}✓${RESET} %s\n" "$*"; }
 warn()  { printf "  ${YELLOW}!${RESET} %s\n" "$*"; }
 
-# Toute erreur fatale explique la cause ET l'action corrective, comme le reste
-# du panneau : un installateur qui dit seulement « échec » ne sert à rien.
+# Every fatal error explains the cause AND the fix, like the rest of the panel:
+# an installer that only says "failed" is of no use.
 fail() {
   printf "\n${RED}✗ %s${RESET}\n" "$1" >&2
-  [[ $# -ge 2 ]] && printf "  Cause : %s\n" "$2" >&2
-  [[ $# -ge 3 ]] && printf "  Action : %s\n" "$3" >&2
+  [[ $# -ge 2 ]] && printf "  Cause: %s\n" "$2" >&2
+  [[ $# -ge 3 ]] && printf "  Fix: %s\n" "$3" >&2
   exit 1
 }
 
 usage() {
   cat <<EOF
-Installation de Minecraft Server Manager.
+Installs Minecraft Server Manager.
 
-Options :
-  --dir CHEMIN            Dossier d'installation      (défaut : ${INSTALL_DIR})
-  --config CHEMIN         Dossier de configuration    (défaut : ${CONFIG_DIR})
-  --data CHEMIN           Dossier de données          (défaut : ${DATA_DIR})
-  --logs CHEMIN           Dossier de journaux         (défaut : ${LOG_DIR})
-  --servers-root CHEMIN   Racine des serveurs         (défaut : ${SERVERS_ROOT})
-  --user NOM              Utilisateur système         (défaut : ${MSM_USER})
-  --host ADRESSE          Adresse d'écoute            (défaut : ${BIND_HOST})
-  --port PORT             Port d'écoute               (défaut : ${BIND_PORT})
-  --skip-frontend         Ne pas compiler l'interface
-  --skip-admin            Ne pas créer de compte administrateur
-  --from-update           Mode utilisé par update.sh (aucune question)
-  -h, --help              Afficher cette aide
+Options:
+  --dir PATH              Installation directory     (default: ${INSTALL_DIR})
+  --config PATH           Configuration directory    (default: ${CONFIG_DIR})
+  --data PATH             Data directory             (default: ${DATA_DIR})
+  --logs PATH             Log directory              (default: ${LOG_DIR})
+  --servers-root PATH     Servers root               (default: ${SERVERS_ROOT})
+  --user NAME             System user                (default: ${MSM_USER})
+  --host ADDRESS          Listening address          (default: ${BIND_HOST})
+  --port PORT             Listening port             (default: ${BIND_PORT})
+  --skip-frontend         Do not build the web interface
+  --skip-admin            Do not create an administrator account
+  --from-update           Mode used by update.sh (no questions asked)
+  -h, --help              Show this help
 EOF
 }
 
@@ -86,32 +86,32 @@ while [[ $# -gt 0 ]]; do
     --port)         BIND_PORT="$2"; shift 2 ;;
     --skip-frontend) SKIP_FRONTEND=1; shift ;;
     --skip-admin)   SKIP_ADMIN=1; shift ;;
-    # Appel par update.sh : aucune question, pas de récapitulatif final.
+    # Called by update.sh: no questions, no final summary.
     --from-update)  FROM_UPDATE=1; SKIP_ADMIN=1; shift ;;
     -h|--help)      usage; exit 0 ;;
-    *) fail "Option inconnue : $1" "L'argument n'est pas reconnu." "Lancer ./install.sh --help" ;;
+    *) fail "Unknown option: $1" "The argument is not recognised." "Run ./install.sh --help" ;;
   esac
 done
 
 # --------------------------------------------------------------------------- #
-#  1. Vérification des prérequis
+#  1. Prerequisites
 # --------------------------------------------------------------------------- #
-step "Vérification des prérequis"
+step "Checking prerequisites"
 
 [[ $EUID -eq 0 ]] || fail \
-  "Ce script doit être exécuté en tant que root." \
-  "La création d'un utilisateur système et d'une unité systemd exige des droits root." \
-  "Relancer avec : sudo ./install.sh"
+  "This script must be run as root." \
+  "Creating a system user and a systemd unit requires root privileges." \
+  "Run it again with: sudo ./install.sh"
 
 command -v systemctl >/dev/null 2>&1 || fail \
-  "systemd est introuvable." \
-  "Ce script installe MSM comme service systemd." \
-  "Sur un système sans systemd, lancer MSM manuellement : python -m msm.cli serve"
+  "systemd was not found." \
+  "This script installs MSM as a systemd service." \
+  "On a system without systemd, run MSM by hand: python -m msm.cli serve"
 
 command -v runuser >/dev/null 2>&1 || fail \
-  "La commande runuser est introuvable." \
-  "Elle sert à exécuter les étapes d'initialisation sous l'utilisateur ${MSM_USER}." \
-  "Installer le paquet util-linux : apt install util-linux"
+  "The runuser command was not found." \
+  "It runs the initialisation steps as the ${MSM_USER} user." \
+  "Install the util-linux package: apt install util-linux"
 
 PYTHON_BIN=""
 for candidate in python3.13 python3.12 python3.11 python3; do
@@ -122,66 +122,66 @@ for candidate in python3.13 python3.12 python3.11 python3; do
 done
 
 [[ -n "$PYTHON_BIN" ]] || fail \
-  "Python 3.11 ou supérieur est introuvable." \
-  "MSM utilise des fonctionnalités introduites en 3.11 (tomllib, typage moderne)." \
-  "Installer python3 : apt install python3 python3-venv  /  dnf install python3"
+  "Python 3.11 or later was not found." \
+  "MSM relies on features introduced in 3.11 (tomllib, modern typing)." \
+  "Install python3: apt install python3 python3-venv  /  dnf install python3"
 
-ok "Python : $("$PYTHON_BIN" --version)"
+ok "Python: $("$PYTHON_BIN" --version)"
 
 "$PYTHON_BIN" -c "import venv" 2>/dev/null || fail \
-  "Le module venv est absent." \
-  "L'environnement virtuel ne peut pas être créé." \
-  "Installer le paquet : apt install python3-venv"
+  "The venv module is missing." \
+  "The virtual environment cannot be created." \
+  "Install the package: apt install python3-venv"
 
 if command -v java >/dev/null 2>&1; then
-  ok "Java : $(java -version 2>&1 | head -n1)"
+  ok "Java: $(java -version 2>&1 | head -n1)"
 else
-  warn "Java est absent — MSM s'installera, mais aucun serveur Minecraft ne pourra démarrer."
-  warn "Installer par exemple : apt install openjdk-21-jre-headless"
+  warn "Java is missing — MSM will install, but no Minecraft server will be able to start."
+  warn "Install it, for example: apt install openjdk-21-jre-headless"
 fi
 
 # --------------------------------------------------------------------------- #
-#  2. Utilisateur système dédié
+#  2. Dedicated system user
 # --------------------------------------------------------------------------- #
-step "Utilisateur système"
+step "System user"
 
 if id -u "$MSM_USER" >/dev/null 2>&1; then
-  ok "L'utilisateur « $MSM_USER » existe déjà."
+  ok "User \"$MSM_USER\" already exists."
 else
-  # Compte système sans shell : MSM ne doit jamais tourner en root, et ce compte
-  # ne doit pas pouvoir servir à ouvrir une session.
+  # System account without a shell: MSM must never run as root, and this
+  # account must not be usable to open a session.
   useradd --system --create-home --home-dir "/var/lib/$MSM_USER" \
           --shell /usr/sbin/nologin "$MSM_USER"
-  ok "Utilisateur système « $MSM_USER » créé (sans shell de connexion)."
+  ok "System user \"$MSM_USER\" created (no login shell)."
 fi
 
 # --------------------------------------------------------------------------- #
-#  3. Dossiers
+#  3. Directories
 # --------------------------------------------------------------------------- #
-step "Préparation des dossiers"
+step "Preparing directories"
 
 install -d -o root -g "$MSM_GROUP" -m 750 "$CONFIG_DIR"
 install -d -o "$MSM_USER" -g "$MSM_GROUP" -m 750 "$DATA_DIR" "$LOG_DIR"
-# Les archives de sauvegarde vivent sous le dossier de données : c'est le seul
-# emplacement déjà autorisé en écriture par le durcissement systemd.
+# Backup archives live under the data directory: it is the only location the
+# systemd hardening already allows writing to.
 install -d -o "$MSM_USER" -g "$MSM_GROUP" -m 750 "$DATA_DIR/backups"
 install -d -o root -g root -m 755 "$INSTALL_DIR"
 
 if [[ ! -d "$SERVERS_ROOT" ]]; then
   install -d -o "$MSM_USER" -g "$MSM_GROUP" -m 755 "$SERVERS_ROOT"
-  ok "Racine des serveurs créée : $SERVERS_ROOT"
+  ok "Servers root created: $SERVERS_ROOT"
 else
-  ok "Racine des serveurs : $SERVERS_ROOT"
+  ok "Servers root: $SERVERS_ROOT"
 fi
 
 # --------------------------------------------------------------------------- #
-#  4. Copie du code
+#  4. Copying the code
 # --------------------------------------------------------------------------- #
-step "Installation du code"
+step "Installing the code"
 
 if [[ "$SOURCE_DIR" != "$INSTALL_DIR" ]]; then
-  # Le dossier `data` de développement et les dépendances ne sont jamais copiés :
-  # l'installation ne doit pas hériter d'une base de test.
+  # The development `data` folder and the dependencies are never copied: the
+  # installation must not inherit a test database.
   for item in backend frontend migrations docs README.md; do
     [[ -e "$SOURCE_DIR/$item" ]] || continue
     rm -rf "${INSTALL_DIR:?}/$item"
@@ -189,56 +189,56 @@ if [[ "$SOURCE_DIR" != "$INSTALL_DIR" ]]; then
   done
   rm -rf "$INSTALL_DIR/backend/.venv" "$INSTALL_DIR/backend/data" \
          "$INSTALL_DIR/frontend/node_modules"
-  ok "Code copié dans $INSTALL_DIR"
+  ok "Code copied to $INSTALL_DIR"
 else
-  ok "Installation en place dans $INSTALL_DIR"
+  ok "In-place installation in $INSTALL_DIR"
 fi
 
-# Version installée, relue par update.sh pour savoir s'il y a du nouveau.
-# `safe.directory` : le dépôt appartient souvent à un autre compte que root, et
-# git refuse alors de le lire sans cette précision.
+# Installed version, read back by update.sh to know whether there is anything new.
+# `safe.directory`: the repository often belongs to an account other than root,
+# and git refuses to read it without this setting.
 BUILD_COMMIT="$(git -c safe.directory="$SOURCE_DIR" -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
 printf 'commit=%s\ninstalled_at=%s\n' "$BUILD_COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   > "$INSTALL_DIR/.msm-build"
 
 # --------------------------------------------------------------------------- #
-#  5. Environnement Python
+#  5. Python environment
 # --------------------------------------------------------------------------- #
-step "Environnement Python"
+step "Python environment"
 
 VENV="$INSTALL_DIR/backend/.venv"
 if [[ ! -x "$VENV/bin/python" ]]; then
   "$PYTHON_BIN" -m venv "$VENV"
-  ok "Environnement virtuel créé."
+  ok "Virtual environment created."
 else
-  ok "Environnement virtuel existant réutilisé."
+  ok "Existing virtual environment reused."
 fi
 
 "$VENV/bin/pip" install --quiet --upgrade pip
-info "Installation des dépendances (peut prendre une minute)…"
+info "Installing dependencies (this may take a minute)…"
 "$VENV/bin/pip" install --quiet -e "$INSTALL_DIR/backend" \
-  || fail "Échec de l'installation des dépendances Python." \
-          "pip n'a pas pu installer le paquet msm." \
-          "Relancer avec les journaux : $VENV/bin/pip install -e $INSTALL_DIR/backend"
-ok "Dépendances Python installées."
+  || fail "Installing the Python dependencies failed." \
+          "pip could not install the msm package." \
+          "Run it again with its output: $VENV/bin/pip install -e $INSTALL_DIR/backend"
+ok "Python dependencies installed."
 
 # --------------------------------------------------------------------------- #
-#  6. Interface web
+#  6. Web interface
 # --------------------------------------------------------------------------- #
-step "Interface web"
+step "Web interface"
 
 if [[ "$SKIP_FRONTEND" -eq 1 ]]; then
-  warn "Compilation ignorée (--skip-frontend)."
+  warn "Build skipped (--skip-frontend)."
 elif command -v npm >/dev/null 2>&1; then
-  info "Compilation de l'interface…"
+  info "Building the interface…"
   (cd "$INSTALL_DIR/frontend" && npm ci --silent && npm run build --silent) \
-    || fail "Échec de la compilation de l'interface." \
-            "npm n'a pas pu produire le dossier dist." \
-            "Relancer manuellement : cd $INSTALL_DIR/frontend && npm ci && npm run build"
-  ok "Interface compilée — MSM la servira lui-même."
+    || fail "Building the interface failed." \
+            "npm could not produce the dist folder." \
+            "Run it by hand: cd $INSTALL_DIR/frontend && npm ci && npm run build"
+  ok "Interface built — MSM serves it itself."
 else
-  warn "npm est absent : l'interface ne sera pas compilée."
-  warn "L'API restera utilisable. Pour ajouter l'interface plus tard :"
+  warn "npm is missing: the interface will not be built."
+  warn "The API stays usable. To add the interface later:"
   warn "  apt install nodejs npm && cd $INSTALL_DIR/frontend && npm ci && npm run build"
 fi
 
@@ -249,58 +249,58 @@ step "Configuration"
 
 ENV_FILE="$CONFIG_DIR/.env"
 if [[ -f "$ENV_FILE" ]]; then
-  ok "Configuration existante conservée : $ENV_FILE"
+  ok "Existing configuration kept: $ENV_FILE"
 else
   SECRET="$("$VENV/bin/python" -c 'import secrets; print(secrets.token_urlsafe(64))')"
   cat > "$ENV_FILE" <<EOF
-# Configuration de Minecraft Server Manager.
-# Généré par install.sh — modifiable, puis : systemctl restart ${SERVICE_NAME}
+# Minecraft Server Manager configuration.
+# Generated by install.sh — edit it, then: systemctl restart ${SERVICE_NAME}
 
 MSM_ENVIRONMENT=production
 MSM_HOST=${BIND_HOST}
 MSM_PORT=${BIND_PORT}
 
-# Change cette clé invalide toutes les sessions et rend illisibles les secrets
-# chiffrés en base (mots de passe RCON).
+# Changing this key invalidates every session and makes the secrets encrypted
+# in the database (RCON passwords) unreadable.
 MSM_SECRET_KEY=${SECRET}
 
-# Mettre à true si MSM est servi en HTTPS (directement ou derrière un proxy).
+# Set to true when MSM is served over HTTPS (directly or behind a proxy).
 MSM_SESSION_COOKIE_SECURE=false
 
 MSM_DATABASE_URL=sqlite+aiosqlite:///${DATA_DIR}/msm.db
 MSM_DATA_DIR=${DATA_DIR}
 MSM_LOG_DIR=${LOG_DIR}
 
-# Les dossiers de serveurs doivent se trouver sous cette racine.
+# Server folders must live under this root.
 MSM_SERVER_ROOTS=${SERVERS_ROOT}
 
-# Sauvegardes : ${DATA_DIR}/backups par défaut. Pour les écrire ailleurs — un
-# autre disque protège aussi d'une panne de celui-ci — renseigner MSM_BACKUP_DIR
-# ET ajouter ce chemin à ReadWritePaths dans l'unité systemd, sans quoi le
-# service n'aura pas le droit d'y écrire.
+# Backups: ${DATA_DIR}/backups by default. To write them elsewhere — another
+# disk also protects against this one failing — set MSM_BACKUP_DIR AND add that
+# path to ReadWritePaths in the systemd unit, otherwise the service will not be
+# allowed to write there.
 MSM_BACKUP_RETENTION=10
 
-# L'interface étant servie par MSM, aucune origine tierce n'est nécessaire.
+# The interface is served by MSM itself, so no third-party origin is needed.
 MSM_CORS_ORIGINS=
 MSM_LOG_FORMAT=json
 EOF
-  # La clé secrète ne doit être lisible que par MSM.
+  # The secret key must only be readable by MSM.
   chown root:"$MSM_GROUP" "$ENV_FILE"
   chmod 640 "$ENV_FILE"
-  ok "Configuration écrite : $ENV_FILE (clé secrète générée)"
+  ok "Configuration written: $ENV_FILE (secret key generated)"
 fi
 
 # --------------------------------------------------------------------------- #
-#  8. Base de données
+#  8. Database
 # --------------------------------------------------------------------------- #
-step "Base de données"
+step "Database"
 
-# Exécute une commande sous l'utilisateur MSM, avec la configuration chargée.
+# Runs a command as the MSM user, with the configuration loaded.
 #
-# Le fichier .env est lu **par le processus fils**, jamais recopié en arguments :
-# la clé secrète n'apparaît donc dans aucune ligne de commande, et `ps` ne la
-# montre à personne. Le terminal est conservé, ce qui permet aux commandes
-# interactives de demander un mot de passe sans écho.
+# The .env file is read **by the child process**, never copied into arguments:
+# the secret key therefore appears on no command line, and `ps` shows it to
+# nobody. The terminal is kept, so interactive commands can ask for a password
+# without echo.
 run_as_msm() {
   runuser -u "$MSM_USER" -- bash -c '
     set -a
@@ -314,67 +314,67 @@ run_as_msm() {
 }
 
 run_as_msm "$VENV/bin/python" -m msm.cli migrate \
-  || fail "Échec de l'initialisation de la base de données." \
-          "Les migrations Alembic n'ont pas pu être appliquées." \
-          "Vérifier les droits sur $DATA_DIR, puis relancer install.sh"
-ok "Schéma de base appliqué."
+  || fail "Initialising the database failed." \
+          "The Alembic migrations could not be applied." \
+          "Check the permissions on $DATA_DIR, then run install.sh again"
+ok "Database schema applied."
 
 # --------------------------------------------------------------------------- #
-#  9. Compte administrateur
+#  9. Administrator account
 # --------------------------------------------------------------------------- #
-step "Compte administrateur"
+step "Administrator account"
 
-# `count-users` n'écrit que son résultat sur la sortie standard ; sa
-# journalisation part sur la sortie d'erreur, écartée ici.
+# `count-users` only writes its result to standard output; its logging goes to
+# standard error, discarded here.
 EXISTING_USERS="$(run_as_msm "$VENV/bin/python" -m msm.cli count-users 2>/dev/null | tail -n1)"
 
-# Ceinture et bretelles : une sortie inattendue ne doit jamais faire croire qu'il
-# n'y a aucun compte — on redemanderait d'en créer un à chaque mise à jour.
+# Belt and braces: unexpected output must never suggest there are no accounts —
+# the installer would then ask to create one on every update.
 if ! [[ "$EXISTING_USERS" =~ ^[0-9]+$ ]]; then
-  warn "Le nombre de comptes n'a pas pu être déterminé."
-  warn "Aucun compte ne sera créé ; en ajouter un au besoin avec createadmin."
+  warn "The number of accounts could not be determined."
+  warn "No account will be created; add one if needed with createadmin."
   EXISTING_USERS=1
 fi
 
 if [[ "$SKIP_ADMIN" -eq 1 ]]; then
-  warn "Création du compte ignorée (--skip-admin)."
+  warn "Account creation skipped (--skip-admin)."
 elif [[ "$EXISTING_USERS" -gt 0 ]]; then
-  ok "${EXISTING_USERS} compte(s) déjà présent(s) — aucun compte créé."
+  ok "${EXISTING_USERS} account(s) already present — no account created."
 else
-  read -r -p "  Nom du compte administrateur [admin] : " ADMIN_NAME
+  read -r -p "  Administrator account name [admin]: " ADMIN_NAME
   ADMIN_NAME="${ADMIN_NAME:-admin}"
 
-  # Le mot de passe est demandé par la commande elle-même, sans écho : il ne
-  # transite ni par une variable du script, ni par une ligne de commande.
+  # The password is asked for by the command itself, without echo: it never
+  # goes through a script variable or a command line.
   if run_as_msm "$VENV/bin/python" -m msm.cli createadmin "$ADMIN_NAME"; then
-    ok "Compte administrateur « $ADMIN_NAME » créé."
+    ok "Administrator account \"$ADMIN_NAME\" created."
   else
-    warn "Le compte n'a pas pu être créé."
-    warn "Réessayer : sudo -u $MSM_USER $VENV/bin/python -m msm.cli createadmin NOM"
+    warn "The account could not be created."
+    warn "Try again: sudo -u $MSM_USER $VENV/bin/python -m msm.cli createadmin NAME"
   fi
 fi
 
 # --------------------------------------------------------------------------- #
-#  10. Droits
+#  10. Permissions
 # --------------------------------------------------------------------------- #
-step "Droits d'accès"
+step "Permissions"
 
 chown -R "$MSM_USER":"$MSM_GROUP" "$DATA_DIR" "$LOG_DIR"
 chown -R root:root "$INSTALL_DIR"
-# MSM lit son code mais n'a aucune raison de pouvoir le modifier.
+# MSM reads its code but has no reason to be able to modify it.
 chmod -R go-w "$INSTALL_DIR"
-ok "Le code est en lecture seule pour le service."
+ok "The code is read-only for the service."
 
 # --------------------------------------------------------------------------- #
-#  11. Service systemd
+#  11. systemd service
 # --------------------------------------------------------------------------- #
-step "Service systemd"
+step "systemd service"
 
 UNIT_SOURCE="$SOURCE_DIR/systemd/${SERVICE_NAME}.service"
 [[ -f "$UNIT_SOURCE" ]] || fail \
-  "Modèle d'unité systemd introuvable." \
-  "Le fichier ${UNIT_SOURCE} est absent." \
-  "Relancer le script depuis la racine du dépôt."
+  "systemd unit template not found." \
+  "The file ${UNIT_SOURCE} is missing." \
+  "Run the script from the root of the repository."
 
 bash "$SOURCE_DIR/systemd/render-unit.sh" "$UNIT_SOURCE" "/etc/systemd/system/${SERVICE_NAME}.service" \
   "$MSM_USER" "$MSM_GROUP" "$INSTALL_DIR" "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR" "$SERVERS_ROOT"
@@ -382,61 +382,61 @@ bash "$SOURCE_DIR/systemd/render-unit.sh" "$UNIT_SOURCE" "/etc/systemd/system/${
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1
 
-# L'activation est *vérifiée*, pas supposée : sans elle, MSM s'installe, démarre,
-# et ne revient jamais après un redémarrage de la machine — panne qui ne se
-# découvrirait qu'à la première coupure de courant.
+# Enabling is *checked*, not assumed: without it, MSM installs, starts, and never
+# comes back after the machine reboots — a failure only discovered at the first
+# power cut.
 systemctl is-enabled --quiet "${SERVICE_NAME}" || fail \
-  "Le service n'a pas pu être activé au démarrage." \
-  "systemctl enable ${SERVICE_NAME} a échoué : MSM ne redémarrerait pas après un reboot." \
-  "Consulter : systemctl status ${SERVICE_NAME} ; puis relancer : systemctl enable ${SERVICE_NAME}"
+  "The service could not be enabled at boot." \
+  "systemctl enable ${SERVICE_NAME} failed: MSM would not come back after a reboot." \
+  "Check: systemctl status ${SERVICE_NAME} ; then run: systemctl enable ${SERVICE_NAME}"
 
-ok "Service installé et activé au démarrage de la machine."
+ok "Service installed and enabled at boot."
 
 # --------------------------------------------------------------------------- #
-#  12. Démarrage
+#  12. Start
 # --------------------------------------------------------------------------- #
-step "Démarrage"
+step "Starting"
 
 systemctl restart "${SERVICE_NAME}"
 sleep 3
 
 if systemctl is-active --quiet "${SERVICE_NAME}"; then
-  ok "Service démarré."
+  ok "Service started."
 else
-  fail "Le service n'a pas démarré." \
-       "systemd signale un échec au lancement." \
-       "Consulter les journaux : journalctl -u ${SERVICE_NAME} -n 50 --no-pager"
+  fail "The service did not start." \
+       "systemd reports a failure at start-up." \
+       "Check the logs: journalctl -u ${SERVICE_NAME} -n 50 --no-pager"
 fi
 
-# update.sh affiche son propre bilan.
+# update.sh prints its own summary.
 [[ "$FROM_UPDATE" -eq 1 ]] && exit 0
 
-printf "\n${GREEN}${BOLD}Installation terminée.${RESET}\n\n"
+printf "\n${GREEN}${BOLD}Installation complete.${RESET}\n\n"
 cat <<EOF
-  Panneau        http://${BIND_HOST}:${BIND_PORT}
+  Panel          http://${BIND_HOST}:${BIND_PORT}
   Configuration  ${CONFIG_DIR}/.env
-  Données        ${DATA_DIR}
-  Sauvegardes    ${DATA_DIR}/backups
-  Journaux       ${LOG_DIR}/msm.log  ·  journalctl -u ${SERVICE_NAME} -f
-  Serveurs       ${SERVERS_ROOT}
+  Data           ${DATA_DIR}
+  Backups        ${DATA_DIR}/backups
+  Logs           ${LOG_DIR}/msm.log  ·  journalctl -u ${SERVICE_NAME} -f
+  Servers        ${SERVERS_ROOT}
 
-  État du service    systemctl status ${SERVICE_NAME}
-  Redémarrer         systemctl restart ${SERVICE_NAME}
-  Créer un compte    sudo -u ${MSM_USER} ${VENV}/bin/python -m msm.cli createadmin NOM
+  Service status     systemctl status ${SERVICE_NAME}
+  Restart            systemctl restart ${SERVICE_NAME}
+  Create an account  sudo -u ${MSM_USER} ${VENV}/bin/python -m msm.cli createadmin NAME
 
-  MSM redémarre automatiquement avec la machine. Pour que vos serveurs
-  Minecraft repartent aussi, cocher « Démarrer avec MSM » dans leurs réglages.
+  MSM restarts automatically with the machine. For your Minecraft servers to
+  come back too, tick "Start with MSM" in their settings.
 
 EOF
 
 if [[ "$BIND_HOST" == "127.0.0.1" ]]; then
   cat <<EOF
-  Le panneau n'écoute que sur la machine locale. Pour y accéder à distance,
-  placer un reverse proxy HTTPS devant (recommandé), puis passer
-  MSM_SESSION_COOKIE_SECURE=true dans ${CONFIG_DIR}/.env.
+  The panel only listens on the local machine. To reach it remotely, put an
+  HTTPS reverse proxy in front of it (recommended), then set
+  MSM_SESSION_COOKIE_SECURE=true in ${CONFIG_DIR}/.env.
 
-  Exposer directement MSM sur Internet sans HTTPS ferait circuler le cookie de
-  session en clair.
+  Exposing MSM directly on the Internet without HTTPS would send the session
+  cookie in clear text.
 
 EOF
 fi

@@ -1,4 +1,4 @@
-"""Historique des ressources par serveur.
+"""Per-server resource history.
 
 L'index composite (serveur, horodatage) n'est pas décoratif : toutes les lectures
 filtrent sur ce couple, et la table grossit d'un point par serveur toutes les

@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
 #
-# Mise à jour de Minecraft Server Manager, sans rien perdre.
+# Updates Minecraft Server Manager without losing anything.
 #
-#   sudo ./update.sh              récupère la dernière version et l'installe
-#   sudo ./update.sh --rollback   revient à la version d'avant la dernière mise à jour
+#   sudo ./update.sh              fetches the latest version and installs it
+#   sudo ./update.sh --rollback   goes back to the version before the last update
 #
-# Ce qui est conservé : configuration (/etc/msm/.env), base de données (comptes,
-# serveurs, historique, planifications…), sauvegardes, journaux, et les serveurs
-# Minecraft eux-mêmes — qui continuent de tourner pendant la mise à jour.
+# What is kept: configuration (/etc/msm/.env), database (accounts, servers,
+# history, schedules…), backups, logs, and the Minecraft servers themselves —
+# which keep running during the update.
 #
-# Déroulement :
+# Steps:
 #
-#   1. récupère la nouvelle version (git pull du dépôt où se trouve ce script) ;
-#   2. met de côté le code installé, pour pouvoir y revenir ;
-#   3. arrête MSM, sauvegarde la base et la configuration ;
-#   4. installe la nouvelle version (install.sh), applique les migrations ;
-#   5. vérifie que le panneau répond.
+#   1. fetches the new version (git pull of the repository holding this script);
+#   2. sets the installed code aside, to be able to go back to it;
+#   3. stops MSM, backs up the database and the configuration;
+#   4. installs the new version (install.sh), applies the migrations;
+#   5. checks that the panel answers.
 #
-# Si l'étape 4 ou 5 échoue, l'ancienne version et la base d'avant la mise à jour
-# sont remises en place automatiquement.
+# If step 4 or 5 fails, the previous version and the pre-update database are
+# put back automatically.
 #
 set -euo pipefail
 
 SERVICE_NAME="minecraft-server-manager"
 UNIT_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-#: Sauvegardes de base gardées sous <données>/update-backups.
+#: Database backups kept under <data>/update-backups.
 KEEP_BACKUPS=5
-#: Dans la copie de l'ancienne version : chemin de la sauvegarde qui lui correspond.
+#: In the copy of the previous version: path of the backup that goes with it.
 ROLLBACK_MARKER=".msm-rollback"
 
 NO_PULL=0
@@ -37,7 +37,7 @@ ASSUME_YES=0
 REF=""
 
 # --------------------------------------------------------------------------- #
-#  Affichage
+#  Output
 # --------------------------------------------------------------------------- #
 if [[ -t 1 ]]; then
   BOLD="\033[1m"; GREEN="\033[32m"; YELLOW="\033[33m"; RED="\033[31m"; RESET="\033[0m"
@@ -52,32 +52,32 @@ warn()  { printf "  ${YELLOW}!${RESET} %s\n" "$*"; }
 
 fail() {
   printf "\n${RED}✗ %s${RESET}\n" "$1" >&2
-  [[ $# -ge 2 ]] && printf "  Cause : %s\n" "$2" >&2
-  [[ $# -ge 3 ]] && printf "  Action : %s\n" "$3" >&2
+  [[ $# -ge 2 ]] && printf "  Cause: %s\n" "$2" >&2
+  [[ $# -ge 3 ]] && printf "  Fix: %s\n" "$3" >&2
   exit 1
 }
 
 usage() {
   cat <<EOF
-Mise à jour de Minecraft Server Manager.
+Updates Minecraft Server Manager.
 
-Usage : sudo ./update.sh [options]
+Usage: sudo ./update.sh [options]
 
-Options :
-  --ref REF      Installer une branche ou un tag précis (défaut : la branche suivie)
-  --no-pull      Ne pas interroger git : installer le code tel qu'il est dans ce dossier
-  --force        Réinstaller même si la version installée est déjà la dernière
-  --rollback     Revenir à la version d'avant la dernière mise à jour
-  -y, --yes      Ne poser aucune question
-  -h, --help     Afficher cette aide
+Options:
+  --ref REF      Install a specific branch or tag (default: the tracked branch)
+  --no-pull      Do not query git: install the code as it is in this folder
+  --force        Reinstall even if the installed version is already the latest
+  --rollback     Go back to the version before the last update
+  -y, --yes      Ask no questions
+  -h, --help     Show this help
 EOF
 }
 
 # --------------------------------------------------------------------------- #
-#  Lecture de l'installation existante
+#  Reading the existing installation
 # --------------------------------------------------------------------------- #
-# Tout est relu depuis l'unité systemd et le .env : aucune option à répéter, et
-# aucun risque de « mettre à jour » vers d'autres dossiers que ceux installés.
+# Everything is read back from the systemd unit and the .env: no option to
+# repeat, and no risk of "updating" into other folders than the installed ones.
 unit_value() {
   grep -m1 "^$1=" "$UNIT_FILE" | cut -d= -f2- | sed 's/^-//'
 }
@@ -91,9 +91,9 @@ env_value() {
 
 load_installation() {
   [[ -f "$UNIT_FILE" ]] || fail \
-    "MSM n'est pas installé sur cette machine." \
-    "L'unité ${UNIT_FILE} est introuvable." \
-    "Pour une première installation : sudo ./install.sh"
+    "MSM is not installed on this machine." \
+    "The unit ${UNIT_FILE} was not found." \
+    "For a first installation: sudo ./install.sh"
 
   MSM_USER="$(unit_value User)"
   MSM_GROUP="$(unit_value Group)"
@@ -102,16 +102,16 @@ load_installation() {
   CONFIG_DIR="$(dirname "$ENV_FILE")"
 
   [[ -n "$MSM_USER" && -d "$INSTALL_DIR" && -f "$ENV_FILE" ]] || fail \
-    "Installation incomplète." \
-    "L'unité systemd ne désigne pas un dossier d'installation et un .env existants." \
-    "Réinstaller avec : sudo ./install.sh (la configuration et la base sont conservées)"
+    "Incomplete installation." \
+    "The systemd unit does not point to an existing installation folder and .env file." \
+    "Reinstall with: sudo ./install.sh (the configuration and the database are kept)"
 
   DATA_DIR="$(env_value MSM_DATA_DIR)"
   LOG_DIR="$(env_value MSM_LOG_DIR)"
   DATA_DIR="${DATA_DIR:-/var/lib/msm}"
   LOG_DIR="${LOG_DIR:-/var/log/msm}"
-  # MSM_SERVER_ROOTS peut en lister plusieurs (séparées par « : ») ; install.sh
-  # n'a besoin que de la première, les autres restent dans l'unité.
+  # MSM_SERVER_ROOTS can list several roots (separated by ":"); install.sh only
+  # needs the first one, the others stay in the unit.
   local roots
   roots="$(env_value MSM_SERVER_ROOTS)"
   SERVERS_ROOT="${roots%%:*}"
@@ -124,7 +124,7 @@ load_installation() {
   esac
   HEALTH_URL="http://${host:-127.0.0.1}:${port:-8000}/api/v1/health"
 
-  # Seule une base SQLite se sauvegarde par copie ; les autres ont leurs outils.
+  # Only an SQLite database is backed up by copying; the others have their own tools.
   local database_url
   database_url="$(env_value MSM_DATABASE_URL)"
   DB_FILE=""
@@ -145,8 +145,8 @@ installed_commit() {
   grep -m1 '^commit=' "$1/.msm-build" 2>/dev/null | cut -d= -f2 || true
 }
 
-# Même principe que install.sh : le .env est lu par le processus fils, jamais
-# passé en argument — la clé secrète n'apparaît dans aucune ligne de commande.
+# Same principle as install.sh: the .env is read by the child process, never
+# passed as an argument — the secret key appears on no command line.
 run_as_msm() {
   runuser -u "$MSM_USER" -- bash -c '
     set -a
@@ -162,13 +162,13 @@ run_as_msm() {
 confirm() {
   [[ "$ASSUME_YES" -eq 1 ]] && return 0
   local answer
-  read -r -p "  $1 [o/N] " answer
-  [[ "$answer" =~ ^[oOyY]$ ]]
+  read -r -p "  $1 [y/N] " answer
+  [[ "$answer" =~ ^[yY]$ ]]
 }
 
-# Révision du schéma, pour pouvoir y ramener la base lors d'un retour arrière.
-# Par la CLI si la version installée la connaît, sinon directement dans SQLite :
-# les versions antérieures à update.sh n'ont pas la commande `db-revision`.
+# Schema revision, to be able to bring the database back to it on a rollback.
+# Through the CLI if the installed version knows the command, otherwise straight
+# from SQLite: versions older than update.sh have no `db-revision` command.
 db_revision() {
   local revision
   revision="$(run_as_msm "$VENV_PY" -m msm.cli db-revision 2>/dev/null | tail -n1 || true)"
@@ -203,7 +203,7 @@ PY
 }
 
 # --------------------------------------------------------------------------- #
-#  Sauvegarde et restauration de la base
+#  Backing up and restoring the database
 # --------------------------------------------------------------------------- #
 backup_state() {
   BACKUP_DIR="$BACKUP_ROOT/$(date +%Y%m%d-%H%M%S)"
@@ -214,8 +214,8 @@ backup_state() {
   local revision="none"
   if [[ -n "$DB_FILE" && -f "$DB_FILE" ]]; then
     revision="$(db_revision)"
-    # API de sauvegarde de SQLite plutôt qu'une copie : elle intègre le journal
-    # WAL et produit un fichier cohérent en un seul morceau.
+    # SQLite's backup API rather than a copy: it includes the WAL journal and
+    # produces a consistent file in a single piece.
     "$VENV_PY" - "$DB_FILE" "$BACKUP_DIR/msm.db" <<'PY'
 import sqlite3, sys
 source = sqlite3.connect(sys.argv[1])
@@ -226,13 +226,13 @@ target.close()
 source.close()
 PY
     chmod 600 "$BACKUP_DIR/msm.db"
-    ok "Base sauvegardée : $BACKUP_DIR/msm.db"
+    ok "Database backed up: $BACKUP_DIR/msm.db"
   elif [[ -n "$DB_FILE" ]]; then
-    warn "Base SQLite introuvable ($DB_FILE) : rien à sauvegarder."
+    warn "SQLite database not found ($DB_FILE): nothing to back up."
   else
-    warn "Base non SQLite : la sauvegarder avec ses propres outils (pg_dump…) avant de continuer."
-    confirm "Continuer sans sauvegarde de la base ?" || fail "Mise à jour annulée." \
-      "Aucune sauvegarde de la base n'a été faite." "Sauvegarder la base, puis relancer."
+    warn "Not an SQLite database: back it up with its own tools (pg_dump…) before going on."
+    confirm "Continue without a database backup?" || fail "Update cancelled." \
+      "No backup of the database was made." "Back up the database, then run the update again."
   fi
 
   cat > "$BACKUP_DIR/info" <<EOF
@@ -242,9 +242,9 @@ commit=$(installed_commit "$INSTALL_DIR")
 db_revision=${revision}
 EOF
   ln -sfn "$BACKUP_DIR" "$BACKUP_ROOT/latest"
-  ok "Configuration sauvegardée."
+  ok "Configuration backed up."
 
-  # Les plus anciennes partent : une base par mise à jour, cela finit par peser.
+  # The oldest ones go: one database per update eventually adds up.
   local old
   for old in $(ls -1d "$BACKUP_ROOT"/2* 2>/dev/null | sort -r | tail -n +$((KEEP_BACKUPS + 1))); do
     rm -rf "$old"
@@ -257,7 +257,7 @@ restore_database() {
   rm -f "$DB_FILE-wal" "$DB_FILE-shm"
   cp "$backup/msm.db" "$DB_FILE"
   chown "$MSM_USER:$MSM_GROUP" "$DB_FILE"
-  ok "Base restaurée depuis $backup"
+  ok "Database restored from $backup"
 }
 
 restore_code() {
@@ -268,77 +268,80 @@ restore_code() {
   mv "$PREVIOUS_DIR" "$INSTALL_DIR"
   rm -f "$INSTALL_DIR/$ROLLBACK_MARKER"
   rm -rf "$discarded"
-  ok "Ancienne version remise en place dans $INSTALL_DIR"
+  ok "Previous version put back in $INSTALL_DIR"
 }
 
-# Échec pendant la mise à jour : tout revient à l'état d'avant. Le service était
-# arrêté depuis la sauvegarde, la base restaurée ne perd donc rien.
+# Failure during the update: everything goes back to how it was. The service
+# has been stopped since the backup, so the restored database loses nothing.
 automatic_rollback() {
-  printf "\n${RED}${BOLD}La mise à jour a échoué : retour à la version précédente.${RESET}\n"
+  printf "\n${RED}${BOLD}The update failed: going back to the previous version.${RESET}\n"
   systemctl stop "$SERVICE_NAME" 2>/dev/null || true
-  restore_code || warn "Aucune copie de l'ancienne version : le code n'a pas pu être restauré."
+  restore_code || warn "No copy of the previous version: the code could not be restored."
   restore_database "$BACKUP_DIR"
   systemctl daemon-reload
   systemctl start "$SERVICE_NAME" || true
 
   if wait_healthy; then
-    fail "Mise à jour annulée — MSM tourne de nouveau en version ${OLD_VERSION}." \
+    fail "Update cancelled — MSM is running version ${OLD_VERSION} again." \
          "$1" \
-         "Consulter le détail ci-dessus et journalctl -u ${SERVICE_NAME} -n 100, puis réessayer."
+         "Check the details above and journalctl -u ${SERVICE_NAME} -n 100, then try again."
   fi
-  fail "Mise à jour annulée, mais MSM ne répond pas après le retour arrière." \
+  fail "Update cancelled, but MSM does not answer after the rollback." \
        "$1" \
-       "Consulter : journalctl -u ${SERVICE_NAME} -n 100 --no-pager"
+       "Check: journalctl -u ${SERVICE_NAME} -n 100 --no-pager"
 }
 
 # --------------------------------------------------------------------------- #
-#  Retour arrière demandé
+#  Requested rollback
 # --------------------------------------------------------------------------- #
 manual_rollback() {
   [[ -d "$PREVIOUS_DIR" ]] || fail \
-    "Aucune version précédente disponible." \
-    "${PREVIOUS_DIR} n'existe pas : aucune mise à jour n'a été faite avec ce script, ou le retour arrière a déjà eu lieu." \
-    "Pour installer une version précise : sudo ./update.sh --ref <tag ou commit>"
+    "No previous version available." \
+    "${PREVIOUS_DIR} does not exist: no update was made with this script, or the rollback already happened." \
+    "To install a specific version: sudo ./update.sh --ref <tag or commit>"
 
-  # La copie ne sert que si la mise à jour qui l'a produite est allée jusqu'à la
-  # sauvegarde : sinon elle est identique au code en place, et la sauvegarde la
-  # plus récente appartiendrait à une mise à jour antérieure.
+  # The copy is only usable if the update that produced it got as far as the
+  # backup: otherwise it is identical to the code in place, and the most recent
+  # backup would belong to an earlier update.
   local backup
   backup="$(cat "$PREVIOUS_DIR/$ROLLBACK_MARKER" 2>/dev/null || true)"
-  [[ -n "$backup" && -d "$backup" ]] || fail     "Rien à défaire."     "La dernière mise à jour s'est arrêtée avant de modifier l'installation."     "MSM tourne toujours dans sa version actuelle ; aucun retour arrière n'est nécessaire."
+  [[ -n "$backup" && -d "$backup" ]] || fail \
+    "Nothing to undo." \
+    "The last update stopped before changing the installation." \
+    "MSM is still running its current version; no rollback is needed."
   local target_revision
   target_revision="$(grep -m1 '^db_revision=' "$backup/info" 2>/dev/null | cut -d= -f2 || true)"
 
-  step "Retour arrière"
+  step "Rollback"
   local current_commit previous_commit
   current_commit="$(installed_commit "$INSTALL_DIR")"
   previous_commit="$(installed_commit "$PREVIOUS_DIR")"
-  info "Version actuelle   : $(installed_version "$INSTALL_DIR")${current_commit:+ (${current_commit:0:7})}"
-  info "Version précédente : $(installed_version "$PREVIOUS_DIR")${previous_commit:+ (${previous_commit:0:7})}"
-  confirm "Revenir à la version précédente ?" || { info "Rien n'a été modifié."; exit 0; }
+  info "Current version:  $(installed_version "$INSTALL_DIR")${current_commit:+ (${current_commit:0:7})}"
+  info "Previous version: $(installed_version "$PREVIOUS_DIR")${previous_commit:+ (${previous_commit:0:7})}"
+  confirm "Go back to the previous version?" || { info "Nothing was changed."; exit 0; }
 
   systemctl stop "$SERVICE_NAME"
-  ok "MSM arrêté (les serveurs Minecraft continuent de tourner)."
+  ok "MSM stopped (the Minecraft servers keep running)."
 
-  # Le schéma est ramené par le code *actuel*, le seul à connaître les
-  # migrations à défaire. Les données saisies depuis la mise à jour sont
-  # conservées, hormis celles des fonctionnalités qui disparaissent.
+  # The schema is brought back by the *current* code, the only one that knows
+  # the migrations to undo. Data entered since the update is kept, except for
+  # the features that disappear.
   if [[ -n "$target_revision" && "$target_revision" != "none" && "$target_revision" != "unknown" ]]; then
     local current
     current="$(db_revision)"
     if [[ "$current" != "$target_revision" ]]; then
       if run_as_msm "$VENV_PY" -m msm.cli downgrade "$target_revision"; then
-        ok "Schéma de base ramené à $target_revision."
+        ok "Database schema brought back to $target_revision."
       else
-        warn "Le schéma n'a pas pu être ramené automatiquement."
-        warn "La base d'avant la mise à jour peut être restaurée ($backup) :"
-        warn "tout ce qui a été modifié depuis serait perdu."
-        if confirm "Restaurer cette sauvegarde ?"; then
+        warn "The schema could not be brought back automatically."
+        warn "The pre-update database can be restored ($backup):"
+        warn "everything changed since would be lost."
+        if confirm "Restore this backup?"; then
           restore_database "$backup"
         else
           systemctl start "$SERVICE_NAME"
-          fail "Retour arrière interrompu." "Le schéma de base n'a pas pu être ramené." \
-               "MSM a été relancé dans sa version actuelle ; rien n'a changé."
+          fail "Rollback interrupted." "The database schema could not be brought back." \
+               "MSM was restarted in its current version; nothing changed."
         fi
       fi
     fi
@@ -347,19 +350,19 @@ manual_rollback() {
   restore_code
   systemctl daemon-reload
   systemctl start "$SERVICE_NAME"
-  wait_healthy || fail "MSM ne répond pas après le retour arrière." \
-    "Le service a démarré mais la sonde ${HEALTH_URL} ne répond pas." \
-    "Consulter : journalctl -u ${SERVICE_NAME} -n 100 --no-pager"
+  wait_healthy || fail "MSM does not answer after the rollback." \
+    "The service started but the probe ${HEALTH_URL} does not answer." \
+    "Check: journalctl -u ${SERVICE_NAME} -n 100 --no-pager"
 
-  printf "\n${GREEN}${BOLD}Retour arrière terminé : MSM $(installed_version "$INSTALL_DIR").${RESET}\n\n"
+  printf "\n${GREEN}${BOLD}Rollback complete: MSM $(installed_version "$INSTALL_DIR").${RESET}\n\n"
 }
 
 # --------------------------------------------------------------------------- #
-#  Récupération de la nouvelle version
+#  Fetching the new version
 # --------------------------------------------------------------------------- #
-# Le dépôt appartient à celui qui l'a cloné : git s'exécute sous ce compte, avec
-# ses identifiants (dépôt privé) — jamais en root, qui laisserait derrière lui
-# des fichiers que ce compte ne pourrait plus modifier.
+# The repository belongs to whoever cloned it: git runs under that account, with
+# its credentials (private repository) — never as root, which would leave behind
+# files that account could no longer modify.
 as_owner() {
   if [[ "$REPO_OWNER" == "root" ]]; then
     git -C "$SOURCE_DIR" "$@"
@@ -369,20 +372,20 @@ as_owner() {
 }
 
 fetch_update() {
-  step "Recherche d'une nouvelle version"
+  step "Looking for a new version"
 
   if [[ "$NO_PULL" -eq 1 ]]; then
     [[ -f "$SOURCE_DIR/systemd/render-unit.sh" ]] || fail \
-      "Version trop ancienne pour une mise à jour automatique." \
-      "Le code de $SOURCE_DIR est antérieur à update.sh." \
-      "Récupérer une version récente du dépôt, puis relancer."
-    ok "Code pris tel quel dans $SOURCE_DIR (--no-pull)."
+      "Version too old for an automatic update." \
+      "The code in $SOURCE_DIR predates update.sh." \
+      "Fetch a recent version of the repository, then run the update again."
+    ok "Code taken as is from $SOURCE_DIR (--no-pull)."
     TARGET_COMMIT="$(git -c safe.directory="$SOURCE_DIR" -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
     return
   fi
 
   if ! git -c safe.directory="$SOURCE_DIR" -C "$SOURCE_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-    warn "$SOURCE_DIR n'est pas un dépôt git : le code présent sera installé tel quel."
+    warn "$SOURCE_DIR is not a git repository: the code there will be installed as is."
     TARGET_COMMIT="unknown"
     return
   fi
@@ -391,36 +394,36 @@ fetch_update() {
   REPO_HOME="$(getent passwd "$REPO_OWNER" | cut -d: -f6)"
 
   as_owner diff --quiet HEAD -- || fail \
-    "Le dépôt contient des modifications locales." \
-    "git refuserait de les écraser, et les installer mélangerait deux versions." \
-    "Les mettre de côté (git stash) ou les annuler (git checkout -- .), puis relancer."
+    "The repository has local changes." \
+    "git would refuse to overwrite them, and installing them would mix two versions." \
+    "Set them aside (git stash) or discard them (git checkout -- .), then run the update again."
 
   as_owner fetch --quiet --tags origin || fail \
-    "Impossible de contacter le dépôt distant." \
-    "git fetch a échoué sous le compte ${REPO_OWNER} (réseau, ou identifiants d'un dépôt privé)." \
-    "Tester : sudo -u ${REPO_OWNER} git -C ${SOURCE_DIR} fetch — puis, pour GitHub : gh auth login && gh auth setup-git"
+    "Cannot reach the remote repository." \
+    "git fetch failed as ${REPO_OWNER} (network, or credentials for a private repository)." \
+    "Test with: sudo -u ${REPO_OWNER} git -C ${SOURCE_DIR} fetch — then, for GitHub: gh auth login && gh auth setup-git"
 
-  # La version visée est seulement *résolue* ici : rien n'est extrait avant
-  # d'avoir vérifié qu'elle peut être installée par ce script.
+  # The target version is only *resolved* here: nothing is checked out before
+  # making sure this script can install it.
   if [[ -n "$REF" ]]; then
     TARGET_COMMIT="$(as_owner rev-parse --verify --quiet "origin/${REF}^{commit}" \
       || as_owner rev-parse --verify --quiet "${REF}^{commit}")" || fail \
-      "Version « $REF » introuvable." "Ni branche, ni tag, ni commit de ce nom." \
-      "Lister les versions : git -C $SOURCE_DIR tag ; git -C $SOURCE_DIR branch -r"
+      "Version \"$REF\" not found." "No branch, tag or commit by that name." \
+      "List the versions: git -C $SOURCE_DIR tag ; git -C $SOURCE_DIR branch -r"
   elif as_owner symbolic-ref -q HEAD >/dev/null; then
     TARGET_COMMIT="$(as_owner rev-parse '@{u}' 2>/dev/null)" || fail \
-      "La branche courante ne suit aucune branche distante." \
-      "git ne sait pas d'où récupérer les nouveautés." \
-      "Préciser la version voulue : sudo ./update.sh --ref main"
+      "The current branch does not track any remote branch." \
+      "git does not know where to fetch new versions from." \
+      "Name the version you want: sudo ./update.sh --ref main"
   else
     TARGET_COMMIT="$(as_owner rev-parse HEAD)"
   fi
 
   as_owner cat-file -e "${TARGET_COMMIT}:systemd/render-unit.sh" 2>/dev/null || fail \
-    "Version trop ancienne pour une mise à jour automatique." \
-    "${TARGET_COMMIT:0:7} est antérieure à update.sh, qui ne saurait pas l'installer." \
-    "Pour revenir en arrière après une mise à jour : sudo ./update.sh --rollback"
-  ok "Version cible : ${TARGET_COMMIT:0:7}"
+    "Version too old for an automatic update." \
+    "${TARGET_COMMIT:0:7} predates update.sh, which would not know how to install it." \
+    "To go back after an update: sudo ./update.sh --rollback"
+  ok "Target version: ${TARGET_COMMIT:0:7}"
 }
 
 apply_fetched() {
@@ -432,91 +435,91 @@ apply_fetched() {
   fi
   if as_owner symbolic-ref -q HEAD >/dev/null; then
     as_owner merge --ff-only --quiet '@{u}' || fail \
-      "La branche locale a divergé de la branche distante." \
-      "Des commits locaux empêchent une simple avance rapide." \
-      "Aligner le dépôt : git -C $SOURCE_DIR status, puis relancer."
+      "The local branch has diverged from the remote branch." \
+      "Local commits prevent a simple fast-forward." \
+      "Align the repository: git -C $SOURCE_DIR status, then run the update again."
   fi
   if [[ "$before" != "$TARGET_COMMIT" ]] && as_owner merge-base --is-ancestor "$before" "$TARGET_COMMIT"; then
-    info "Nouveautés :"
+    info "What's new:"
     as_owner log --oneline --no-decorate "${before}..${TARGET_COMMIT}" | head -n 20 | sed 's/^/    /'
   fi
 }
 
 # --------------------------------------------------------------------------- #
-#  Mise à jour
+#  Update
 # --------------------------------------------------------------------------- #
 update() {
   OLD_VERSION="$(installed_version "$INSTALL_DIR")"
   local old_commit
   old_commit="$(installed_commit "$INSTALL_DIR")"
-  info "Version installée : ${OLD_VERSION}${old_commit:+ (${old_commit:0:7})}"
+  info "Installed version: ${OLD_VERSION}${old_commit:+ (${old_commit:0:7})}"
 
   fetch_update
 
   if [[ "$FORCE" -eq 0 && -n "$old_commit" && "$old_commit" == "$TARGET_COMMIT" ]]; then
-    printf "\n${GREEN}MSM est déjà à jour.${RESET} (--force pour réinstaller quand même)\n\n"
+    printf "\n${GREEN}MSM is already up to date.${RESET} (--force to reinstall anyway)\n\n"
     return 0
   fi
 
   if [[ "$SOURCE_DIR" != "$INSTALL_DIR" ]]; then
-    [[ -f "$SOURCE_DIR/install.sh" ]] || fail "install.sh introuvable dans $SOURCE_DIR." \
-      "update.sh doit être lancé depuis le dépôt MSM." "cd vers le dépôt, puis sudo ./update.sh"
+    [[ -f "$SOURCE_DIR/install.sh" ]] || fail "install.sh not found in $SOURCE_DIR." \
+      "update.sh must be run from the MSM repository." "cd into the repository, then sudo ./update.sh"
   fi
 
-  # --- Copie de l'ancienne version -------------------------------------------
-  # Avant tout changement, y compris le git pull : pour une installation en place
-  # (dépôt = dossier d'installation), c'est lui qui modifie le code.
-  step "Copie de la version installée"
+  # --- Copy of the previous version ------------------------------------------
+  # Before any change, including the git pull: for an in-place installation
+  # (repository = installation folder), the pull is what modifies the code.
+  step "Copying the installed version"
   rm -rf "$PREVIOUS_DIR"
   cp -a "$INSTALL_DIR" "$PREVIOUS_DIR"
   rm -rf "$PREVIOUS_DIR/frontend/node_modules" "$PREVIOUS_DIR/$ROLLBACK_MARKER"
-  ok "Version ${OLD_VERSION} conservée dans $PREVIOUS_DIR"
+  ok "Version ${OLD_VERSION} kept in $PREVIOUS_DIR"
 
   apply_fetched
 
-  # --- Unité systemd ---------------------------------------------------------
-  # Installée avant l'arrêt : c'est elle qui décide de ce que l'arrêt tue. Une
-  # ancienne unité en `KillMode=mixed` couperait les serveurs Minecraft.
-  step "Service systemd"
+  # --- systemd unit ----------------------------------------------------------
+  # Installed before stopping: the unit decides what stopping kills. An older
+  # unit with `KillMode=mixed` would take the Minecraft servers down.
+  step "systemd service"
   bash "$SOURCE_DIR/systemd/render-unit.sh" "$SOURCE_DIR/systemd/${SERVICE_NAME}.service" \
     "$UNIT_FILE" "$MSM_USER" "$MSM_GROUP" "$INSTALL_DIR" "$CONFIG_DIR" "$DATA_DIR" \
     "$LOG_DIR" "$SERVERS_ROOT"
   systemctl daemon-reload
-  ok "Unité à jour."
+  ok "Unit up to date."
 
-  # --- Arrêt et sauvegarde ---------------------------------------------------
-  step "Arrêt de MSM"
+  # --- Stop and backup -------------------------------------------------------
+  step "Stopping MSM"
   systemctl stop "$SERVICE_NAME"
-  ok "MSM arrêté — les serveurs Minecraft continuent de tourner."
+  ok "MSM stopped — the Minecraft servers keep running."
 
-  step "Sauvegarde"
+  step "Backup"
   backup_state
-  # À partir d'ici, la copie de l'ancienne version et cette sauvegarde vont
-  # ensemble : c'est ce couple que `--rollback` remettra en place.
+  # From here on, the copy of the previous version and this backup go together:
+  # that pair is what `--rollback` puts back.
   echo "$BACKUP_DIR" > "$PREVIOUS_DIR/$ROLLBACK_MARKER"
 
   # --- Installation ----------------------------------------------------------
-  step "Installation de la nouvelle version"
+  step "Installing the new version"
   if ! bash "$SOURCE_DIR/install.sh" --from-update \
       --dir "$INSTALL_DIR" --config "$CONFIG_DIR" --data "$DATA_DIR" --logs "$LOG_DIR" \
       --servers-root "$SERVERS_ROOT" --user "$MSM_USER"; then
-    automatic_rollback "L'installation de la nouvelle version a échoué."
+    automatic_rollback "Installing the new version failed."
   fi
 
-  step "Vérification"
+  step "Checking"
   if ! wait_healthy; then
-    automatic_rollback "Le panneau ne répond pas sur ${HEALTH_URL} après la mise à jour."
+    automatic_rollback "The panel does not answer on ${HEALTH_URL} after the update."
   fi
-  ok "Le panneau répond."
+  ok "The panel answers."
 
   local new_commit
   new_commit="$(installed_commit "$INSTALL_DIR")"
-  printf "\n${GREEN}${BOLD}Mise à jour terminée : %s → %s.${RESET}\n\n" \
+  printf "\n${GREEN}${BOLD}Update complete: %s → %s.${RESET}\n\n" \
     "${OLD_VERSION}${old_commit:+ (${old_commit:0:7})}" \
     "$(installed_version "$INSTALL_DIR")${new_commit:+ (${new_commit:0:7})}"
   cat <<EOF
-  Sauvegarde d'avant mise à jour   ${BACKUP_DIR}
-  Revenir à la version précédente  sudo ./update.sh --rollback
+  Pre-update backup                ${BACKUP_DIR}
+  Go back to the previous version  sudo ./update.sh --rollback
 
 EOF
 }
@@ -524,22 +527,22 @@ EOF
 main() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --ref)       REF="${2:-}"; [[ -n "$REF" ]] || fail "--ref attend une valeur."; shift 2 ;;
+      --ref)       REF="${2:-}"; [[ -n "$REF" ]] || fail "--ref expects a value."; shift 2 ;;
       --no-pull)   NO_PULL=1; shift ;;
       --force)     FORCE=1; shift ;;
       --rollback)  ROLLBACK=1; shift ;;
       -y|--yes)    ASSUME_YES=1; shift ;;
       -h|--help)   usage; exit 0 ;;
-      *) fail "Option inconnue : $1" "L'argument n'est pas reconnu." "Lancer ./update.sh --help" ;;
+      *) fail "Unknown option: $1" "The argument is not recognised." "Run ./update.sh --help" ;;
     esac
   done
 
   [[ $EUID -eq 0 ]] || fail \
-    "Ce script doit être exécuté en tant que root." \
-    "Il arrête et redémarre le service, et écrit dans les dossiers de MSM." \
-    "Relancer avec : sudo ./update.sh"
-  command -v systemctl >/dev/null 2>&1 || fail "systemd est introuvable." \
-    "MSM est installé comme service systemd." "Mettre à jour à la main : voir docs/DEPLOY.md"
+    "This script must be run as root." \
+    "It stops and restarts the service, and writes to MSM's folders." \
+    "Run it again with: sudo ./update.sh"
+  command -v systemctl >/dev/null 2>&1 || fail "systemd was not found." \
+    "MSM is installed as a systemd service." "Update by hand: see docs/DEPLOY.md"
 
   load_installation
 
@@ -550,6 +553,6 @@ main() {
   fi
 }
 
-# Tout le script est lu avant de s'exécuter : le `git pull` peut remplacer ce
-# fichier en cours de route sans que bash n'en lise la suite modifiée.
+# The whole script is read before it runs: the `git pull` can replace this file
+# along the way without bash reading the modified remainder.
 main "$@"; exit $?

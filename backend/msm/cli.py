@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import logging
 import os
 import secrets
 import sys
@@ -38,35 +39,35 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"MSM {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("serve", help="Démarrer le serveur web")
-    subparsers.add_parser("migrate", help="Appliquer les migrations de base de données")
+    subparsers.add_parser("serve", help="Start the web server")
+    subparsers.add_parser("migrate", help="Apply the database migrations")
 
-    create_admin = subparsers.add_parser("createadmin", help="Créer un compte administrateur")
-    create_admin.add_argument("username", help="Nom du compte à créer")
+    create_admin = subparsers.add_parser("createadmin", help="Create an administrator account")
+    create_admin.add_argument("username", help="Name of the account to create")
     create_admin.add_argument("--display-name", default=None)
     create_admin.add_argument("--email", default=None)
     create_admin.add_argument(
         "--role",
         choices=[role.value for role in Role],
         default=Role.ADMIN.value,
-        help="Rôle du compte (ADMIN par défaut)",
+        help="Role of the account (ADMIN by default)",
     )
 
-    subparsers.add_parser("purge-sessions", help="Supprimer les sessions expirées")
-    subparsers.add_parser("secret", help="Générer une clé secrète pour le fichier .env")
+    subparsers.add_parser("purge-sessions", help="Delete expired sessions")
+    subparsers.add_parser("secret", help="Generate a secret key for the .env file")
     subparsers.add_parser(
         "count-users",
-        help="Afficher le nombre de comptes (un entier seul, pour les scripts)",
+        help="Print the number of accounts (a bare integer, for scripts)",
     )
     subparsers.add_parser(
         "db-revision",
-        help="Afficher la révision du schéma de base (seule, pour les scripts)",
+        help="Print the database schema revision (alone, for scripts)",
     )
     downgrade = subparsers.add_parser(
         "downgrade",
-        help="Ramener le schéma à une révision antérieure (retour arrière d'une mise à jour)",
+        help="Bring the schema back to an earlier revision (rolling back an update)",
     )
-    downgrade.add_argument("revision", help="Révision cible, telle qu'affichée par db-revision")
+    downgrade.add_argument("revision", help="Target revision, as printed by db-revision")
 
     return parser
 
@@ -128,10 +129,10 @@ async def _create_admin(args: argparse.Namespace, settings: object) -> int:
                 email=args.email,
             )
         except Exception as exc:
-            print(f"Échec : {exc}", file=sys.stderr)
+            print(f"Failed: {exc}", file=sys.stderr)
             return 1
 
-    print(f"Compte « {user.username} » créé avec le rôle {user.role.value}.")
+    print(f'Account "{user.username}" created with the {user.role.value} role.')
     return 0
 
 
@@ -171,22 +172,27 @@ async def _db_revision() -> int:
 async def _purge_sessions(settings: object) -> int:
     async with session_scope() as session:
         removed = await AuthService(session, settings).purge_expired_sessions()  # type: ignore[arg-type]
-    print(f"{removed} session(s) expirée(s) supprimée(s).")
+    print(f"{removed} expired session(s) deleted.")
     return 0
 
 
 def _prompt_password() -> str | None:
     """Demande le mot de passe deux fois, sans écho."""
-    password = getpass.getpass(f"Mot de passe ({MIN_PASSWORD_LENGTH} caractères minimum) : ")
-    confirmation = getpass.getpass("Confirmation : ")
+    password = getpass.getpass(f"Password ({MIN_PASSWORD_LENGTH} characters minimum): ")
+    confirmation = getpass.getpass("Confirm: ")
     if password != confirmation:
-        print("Les mots de passe ne correspondent pas.", file=sys.stderr)
+        print("The passwords do not match.", file=sys.stderr)
         return None
     return password
 
 
 def _run_migrations(downgrade_to: str | None = None) -> int:
     """Applique les migrations Alembic, ou ramène le schéma à ``downgrade_to``."""
+    # Réglé avant l'import, qui charge déjà les plugins d'Alembic : il annonce
+    # chacun d'eux au niveau INFO, du bruit dans la sortie d'install.sh et
+    # d'update.sh sans rien d'utile pour l'administrateur.
+    logging.getLogger("alembic.runtime.plugins").setLevel(logging.WARNING)
+
     from alembic import command
     from alembic.config import Config
 
@@ -194,16 +200,16 @@ def _run_migrations(downgrade_to: str | None = None) -> int:
 
     config_path = BACKEND_ROOT / "alembic.ini"
     if not config_path.is_file():
-        print(f"Configuration Alembic introuvable : {config_path}", file=sys.stderr)
+        print(f"Alembic configuration not found: {config_path}", file=sys.stderr)
         return 1
 
     if downgrade_to is not None:
         command.downgrade(Config(str(config_path)), downgrade_to)
-        print(f"Schema ramene a {downgrade_to}.")
+        print(f"Schema brought back to {downgrade_to}.")
         return 0
 
     command.upgrade(Config(str(config_path)), "head")
-    print("Migrations appliquées.")
+    print("Migrations applied.")
     return 0
 
 

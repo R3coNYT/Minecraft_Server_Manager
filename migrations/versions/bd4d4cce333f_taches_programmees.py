@@ -1,4 +1,4 @@
-"""Tâches programmées.
+"""Scheduled tasks.
 
 `next_run_at` est indexé : la boucle du planificateur interroge cette colonne
 toutes les vingt secondes, sur toutes les tâches de toutes les machines.

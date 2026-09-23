@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 #
-# Génère l'unité systemd de MSM à partir du modèle. Partagé par install.sh et
-# update.sh : une mise à jour doit installer la nouvelle unité *avant* d'arrêter
-# le service, pour que l'arrêt suive déjà les nouvelles règles.
+# Renders MSM's systemd unit from the template. Shared by install.sh and
+# update.sh: an update must install the new unit *before* stopping the service,
+# so that stopping already follows the new rules.
 #
-#   render-unit.sh MODELE SORTIE UTILISATEUR GROUPE CODE CONFIG DONNEES JOURNAUX SERVEURS
+#   render-unit.sh TEMPLATE OUTPUT USER GROUP CODE CONFIG DATA LOGS SERVERS
 #
-# Les chemins ajoutés à la main dans `ReadWritePaths` d'une unité existante —
-# des sauvegardes sur un autre disque, une seconde racine de serveurs — sont
-# conservés : une mise à jour ne doit pas retirer au service un droit d'écriture
-# dont il a besoin.
+# Paths added by hand to `ReadWritePaths` in an existing unit — backups on
+# another disk, a second servers root — are kept: an update must not take away
+# a write permission the service needs.
 set -euo pipefail
 
-[[ $# -eq 9 ]] || { echo "Usage : $0 MODELE SORTIE UTILISATEUR GROUPE CODE CONFIG DONNEES JOURNAUX SERVEURS" >&2; exit 2; }
+[[ $# -eq 9 ]] || { echo "Usage: $0 TEMPLATE OUTPUT USER GROUP CODE CONFIG DATA LOGS SERVERS" >&2; exit 2; }
 template="$1" output="$2" user="$3" group="$4" home="$5" config="$6" data="$7" logs="$8" servers="$9"
 
 rendered="$(sed -e "s|__MSM_USER__|${user}|g" \
@@ -35,6 +34,6 @@ if [[ -f "$output" ]]; then
     '/^ReadWritePaths=/ { print line; next } { print }')"
 fi
 
-# Écriture atomique : un `daemon-reload` ne doit jamais lire une unité tronquée.
+# Atomic write: a `daemon-reload` must never read a truncated unit.
 printf '%s\n' "$rendered" > "${output}.tmp"
 mv "${output}.tmp" "$output"

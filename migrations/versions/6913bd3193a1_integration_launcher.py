@@ -1,4 +1,4 @@
-"""Intégration avec le serveur de fichiers d'un launcher.
+"""Integration with a launcher's file server.
 
 `launcher_integrations` porte les réglages et l'état de synchronisation d'un
 serveur ; `launcher_files` retient les fichiers que MSM y a installés, pour ne
