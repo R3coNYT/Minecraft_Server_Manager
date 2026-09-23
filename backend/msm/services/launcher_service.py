@@ -75,7 +75,23 @@ _PUSH_NOT_BEFORE: dict[int, datetime] = {}
 _BACKGROUND: set[asyncio.Task[Any]] = set()
 
 
+_LOCKS_LOOP: asyncio.AbstractEventLoop | None = None
+
+
 def _lock(server_id: int) -> asyncio.Lock:
+    """Verrou du serveur, propre à la boucle d'événements en cours.
+
+    Un `asyncio.Lock` se lie à la première boucle qui l'attend ; réutilisé dans
+    une autre — une application recréée, chaque test — il lève une erreur. Les
+    verrous, comme l'attente après un échec d'envoi, appartiennent donc à la
+    boucle qui les a créés et sont oubliés quand elle change.
+    """
+    global _LOCKS_LOOP
+    loop = asyncio.get_running_loop()
+    if _LOCKS_LOOP is not loop:
+        _LOCKS.clear()
+        _PUSH_NOT_BEFORE.clear()
+        _LOCKS_LOOP = loop
     return _LOCKS.setdefault(server_id, asyncio.Lock())
 
 

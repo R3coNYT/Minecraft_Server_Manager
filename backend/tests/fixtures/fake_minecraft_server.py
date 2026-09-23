@@ -39,7 +39,11 @@ START_TIME = time.time()
 def emit(thread: str, level: str, message: str) -> None:
     """Écrit une ligne au format log4j d'un serveur Minecraft moderne."""
     stamp = time.strftime("%H:%M:%S")
-    print(f"[{stamp}] [{thread}/{level}]: {message}", flush=True)
+    # Comme la JVM : une console que plus personne ne lit (MSM arrêté ou mis à
+    # jour) n'arrête pas le serveur. Sans cela, le faux serveur mourrait d'un
+    # BrokenPipeError là où un vrai continue de tourner.
+    with contextlib.suppress(OSError):
+        print(f"[{stamp}] [{thread}/{level}]: {message}", flush=True)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

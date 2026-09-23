@@ -18,6 +18,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 
+from sqlalchemy.exc import IntegrityError
+
 from msm.bus import EventBus, topics
 from msm.db.repositories import ServerRepository
 from msm.db.session import session_scope
@@ -85,16 +87,29 @@ class RuntimeStateRecorder:
         if runtime is None:
             return
 
-        try:
-            async with session_scope() as session:
-                await ServerRepository(session).save_runtime_state(
-                    server_id,
-                    state=runtime.state,
-                    pid=runtime.pid,
-                    group_id=runtime.group_id,
-                    process_create_time=runtime.process_create_time,
-                    consecutive_crashes=payload.get("consecutive_crashes", 0),
-                    last_error=payload.get("last_error"),
-                )
-        except Exception as exc:
-            logger.warning("runtime_state_persist_failed", server_id=server_id, error=str(exc))
+        # Deux tentatives : au premier démarrage d'un serveur, la requête qui l'a
+        # lancé crée la ligne d'état dans sa propre transaction. Si elle valide
+        # entre notre lecture et notre insertion, l'insertion échoue sur la
+        # contrainte d'unicité — la seconde tentative trouve la ligne et la met
+        # à jour. Sans elle, l'état perdu ici privait le serveur de réadoption.
+        for attempt in (1, 2):
+            try:
+                async with session_scope() as session:
+                    await ServerRepository(session).save_runtime_state(
+                        server_id,
+                        state=runtime.state,
+                        pid=runtime.pid,
+                        group_id=runtime.group_id,
+                        process_create_time=runtime.process_create_time,
+                        consecutive_crashes=payload.get("consecutive_crashes", 0),
+                        last_error=payload.get("last_error"),
+                    )
+                return
+            except IntegrityError as exc:
+                if attempt == 2:
+                    logger.warning(
+                        "runtime_state_persist_failed", server_id=server_id, error=str(exc)
+                    )
+            except Exception as exc:
+                logger.warning("runtime_state_persist_failed", server_id=server_id, error=str(exc))
+                return
