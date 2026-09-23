@@ -14,6 +14,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
   CloudDownload,
+  Copy,
+  KeyRound,
   Link2,
   RefreshCw,
   Send,
@@ -41,6 +43,7 @@ import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { SyncCountdown } from '@/components/launcher/SyncCountdown'
+import { cn } from '@/lib/cn'
 import { t, tn, type MessageKey } from '@/i18n'
 
 const STATUS_STYLES: Record<LauncherSyncStatus, string> = {
@@ -84,6 +87,51 @@ function toDraft(link: LauncherLink | null): Draft {
     sync_paths: (link?.sync_paths ?? ['mods/']).join(', '),
     interval_minutes: link?.interval_minutes ?? 30,
     enabled: link?.enabled ?? true,
+  }
+}
+
+/**
+ * Jeton aléatoire de même force que `msm secret` : 64 octets en base64url.
+ *
+ * Généré dans le navigateur : `crypto.getRandomValues` est une source
+ * cryptographique, disponible même hors HTTPS, et le jeton ne transite pas par
+ * le réseau avant d'être enregistré.
+ */
+function generateToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(64))
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
+
+/**
+ * Copie dans le presse-papiers. `navigator.clipboard` n'existe qu'en contexte
+ * sécurisé (HTTPS ou localhost) : un panneau consulté en HTTP sur le réseau
+ * local passe par l'ancienne méthode, via un champ temporaire.
+ */
+async function copyText(text: string): Promise<boolean> {
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Refus du navigateur : tenter l'ancienne méthode.
+    }
+  }
+  const field = document.createElement('textarea')
+  field.value = text
+  field.setAttribute('readonly', '')
+  field.style.position = 'fixed'
+  field.style.opacity = '0'
+  document.body.appendChild(field)
+  field.select()
+  try {
+    return document.execCommand('copy')
+  } catch {
+    return false
+  } finally {
+    field.remove()
   }
 }
 
@@ -281,6 +329,26 @@ function ConfigurationForm({
   const push = useToasts((state) => state.push)
   const [draft, setDraft] = useState<Draft>(() => toDraft(link))
   const [clearToken, setClearToken] = useState(false)
+  // Un jeton généré s'affiche en clair : il faut le recopier sur le serveur de
+  // fichiers. Un jeton saisi à la main reste masqué.
+  const [generated, setGenerated] = useState(false)
+
+  const copyToken = async () => {
+    const copied = await copyText(draft.push_token)
+    push(
+      copied
+        ? {
+            kind: 'success',
+            title: t('launcherPage.tokenCopied'),
+            detail: t('launcherPage.tokenCopiedDetail'),
+          }
+        : {
+            kind: 'error',
+            title: t('launcherPage.tokenCopyFailed'),
+            detail: t('launcherPage.tokenCopyFailedDetail'),
+          },
+    )
+  }
 
   const save = useMutation({
     mutationFn: () =>
@@ -343,14 +411,48 @@ function ConfigurationForm({
               : t('launcherPage.tokenHelp')
           }
         >
-          <Input
-            type="password"
-            autoComplete="off"
-            value={draft.push_token}
-            onChange={(event) => set('push_token', event.target.value)}
-            placeholder={link?.push_configured ? '••••••••' : ''}
-            disabled={clearToken}
-          />
+          <div className="flex flex-wrap gap-2">
+            <Input
+              type={generated ? 'text' : 'password'}
+              autoComplete="off"
+              spellCheck={false}
+              className={cn('min-w-[12rem] flex-1', generated && 'font-mono text-xs')}
+              value={draft.push_token}
+              onChange={(event) => {
+                setGenerated(false)
+                set('push_token', event.target.value)
+              }}
+              placeholder={link?.push_configured ? '••••••••' : ''}
+              disabled={clearToken}
+            />
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<KeyRound className="size-4" />}
+              title={t('launcherPage.generateTokenHint')}
+              disabled={clearToken}
+              onClick={() => {
+                setGenerated(true)
+                set('push_token', generateToken())
+              }}
+            >
+              {t('launcherPage.generateToken')}
+            </Button>
+            {draft.push_token ? (
+              <Button
+                type="button"
+                variant="ghost"
+                icon={<Copy className="size-4" />}
+                disabled={clearToken}
+                onClick={() => void copyToken()}
+              >
+                {t('launcherPage.copyToken')}
+              </Button>
+            ) : null}
+          </div>
+          {generated ? (
+            <p className="mt-1.5 text-xs text-amber-300/90">{t('launcherPage.tokenGenerated')}</p>
+          ) : null}
         </Field>
         {link?.push_configured ? (
           <Checkbox
