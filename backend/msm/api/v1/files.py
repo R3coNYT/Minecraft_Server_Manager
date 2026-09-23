@@ -113,7 +113,7 @@ async def delete_file(
 ) -> dict[str, str]:
     server, context = access
     await service.delete(server, area, name, context=context, ip_address=ip)
-    return {"status": "supprimé", "name": name}
+    return {"status": "deleted", "name": name}
 
 
 @router.post(

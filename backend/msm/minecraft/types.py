@@ -46,8 +46,8 @@ _LABELS: dict[ServerType, str] = {
     ServerType.SPIGOT: "Spigot",
     ServerType.BUKKIT: "Bukkit",
     ServerType.PURPUR: "Purpur",
-    ServerType.CUSTOM: "Personnalisé",
-    ServerType.UNKNOWN: "Inconnu",
+    ServerType.CUSTOM: "Custom",
+    ServerType.UNKNOWN: "Unknown",
 }
 
 

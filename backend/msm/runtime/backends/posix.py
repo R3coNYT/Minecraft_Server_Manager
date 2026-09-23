@@ -124,7 +124,7 @@ class PosixProcessBackend(ProcessBackend):
         if group_id in (0, os.getpgrp()):
             logger.error(
                 "signal_group_refused",
-                reason="le groupe visé est celui de MSM",
+                reason="target group is MSM's own",
                 group_id=group_id,
                 pid=spawned.pid,
             )

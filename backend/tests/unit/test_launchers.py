@@ -138,7 +138,7 @@ class TestShellLauncherPosix:
         with pytest.raises(LaunchError) as excinfo:
             registry.build_spec("shell", context(server_dir, script_path="run.sh"))
 
-        assert "exécutable" in (excinfo.value.cause or "")
+        assert "not executable" in (excinfo.value.cause or "")
         assert excinfo.value.remediation and "chmod +x" in excinfo.value.remediation
 
     def test_executable_script_is_accepted(self, server_dir: Path) -> None:

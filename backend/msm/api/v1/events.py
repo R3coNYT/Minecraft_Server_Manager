@@ -185,7 +185,7 @@ async def delete_event(event_id: int, access: ServerAccess, service: EventsDep) 
     event = await service.get_event(server, event_id)
     name = event.name
     await service.delete_event(server, event, context=context)
-    return {"status": "supprimé", "name": name}
+    return {"status": "deleted", "name": name}
 
 
 # --------------------------------------------------------------------------- #
