@@ -22,6 +22,17 @@ async def _create_server(admin: ApiClient, directory: Path, name: str = "survie"
     return created.json()
 
 
+async def _wait_state(admin: ApiClient, server_id: int, state: str, timeout: float = 20.0) -> bool:
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while loop.time() < deadline:
+        response = await admin.get(f"/api/v1/servers/{server_id}/status")
+        if response.json()["state"] == state:
+            return True
+        await asyncio.sleep(0.05)
+    return False
+
+
 class TestSchedules:
     async def test_create_computes_the_next_occurrence(
         self, admin: ApiClient, fake_server_dir: Path
@@ -253,6 +264,11 @@ class TestScheduleExecution:
             user = await session.get(User, moderator_id)
             user.is_active = False
 
+        from msm.bus import topics
+
+        outcome = app.state.supervisor.bus.subscribe(
+            topics.server_topic(server["id"], topics.SCHEDULE)
+        )
         status = await run_schedule(
             created["id"], supervisor=app.state.supervisor, settings=app.state.settings
         )
@@ -261,6 +277,13 @@ class TestScheduleExecution:
         async with session_scope() as session:
             schedule = await session.get(Schedule, created["id"])
             assert "disabled" in (schedule.last_error or "")
+
+        # L'échec est aussi annoncé sur le bus : c'est là que les notifications
+        # Discord le prennent.
+        event = await asyncio.wait_for(outcome.get(), timeout=5)
+        outcome.close()
+        assert event.payload["status"] == "FAILED"
+        assert event.payload["task"] == "Annonce"
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 
@@ -355,6 +378,48 @@ class TestNotifications:
         keys = {item["key"] for item in response.json()}
         assert "server_crashed" in keys
         assert all(item["label"] for item in response.json())
+
+    async def test_starting_and_stopping_a_server_reach_discord(
+        self, admin: ApiClient, fake_server_dir: Path, app, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Un vrai démarrage puis un vrai arrêt produisent les deux annonces."""
+        from msm.services import notifier as notifier_module
+
+        sent: list[str] = []
+
+        async def fake_send(url: str, content: str, **_: object) -> bool:
+            sent.append(content)
+            return True
+
+        async def settings() -> dict:
+            return {
+                "enabled": True,
+                "webhook_url": WEBHOOK,
+                "events": ["server_started", "server_stopped"],
+            }
+
+        monkeypatch.setattr(notifier_module, "send_to_discord", fake_send)
+        monkeypatch.setattr(notifier_module, "BATCH_WINDOW_S", 0.1)
+        notifier = notifier_module.Notifier(app.state.supervisor.bus, settings)
+        notifier.start()
+        try:
+            server = await _create_server(admin, fake_server_dir)
+            await admin.post(f"/api/v1/servers/{server['id']}/start")
+            assert await _wait_state(admin, server["id"], "ONLINE")
+            await admin.post(f"/api/v1/servers/{server['id']}/stop")
+            assert await _wait_state(admin, server["id"], "OFFLINE")
+
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 10
+            while loop.time() < deadline and "Server stopped" not in "\n".join(sent):
+                await asyncio.sleep(0.1)
+        finally:
+            await notifier.stop()
+
+        text = "\n".join(sent)
+        assert "Server started" in text
+        assert "Server stopped" in text
+        assert "survie" in text
 
 
 class TestDownloads:

@@ -29,6 +29,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from msm.bus import topics
 from msm.config import Settings, get_settings
 from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction
@@ -462,7 +463,20 @@ async def run_schedule(
         )
         if status is ScheduleStatus.SUCCESS:
             logger.info("schedule_ran", schedule_id=schedule.id, server_id=server.id, manual=manual)
-        return status
+
+    # Après la validation : ce qui est annoncé est déjà dans l'historique.
+    supervisor.bus.publish(
+        topics.server_topic(server.id, topics.SCHEDULE),
+        {
+            "server_id": server.id,
+            "server": server.name,
+            "schedule_id": schedule.id,
+            "task": schedule.name,
+            "status": status.value,
+            "error": message,
+        },
+    )
+    return status
 
 
 class Scheduler:

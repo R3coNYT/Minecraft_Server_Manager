@@ -40,6 +40,11 @@ class Supervisor:
         self._runtimes: dict[int, ServerRuntime] = {}
         self._pre_start_hooks: list[PreStartHook] = []
 
+    @property
+    def bus(self) -> EventBus:
+        """Bus sur lequel publient les runtimes, pour que les services y publient aussi."""
+        return self._bus
+
     # ------------------------------------------------------------------ #
     #  Préparation avant démarrage
     # ------------------------------------------------------------------ #

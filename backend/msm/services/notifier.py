@@ -29,6 +29,7 @@ from typing import Any
 import httpx
 
 from msm.bus import EventBus, topics
+from msm.core.states import ServerState
 from msm.i18n import tr
 from msm.logging_conf import get_logger
 
@@ -97,9 +98,11 @@ class Notification:
 
     def render(self) -> str:
         icon = _ICONS.get(self.event, "•")
-        moment = self.ts.strftime("%H:%M")
+        # Horodatage Discord : chaque lecteur voit l'heure dans son propre
+        # fuseau, là où un « 03:05 » écrit ici serait en UTC.
+        moment = f"<t:{int(self.ts.timestamp())}:t>"
         suffix = f" — {self.detail}" if self.detail else ""
-        return f"{icon} `{moment}` **{self.server_name}** · {tr(LABELS[self.event])}{suffix}"
+        return f"{icon} {moment} **{self.server_name}** · {tr(LABELS[self.event])}{suffix}"
 
 
 def render_batch(items: list[Notification]) -> str:
@@ -175,6 +178,9 @@ class Notifier:
         self._load_settings = settings_loader
         self._bus = bus
         self._queue: list[Notification] = []
+        #: Dernier état vu de chaque serveur, et la raison qui l'accompagnait :
+        #: « démarré » et « arrêté » sont des transitions, pas des états.
+        self._states: dict[int, tuple[str, str]] = {}
         self._task: asyncio.Task[None] | None = None
         self._stop = asyncio.Event()
 
@@ -259,6 +265,49 @@ class Notifier:
                 )
             elif status == "COMPLETED":
                 self.notify(Notification(NotificationEvent.BACKUP_COMPLETED, str(name)))
+        elif suffix == topics.SCHEDULE:
+            if payload.get("status") == "FAILED":
+                task = str(payload.get("task") or "")
+                error = str(payload.get("error") or "")
+                self.notify(
+                    Notification(
+                        NotificationEvent.SCHEDULE_FAILED,
+                        str(name),
+                        f"{task} — {error}" if task and error else task or error,
+                    )
+                )
+        elif suffix == topics.STATUS:
+            self._collect_state(payload, str(name))
+
+    def _collect_state(self, payload: dict[str, Any], name: str) -> None:
+        """Annonce un démarrage ou un arrêt à partir des changements d'état.
+
+        Seules les transitions complètes comptent : STARTING → ONLINE pour un
+        démarrage, ONLINE ou STOPPING → OFFLINE pour un arrêt. Un serveur
+        réadopté au lancement de MSM, ou détaché à son arrêt, ne passe pas par
+        là — il n'a été ni démarré ni arrêté. Un arrêt sur plantage aboutit à
+        CRASHED, déjà annoncé à part.
+        """
+        server_id = payload.get("id")
+        state = payload.get("state")
+        if not isinstance(server_id, int) or not isinstance(state, str):
+            return
+        reason = str(payload.get("state_reason") or "")
+        previous_state, previous_reason = self._states.get(server_id, ("", ""))
+        self._states[server_id] = (state, reason)
+        if state == previous_state:
+            return
+
+        # La raison utile est celle de la demande (« Start requested by… »),
+        # portée par l'état intermédiaire, pas celle de l'aboutissement.
+        if state == ServerState.ONLINE.value and previous_state == ServerState.STARTING.value:
+            self.notify(Notification(NotificationEvent.SERVER_STARTED, name, previous_reason))
+        elif state == ServerState.OFFLINE.value and previous_state in (
+            ServerState.ONLINE.value,
+            ServerState.STOPPING.value,
+        ):
+            detail = previous_reason if previous_state == ServerState.STOPPING.value else reason
+            self.notify(Notification(NotificationEvent.SERVER_STOPPED, name, detail))
 
     async def flush(self) -> bool:
         """Envoie ce qui est en file. Renvoie `True` si un message est parti."""
