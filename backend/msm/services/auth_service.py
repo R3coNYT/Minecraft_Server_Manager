@@ -21,6 +21,7 @@ from msm.db.models.audit import AuditAction, AuditResult
 from msm.db.models.user import User, UserSession
 from msm.db.repositories import AuditRepository, SessionRepository, UserRepository
 from msm.exceptions import AuthenticationError, ConflictError, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.security.password import (
     hash_password,
@@ -74,28 +75,26 @@ class AuthService:
         if user is None:
             # Vérification à vide : la réponse doit coûter le même temps.
             verify_password(_dummy_hash(), password)
-            await self._record_failure(username, ip_address, "compte inexistant")
+            await self._record_failure(username, ip_address, tr("unknown account"))
             raise self._invalid_credentials()
 
         if locked_for := self._locked_seconds(user):
-            await self._record_failure(username, ip_address, "compte verrouillé", user=user)
+            await self._record_failure(username, ip_address, tr("account locked"), user=user)
             raise AuthenticationError(
-                "Compte temporairement verrouillé.",
-                cause=(
-                    f"Trop de tentatives infructueuses ; réessai possible dans "
-                    f"{locked_for // 60 + 1} minute(s)."
+                tr("Account temporarily locked."),
+                cause=tr(
+                    "Too many failed attempts; try again in {minutes} minute(s).",
+                    minutes=locked_for // 60 + 1,
                 ),
-                remediation=(
-                    "Patienter, ou demander à un administrateur de réinitialiser le compte."
-                ),
+                remediation=tr("Wait, or ask an administrator to reset the account."),
             )
 
         if not user.is_active:
-            await self._record_failure(username, ip_address, "compte désactivé", user=user)
+            await self._record_failure(username, ip_address, tr("account disabled"), user=user)
             raise AuthenticationError(
-                "Compte désactivé.",
-                cause="Ce compte a été désactivé par un administrateur.",
-                remediation="Contacter un administrateur du panel.",
+                tr("Account disabled."),
+                cause=tr("This account has been disabled by an administrator."),
+                remediation=tr("Contact an administrator of the panel."),
             )
 
         if not verify_password(user.password_hash, password):
@@ -107,7 +106,7 @@ class AuthService:
                 logger.warning(
                     "account_locked", username=user.username, attempts=user.failed_attempts
                 )
-            await self._record_failure(username, ip_address, "mot de passe incorrect", user=user)
+            await self._record_failure(username, ip_address, tr("wrong password"), user=user)
             raise self._invalid_credentials()
 
         # Succès : le compteur repart de zéro et l'empreinte est modernisée
@@ -127,7 +126,7 @@ class AuthService:
 
         self._audit.record(
             action=AuditAction.LOGIN,
-            summary=f"Connexion de {user.username}.",
+            summary=tr("{username} signed in.", username=user.username),
             actor_id=user.id,
             actor_username=user.username,
             actor_role=user.role.value,
@@ -156,7 +155,7 @@ class AuthService:
         user = record.user
         self._audit.record(
             action=AuditAction.LOGOUT,
-            summary=f"Déconnexion de {user.username}.",
+            summary=tr("{username} signed out.", username=user.username),
             actor_id=user.id,
             actor_username=user.username,
             actor_role=user.role.value,
@@ -177,15 +176,15 @@ class AuthService:
         """Change le mot de passe et invalide toutes les sessions existantes."""
         if not verify_password(user.password_hash, current_password):
             raise AuthenticationError(
-                "Mot de passe actuel incorrect.",
-                cause="La vérification du mot de passe actuel a échoué.",
-                remediation="Ressaisir le mot de passe actuel.",
+                tr("Current password incorrect."),
+                cause=tr("The current password could not be verified."),
+                remediation=tr("Enter the current password again."),
             )
         if current_password == new_password:
             raise ValidationError(
-                "Nouveau mot de passe identique à l'ancien.",
-                cause="Le mot de passe proposé est le mot de passe actuel.",
-                remediation="Choisir un mot de passe différent.",
+                tr("New password identical to the old one."),
+                cause=tr("The proposed password is the current password."),
+                remediation=tr("Choose a different password."),
             )
 
         user.password_hash = hash_password(validate_password_strength(new_password))
@@ -195,7 +194,7 @@ class AuthService:
 
         self._audit.record(
             action=AuditAction.PASSWORD_CHANGED,
-            summary=f"Mot de passe modifié pour {user.username}.",
+            summary=tr("Password changed for {username}.", username=user.username),
             actor_id=user.id,
             actor_username=user.username,
             actor_role=user.role.value,
@@ -217,15 +216,15 @@ class AuthService:
         clean_username = username.strip()
         if not clean_username or len(clean_username) > 64:
             raise ValidationError(
-                "Nom d'utilisateur invalide.",
-                cause="Le nom doit contenir entre 1 et 64 caractères.",
-                remediation="Choisir un nom d'utilisateur plus court.",
+                tr("Invalid username."),
+                cause=tr("The name must contain between 1 and 64 characters."),
+                remediation=tr("Choose a shorter username."),
             )
         if await self._users.get_by_username(clean_username) is not None:
             raise ConflictError(
-                "Ce nom d'utilisateur est déjà pris.",
-                cause=f"Un compte « {clean_username} » existe déjà.",
-                remediation="Choisir un autre nom d'utilisateur.",
+                tr("This username is already taken."),
+                cause=tr("An account “{username}” already exists.", username=clean_username),
+                remediation=tr("Choose another username."),
             )
 
         user = await self._users.create(
@@ -238,9 +237,11 @@ class AuthService:
 
         self._audit.record(
             action=AuditAction.USER_CREATED,
-            summary=f"Création du compte {user.username} ({role.value}).",
+            summary=tr(
+                "Account {username} created ({role}).", username=user.username, role=role.value
+            ),
             actor_id=actor.id if actor else None,
-            actor_username=actor.username if actor else "système",
+            actor_username=actor.username if actor else tr("system"),
             actor_role=actor.role.value if actor else None,
             ip_address=ip_address,
             target_type="user",
@@ -288,7 +289,9 @@ class AuthService:
         """
         self._audit.record(
             action=AuditAction.LOGIN_FAILED,
-            summary=f"Échec de connexion pour « {username} » : {reason}.",
+            summary=tr(
+                "Failed sign-in for “{username}”: {reason}.", username=username, reason=reason
+            ),
             actor_id=user.id if user else None,
             actor_username=username[:64],
             actor_role=user.role.value if user else None,
@@ -306,7 +309,7 @@ class AuthService:
         attaquant la liste des comptes existants.
         """
         return AuthenticationError(
-            "Identifiants incorrects.",
-            cause="Le nom d'utilisateur ou le mot de passe ne correspond pas.",
-            remediation="Vérifier les identifiants saisis.",
+            tr("Incorrect credentials."),
+            cause=tr("The username or the password does not match."),
+            remediation=tr("Check the credentials entered."),
         )

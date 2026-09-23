@@ -30,6 +30,7 @@ from typing import Any, Protocol
 from msm.bus import EventBus, topics
 from msm.core.log_line import LogLine
 from msm.exceptions import MsmError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 
 logger = get_logger(__name__)
@@ -102,10 +103,11 @@ async def frozen_world(
     runtime: _Runtime,
     bus: EventBus,
     *,
-    actor: str = "sauvegarde",
+    actor: str | None = None,
     timeout: float = CONFIRMATION_TIMEOUT_S,
 ) -> AsyncIterator[None]:
     """Suspend l'écriture du monde pendant la durée du bloc."""
+    actor = actor or tr("backup")
     confirmed = await _command_and_wait(
         runtime, bus, "save-off", SAVE_OFF_RE, actor=actor, timeout=timeout
     )
@@ -114,14 +116,15 @@ async def frozen_world(
         # sa réponse soit reconnue : rétablir l'écriture est le seul geste sûr.
         await _restore(runtime, actor)
         raise BackupNotSafe(
-            "Le serveur n'a pas confirmé la suspension des sauvegardes.",
-            cause=(
-                "Aucune réponse à `save-off` en "
-                f"{timeout:.0f} s. Copier maintenant produirait un monde incohérent."
+            tr("The server did not confirm that saving was paused."),
+            cause=tr(
+                "No answer to `save-off` within {seconds} s. Copying now would produce an "
+                "inconsistent world.",
+                seconds=f"{timeout:.0f}",
             ),
-            remediation=(
-                "Vérifier que le serveur répond dans la console, "
-                "ou l'arrêter puis relancer la sauvegarde."
+            remediation=tr(
+                "Check that the server answers in the console, or stop it and start the "
+                "backup again."
             ),
         )
 
@@ -131,11 +134,13 @@ async def frozen_world(
         )
         if not flushed:
             raise BackupNotSafe(
-                "Le serveur n'a pas confirmé l'écriture du monde sur le disque.",
-                cause=f"Aucune réponse à `save-all flush` en {timeout:.0f} s.",
-                remediation=(
-                    "Vérifier que le serveur répond dans la console, "
-                    "ou l'arrêter puis relancer la sauvegarde."
+                tr("The server did not confirm writing the world to disk."),
+                cause=tr(
+                    "No answer to `save-all flush` within {seconds} s.", seconds=f"{timeout:.0f}"
+                ),
+                remediation=tr(
+                    "Check that the server answers in the console, or stop it and start the "
+                    "backup again."
                 ),
             )
         yield

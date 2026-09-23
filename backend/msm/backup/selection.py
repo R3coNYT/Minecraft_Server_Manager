@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from msm.i18n import format_datetime, tr
 from msm.minecraft.capabilities import world_directories
 
 #: Nom du manifeste structuré, à la racine de l'archive.
@@ -254,23 +255,30 @@ def build_manifest(
     }
 
     lines = [
-        f"Serveur : {server_name} ({server_type}"
-        + (f", {minecraft_version}" if minecraft_version else "")
-        + ")",
-        f"Sauvegarde du {stamp.strftime('%d/%m/%Y à %H:%M UTC')}",
+        tr(
+            "Server: {name} ({type})",
+            name=server_name,
+            type=f"{server_type}, {minecraft_version}" if minecraft_version else server_type,
+        ),
+        tr("Backup of {date} UTC", date=format_datetime(stamp)),
         "",
-        "Cette archive contient les mondes et les configurations, pas les mods",
-        "ni les plugins. Voici la liste de ceux qui étaient installés, à",
-        "réinstaller manuellement en cas de reconstruction du serveur.",
+        tr(
+            "This archive contains the worlds and configuration files, not the mods or "
+            "plugins. Here is the list of those that were installed, to reinstall by hand "
+            "if the server has to be rebuilt."
+        ),
         "",
     ]
     for title, items in (("MODS", selection.mods), ("PLUGINS", selection.plugins)):
         lines.append(f"--- {title} ({len(items)}) ---")
         if not items:
-            lines.append("(aucun)")
+            lines.append(tr("(none)"))
         for item in items:
-            suffix = "" if item.enabled else "   [désactivé]"
-            lines.append(f"{item.name}   {item.size_bytes / 1_048_576:.1f} Mo{suffix}")
+            suffix = "" if item.enabled else "   " + tr("[disabled]")
+            lines.append(
+                tr("{name}   {size} MB", name=item.name, size=f"{item.size_bytes / 1_048_576:.1f}")
+                + suffix
+            )
         lines.append("")
 
     return {

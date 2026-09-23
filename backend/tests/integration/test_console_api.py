@@ -81,7 +81,7 @@ class TestLifecycle:
         )
 
         assert response.status_code == 409
-        assert "Arrêter le serveur" in response.json()["remediation"]
+        assert "Stop the server" in response.json()["remediation"]
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 
@@ -187,7 +187,7 @@ class TestDangerousCommands:
 
         assert response.status_code == 428
         assert response.json()["code"] == "CONFIRMATION_REQUIRED"
-        assert "administrateur" in response.json()["cause"]
+        assert "administrator" in response.json()["cause"]
 
         confirmed = await admin.post(
             f"/api/v1/servers/{server['id']}/command",

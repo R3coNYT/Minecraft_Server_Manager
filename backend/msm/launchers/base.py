@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from msm.exceptions import LaunchError
+from msm.i18n import tr
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,18 +71,20 @@ class LaunchContext:
         candidate = Path(relative)
         if candidate.is_absolute():
             raise LaunchError(
-                f"{label} invalide.",
-                cause=f"« {relative} » est un chemin absolu.",
-                remediation=f"Indiquer un chemin relatif au dossier du serveur ({self.directory}).",
+                tr("{label}: invalid.", label=label),
+                cause=tr("“{path}” is an absolute path.", path=relative),
+                remediation=tr(
+                    "Enter a path relative to the server folder ({folder}).", folder=self.directory
+                ),
             )
 
         root = self.directory.resolve()
         resolved = (root / candidate).resolve()
         if resolved != root and root not in resolved.parents:
             raise LaunchError(
-                f"{label} invalide.",
-                cause=f"« {relative} » pointe en dehors du dossier du serveur.",
-                remediation="Placer le fichier dans le dossier du serveur.",
+                tr("{label}: invalid.", label=label),
+                cause=tr("“{path}” points outside the server folder.", path=relative),
+                remediation=tr("Put the file in the server folder."),
             )
         return resolved
 
@@ -123,9 +126,9 @@ class Launcher(ABC):
         directory = ctx.directory
         if not directory.is_dir():
             raise LaunchError(
-                "Dossier du serveur introuvable.",
-                cause=f"{directory} n'existe pas ou n'est pas un dossier.",
-                remediation="Vérifier le chemin du serveur dans ses réglages.",
+                tr("Server folder not found."),
+                cause=tr("{path} does not exist or is not a folder.", path=directory),
+                remediation=tr("Check the server path in its settings."),
             )
         return directory.resolve()
 
@@ -133,14 +136,14 @@ class Launcher(ABC):
     def _require_file(path: Path, *, label: str, remediation: str) -> Path:
         if not path.exists():
             raise LaunchError(
-                f"{label} introuvable.",
-                cause=f"{path} n'existe pas.",
+                tr("{label}: not found.", label=label),
+                cause=tr("{path} does not exist.", path=path),
                 remediation=remediation,
             )
         if not path.is_file():
             raise LaunchError(
-                f"{label} invalide.",
-                cause=f"{path} n'est pas un fichier.",
+                tr("{label}: invalid.", label=label),
+                cause=tr("{path} is not a file.", path=path),
                 remediation=remediation,
             )
         return path
@@ -153,16 +156,16 @@ class Launcher(ABC):
             if candidate.is_file() and os.access(candidate, os.X_OK):
                 return str(candidate)
             raise LaunchError(
-                f"{label} introuvable.",
-                cause=f"{command} n'existe pas ou n'est pas exécutable.",
+                tr("{label}: not found.", label=label),
+                cause=tr("{command} does not exist or is not executable.", command=command),
                 remediation=remediation,
             )
 
         found = shutil.which(command)
         if found is None:
             raise LaunchError(
-                f"{label} introuvable.",
-                cause=f"« {command} » n'est pas présent dans le PATH du système.",
+                tr("{label}: not found.", label=label),
+                cause=tr("“{command}” is not on the system PATH.", command=command),
                 remediation=remediation,
             )
         return found

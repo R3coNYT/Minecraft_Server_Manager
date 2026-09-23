@@ -9,18 +9,19 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { formatMemory } from '@/lib/format'
+import { formatMemory, formatPercent } from '@/lib/format'
 import type { MetricRange } from '@/lib/types'
 import { Card, CardHeader, LoadingBlock } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ResourceChart } from './ResourceChart'
 import { cn } from '@/lib/cn'
+import { t, type MessageKey } from '@/i18n'
 
-const RANGES: { key: MetricRange; label: string }[] = [
-  { key: '1h', label: '1 h' },
-  { key: '6h', label: '6 h' },
-  { key: '24h', label: '24 h' },
-  { key: '7d', label: '7 j' },
+const RANGES: { key: MetricRange; label: MessageKey }[] = [
+  { key: '1h', label: 'metrics.range1h' },
+  { key: '6h', label: 'metrics.range6h' },
+  { key: '24h', label: 'metrics.range24h' },
+  { key: '7d', label: 'metrics.range7d' },
 ]
 
 export function ResourcePanel({ serverId }: { serverId: number }) {
@@ -39,8 +40,8 @@ export function ResourcePanel({ serverId }: { serverId: number }) {
   return (
     <Card>
       <CardHeader
-        title="Ressources"
-        subtitle="Historique conservé, indépendant de la page ouverte."
+        title={t('metrics.title')}
+        subtitle={t('metrics.subtitle')}
         action={
           <div className="flex gap-1 rounded-lg bg-slate-900 p-0.5">
             {RANGES.map((item) => (
@@ -54,7 +55,7 @@ export function ResourcePanel({ serverId }: { serverId: number }) {
                     : 'text-slate-400 hover:text-slate-200',
                 )}
               >
-                {item.label}
+                {t(item.label)}
               </button>
             ))}
           </div>
@@ -75,18 +76,18 @@ export function ResourcePanel({ serverId }: { serverId: number }) {
               points={points}
               value={(point) => point.cpu_percent}
               floor={100}
-              format={(value) => `${Math.round(value)} %`}
+              format={formatPercent}
               color="#38bdf8"
-              label="Processeur"
-              hint="100 % = un cœur"
+              label={t('metrics.cpu')}
+              hint={t('metrics.cpuHint')}
             />
             <ResourceChart
               points={points}
               value={(point) => point.memory_mb}
               format={formatMemory}
               color="#a78bfa"
-              label="Mémoire"
-              hint="réellement occupée par le serveur"
+              label={t('metrics.memory')}
+              hint={t('metrics.memoryHint')}
             />
             <ResourceChart
               points={points}
@@ -96,7 +97,7 @@ export function ResourcePanel({ serverId }: { serverId: number }) {
               floor={1}
               format={(value) => `${Math.round(value)}`}
               color="#34d399"
-              label="Joueurs connectés"
+              label={t('metrics.players')}
             />
           </>
         )}

@@ -37,7 +37,7 @@ class TestRendering:
         batch = render_batch([_notification() for _ in range(MAX_LINES_PER_MESSAGE + 5)])
 
         assert batch.count("\n") == MAX_LINES_PER_MESSAGE
-        assert "et 5 autre" in batch
+        assert "and 5 more" in batch
 
 
 @pytest.mark.asyncio
@@ -125,7 +125,7 @@ class TestFiltering:
 
         assert await notifier.flush() is True
         assert len(sent) == 1
-        assert "sauvegarde" in sent[0].lower()
+        assert "backup" in sent[0].lower()
 
     async def test_queue_is_emptied_even_when_nothing_is_sent(self) -> None:
         """Sinon la file grossirait indéfiniment sur une instance sans webhook."""

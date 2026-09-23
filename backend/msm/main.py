@@ -39,7 +39,7 @@ from msm.services.player_recorder import PlayerRecorder
 from msm.services.runtime_recorder import RuntimeStateRecorder
 from msm.services.schedule_service import Scheduler
 from msm.services.server_service import ServerService
-from msm.services.settings_service import load_notification_settings
+from msm.services.settings_service import load_language, load_notification_settings
 from msm.web import mount_frontend
 from msm.ws import websocket_router
 
@@ -67,6 +67,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
 
     init_engine(settings)
+    # Avant tout le reste : les premiers messages produits — réadoption,
+    # démarrage automatique — doivent déjà sortir dans la langue choisie.
+    await load_language()
     supervisor = Supervisor(bus=get_event_bus())
     # Avant chaque démarrage : appliquer les mods synchronisés mis en attente.
     supervisor.add_pre_start_hook(make_pre_start_hook(settings))
@@ -97,7 +100,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:  # pragma: no cover - base absente ou migrations non appliquées
         logger.exception(
             "server_registration_skipped",
-            hint="Vérifier que les migrations ont été appliquées (alembic upgrade head).",
+            hint="Check that migrations have been applied (alembic upgrade head).",
         )
 
     stats_task = asyncio.create_task(_publish_system_stats(settings), name="msm-system-stats")
@@ -156,7 +159,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="Minecraft Server Manager",
-        description="Panneau de contrôle multi-serveurs Minecraft.",
+        description="Multi-server Minecraft control panel.",
         version=__version__,
         lifespan=lifespan,
         docs_url="/api/docs" if not settings.is_production else None,

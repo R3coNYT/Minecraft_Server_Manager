@@ -30,6 +30,7 @@ from typing import Any
 
 from msm.backup.selection import MANIFEST_NAME, ArchiveEntry
 from msm.exceptions import MsmError, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 
 logger = get_logger(__name__)
@@ -94,9 +95,9 @@ def create_archive(
             for entry in entries:
                 if should_stop is not None and should_stop():
                     raise BackupCancelled(
-                        "Sauvegarde annulée.",
-                        cause="L'opération a été interrompue avant la fin.",
-                        remediation="Relancer la sauvegarde si elle est toujours souhaitée.",
+                        tr("Backup cancelled."),
+                        cause=tr("The operation was interrupted before the end."),
+                        remediation=tr("Start the backup again if it is still wanted."),
                     )
                 try:
                     archive.add(entry.source, arcname=entry.arcname, recursive=False)
@@ -133,9 +134,11 @@ def read_manifest(archive_path: Path) -> dict[str, Any]:
             return json.loads(member.read().decode("utf-8"))
     except (KeyError, tarfile.TarError, OSError, ValueError) as exc:
         raise ValidationError(
-            "Archive illisible.",
-            cause=f"{archive_path.name} n'est pas une sauvegarde MSM valide : {exc}",
-            remediation="Vérifier que le fichier n'a pas été tronqué ou modifié.",
+            tr("Unreadable archive."),
+            cause=tr(
+                "{name} is not a valid MSM backup: {error}", name=archive_path.name, error=exc
+            ),
+            remediation=tr("Check that the file has not been truncated or modified."),
         ) from exc
 
 
@@ -144,23 +147,29 @@ def _validate_member(member: tarfile.TarInfo, target: Path) -> None:
     name = member.name
     if member.issym() or member.islnk():
         raise ValidationError(
-            "Archive refusée.",
-            cause=f"L'archive contient un lien ({name}), qui pourrait pointer hors du serveur.",
-            remediation="Ne restaurer que des archives produites par MSM.",
+            tr("Archive refused."),
+            cause=tr(
+                "The archive contains a link ({name}) that could point outside the server.",
+                name=name,
+            ),
+            remediation=tr("Only restore archives produced by MSM."),
         )
     if member.isdev() or member.ischr() or member.isblk() or member.isfifo():
         raise ValidationError(
-            "Archive refusée.",
-            cause=f"L'archive contient une entrée qui n'est ni un fichier ni un dossier ({name}).",
-            remediation="Ne restaurer que des archives produites par MSM.",
+            tr("Archive refused."),
+            cause=tr(
+                "The archive contains an entry that is neither a file nor a folder ({name}).",
+                name=name,
+            ),
+            remediation=tr("Only restore archives produced by MSM."),
         )
 
     candidate = Path(name)
     if candidate.is_absolute() or name.startswith(("/", "\\")) or ".." in candidate.parts:
         raise ValidationError(
-            "Archive refusée.",
-            cause=f"L'archive tente d'écrire hors du dossier du serveur ({name}).",
-            remediation="Ne restaurer que des archives produites par MSM.",
+            tr("Archive refused."),
+            cause=tr("The archive tries to write outside the server folder ({name}).", name=name),
+            remediation=tr("Only restore archives produced by MSM."),
         )
 
     resolved = os.path.normpath(target / name)
@@ -169,9 +178,9 @@ def _validate_member(member: tarfile.TarInfo, target: Path) -> None:
         resolved
     ).startswith(os.path.normcase(root) + os.sep):
         raise ValidationError(
-            "Archive refusée.",
-            cause=f"L'archive tente d'écrire hors du dossier du serveur ({name}).",
-            remediation="Ne restaurer que des archives produites par MSM.",
+            tr("Archive refused."),
+            cause=tr("The archive tries to write outside the server folder ({name}).", name=name),
+            remediation=tr("Only restore archives produced by MSM."),
         )
 
 

@@ -31,6 +31,7 @@ from msm.core.permissions import Permission
 from msm.db.repositories import ServerPermissionRepository, UserRepository
 from msm.db.session import session_scope
 from msm.exceptions import MsmError, PermissionDenied
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext, build_context
@@ -87,7 +88,7 @@ class WebSocketConnection:
         except WebSocketDisconnect:
             pass
         except (ValueError, TypeError):
-            await self._send_error("INVALID_MESSAGE", "Message illisible.")
+            await self._send_error("INVALID_MESSAGE", tr("Unreadable message."))
         except RuntimeError:
             # Connexion refermée pendant la lecture : sortie normale.
             pass
@@ -104,7 +105,7 @@ class WebSocketConnection:
     # ------------------------------------------------------------------ #
     async def _handle(self, message: Any) -> None:
         if not isinstance(message, dict):
-            await self._send_error("INVALID_MESSAGE", "Le message doit être un objet JSON.")
+            await self._send_error("INVALID_MESSAGE", tr("The message must be a JSON object."))
             return
 
         message_type = message.get("t")
@@ -120,8 +121,8 @@ class WebSocketConnection:
             else:
                 await self._send_error(
                     "UNKNOWN_MESSAGE",
-                    f"Type de message inconnu : {message_type!r}.",
-                    remediation="Types acceptés : subscribe, unsubscribe, ping.",
+                    tr("Unknown message type: {type}.", type=repr(message_type)),
+                    remediation=tr("Accepted types: subscribe, unsubscribe, ping."),
                 )
         except MsmError as exc:
             await self._send_error(
@@ -133,13 +134,13 @@ class WebSocketConnection:
         if not isinstance(server_id, int):
             await self._send_error(
                 "INVALID_SUBSCRIPTION",
-                "Identifiant de serveur manquant.",
-                remediation="Fournir `server_id` dans la charge utile.",
+                tr("Missing server identifier."),
+                remediation=tr("Provide `server_id` in the payload."),
             )
             return
 
         context = await self._authorize(server_id)
-        context.require(Permission.SERVER_VIEW, action="suivre ce serveur")
+        context.require(Permission.SERVER_VIEW, action=tr("follow this server"))
 
         # Un serveur inexistant ou hors supervision doit être signalé tout de
         # suite : sans cela, le client attendrait indéfiniment des événements
@@ -148,16 +149,18 @@ class WebSocketConnection:
         if runtime is None:
             await self._send_error(
                 "NOT_FOUND",
-                "Serveur introuvable.",
-                cause=f"Aucun serveur supervisé ne porte l'identifiant {server_id}.",
-                remediation="Rafraîchir la liste des serveurs.",
+                tr("Server not found."),
+                cause=tr(
+                    "No supervised server has the identifier {server_id}.", server_id=server_id
+                ),
+                remediation=tr("Refresh the server list."),
             )
             return
 
         requested = data.get("channels") or list(CHANNELS)
         channels = [channel for channel in requested if channel in CHANNELS]
         if "logs" in channels:
-            context.require(Permission.CONSOLE_READ, action="suivre la console")
+            context.require(Permission.CONSOLE_READ, action=tr("follow the console"))
 
         assert self._subscription is not None
         for channel in channels:
@@ -208,7 +211,7 @@ class WebSocketConnection:
                 MessageType.LOG_TRUNCATED,
                 {
                     "missed": first_available[0].seq - resume_from - 1,
-                    "reason": "Lignes sorties du tampon d'historique.",
+                    "reason": tr("Lines dropped from the history buffer."),
                 },
                 server_id=server_id,
             )
@@ -230,9 +233,9 @@ class WebSocketConnection:
             user = await UserRepository(session).get(self._user_id)
             if user is None or not user.is_active:
                 raise PermissionDenied(
-                    "Compte désactivé.",
-                    cause="Le compte associé à cette connexion n'est plus actif.",
-                    remediation="Se reconnecter au panel.",
+                    tr("Account disabled."),
+                    cause=tr("The account behind this connection is no longer active."),
+                    remediation=tr("Sign in to the panel again."),
                 )
             override = await ServerPermissionRepository(session).get(user.id, server_id)
             return build_context(user, server_id=server_id, override=override)
@@ -268,7 +271,7 @@ class WebSocketConnection:
             if dropped := subscription.take_dropped():
                 await self._send(
                     MessageType.LOG_TRUNCATED,
-                    {"missed": dropped, "reason": "Client trop lent : événements écartés."},
+                    {"missed": dropped, "reason": tr("Client too slow: events dropped.")},
                 )
 
     async def _flush(self, batch: list[Any]) -> None:

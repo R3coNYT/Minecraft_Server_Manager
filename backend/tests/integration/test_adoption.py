@@ -76,8 +76,8 @@ class TestAdoption:
         await second.adopt(pid, create_time=create_time)
 
         texts = [line.text for line in second.logs_tail(20)]
-        assert any("réadopté" in text for text in texts)
-        assert any("lecture seule" in text for text in texts)
+        assert any("re-adopted" in text for text in texts)
+        assert any("read-only" in text for text in texts)
 
         await second.kill(actor="test")
 

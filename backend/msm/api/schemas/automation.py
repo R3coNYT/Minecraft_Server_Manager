@@ -71,6 +71,15 @@ class NotificationSettingsOut(BaseModel):
     webhook_unreadable: bool
 
 
+class LanguageOut(BaseModel):
+    language: str
+    languages: list[str]
+
+
+class LanguageRequest(BaseModel):
+    language: str
+
+
 class NotificationSettingsRequest(BaseModel):
     enabled: bool | None = None
     events: list[str] | None = None

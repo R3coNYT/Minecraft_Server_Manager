@@ -20,6 +20,7 @@ import { Card, CardHeader, Checkbox, Field, Select } from '@/components/ui/primi
 import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { t } from '@/i18n'
 
 interface VersionInstallerProps {
   serverId: number
@@ -61,8 +62,8 @@ export function VersionInstaller({
     onSuccess: (result) => {
       push({
         kind: 'success',
-        title: `${result.file} installé`,
-        detail: `${formatBytes(result.size_bytes)} — le serveur démarrera sur cette version.`,
+        title: t('version.installed', { file: result.file }),
+        detail: t('version.installedDetail', { size: formatBytes(result.size_bytes) }),
       })
       setConfirming(false)
       onInstalled()
@@ -76,19 +77,19 @@ export function VersionInstaller({
   return (
     <Card>
       <CardHeader
-        title="Version du serveur"
-        subtitle="Téléchargée depuis la source officielle, empreinte vérifiée."
+        title={t('version.title')}
+        subtitle={t('version.subtitle')}
       />
 
       <div className="space-y-4 px-5 py-4">
         {running ? (
           <p className="rounded-lg border border-amber-900/60 bg-amber-950/30 px-3.5 py-2.5 text-xs text-amber-100">
-            Le serveur tourne : arrêter le serveur avant de changer sa version.
+            {t('version.running')}
           </p>
         ) : null}
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Source">
+          <Field label={t('version.source')}>
             <Select
               value={source}
               disabled={running}
@@ -106,19 +107,19 @@ export function VersionInstaller({
           </Field>
 
           <Field
-            label="Version"
-            hint={versions.isLoading ? 'Chargement du catalogue…' : undefined}
+            label={t('version.version')}
+            hint={versions.isLoading ? t('version.loadingCatalogue') : undefined}
           >
             <Select
               value={version}
               disabled={running || versions.isLoading || listed.length === 0}
               onChange={(event) => setVersion(event.target.value)}
             >
-              <option value="">— Choisir —</option>
+              <option value="">{t('version.choose')}</option>
               {listed.slice(0, 200).map((item) => (
                 <option key={item.id} value={item.id}>
                   {item.id}
-                  {item.channel !== 'release' ? ' (préversion)' : ''}
+                  {item.channel !== 'release' ? t('version.prerelease') : ''}
                 </option>
               ))}
             </Select>
@@ -126,8 +127,8 @@ export function VersionInstaller({
         </div>
 
         <Checkbox
-          label="Afficher les préversions"
-          hint="Instables : à réserver aux tests."
+          label={t('version.showPre')}
+          hint={t('version.showPreHint')}
           checked={showPre}
           onChange={(event) => setShowPre(event.target.checked)}
         />
@@ -140,23 +141,19 @@ export function VersionInstaller({
           disabled={running || !version}
           onClick={() => setConfirming(true)}
         >
-          Installer
+          {t('version.install')}
         </Button>
 
         {currentJar ? (
-          <p className="truncate text-xs text-slate-600">Fichier actuel : {currentJar}</p>
+          <p className="truncate text-xs text-slate-600">{t('version.current', { file: currentJar })}</p>
         ) : null}
       </div>
 
       <ConfirmDialog
         open={confirming}
-        title={`Installer la version ${version} ?`}
-        consequence={
-          `Le JAR est téléchargé dans le dossier du serveur et sélectionné pour les prochains ` +
-          `démarrages. Le fichier actuel n'est pas supprimé. Changer de version sans sauvegarde ` +
-          `récente peut rendre un monde illisible : vérifier l'onglet Sauvegardes avant.`
-        }
-        confirmLabel="Installer"
+        title={t('version.confirmTitle', { version })}
+        consequence={t('version.confirmConsequence')}
+        confirmLabel={t('version.install')}
         danger
         requireTyping={serverName}
         loading={install.isPending}

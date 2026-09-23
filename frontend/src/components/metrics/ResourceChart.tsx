@@ -12,6 +12,7 @@
 
 import { useId } from 'react'
 import type { MetricPoint } from '@/lib/types'
+import { locale, t } from '@/i18n'
 
 const WIDTH = 600
 const HEIGHT = 140
@@ -64,7 +65,7 @@ export function ResourceChart({
   if (points.length === 0) {
     return (
       <div className="flex h-[140px] items-center justify-center rounded-lg border border-dashed border-slate-800 text-xs text-slate-600">
-        Aucune mesure sur cette période.
+        {t('metrics.noData')}
       </div>
     )
   }
@@ -88,7 +89,7 @@ export function ResourceChart({
   const first = points[0]!
   const last = points[points.length - 1]!
   const hour = (iso: string) =>
-    new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
 
   return (
     <figure className="m-0">
@@ -98,7 +99,7 @@ export function ResourceChart({
           {hint ? <span className="ml-1.5 text-slate-600">{hint}</span> : null}
         </span>
         <span className="shrink-0 tabular-nums text-slate-500">
-          pointe {format(peak)}
+          {t('metrics.peak', { value: format(peak) })}
         </span>
       </figcaption>
 
@@ -107,7 +108,7 @@ export function ResourceChart({
         className="h-[140px] w-full"
         preserveAspectRatio="none"
         role="img"
-        aria-label={`${label} : maximum ${format(Math.max(...values))}`}
+        aria-label={t('metrics.aria', { label, value: format(Math.max(...values)) })}
       >
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
@@ -162,7 +163,7 @@ export function ResourceChart({
         <span>{hour(first.ts)}</span>
         {/* « échelle » et non « max » : c'est le haut de l'axe, pas une mesure.
             La pointe réellement observée est annoncée dans le titre. */}
-        <span>échelle 0 – {format(ceiling)}</span>
+        <span>{t('metrics.scale', { value: format(ceiling) })}</span>
         <span>{hour(last.ts)}</span>
       </div>
     </figure>

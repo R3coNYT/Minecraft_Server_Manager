@@ -23,7 +23,7 @@ class AuditRepository:
         action: AuditAction,
         summary: str,
         actor_id: int | None = None,
-        actor_username: str = "système",
+        actor_username: str = "system",
         actor_role: str | None = None,
         ip_address: str | None = None,
         server_id: int | None = None,

@@ -28,9 +28,10 @@ from msm.core.permissions import Permission
 from msm.db.models.misc import EventDefinition
 from msm.events import registry
 from msm.events.engine import max_danger, parse_steps
+from msm.i18n import tr
 from msm.services.event_service import EventService
 
-router = APIRouter(tags=["événements"])
+router = APIRouter(tags=["events"])
 
 
 def _events(session: DbSession, supervisor: SupervisorDep) -> EventService:
@@ -66,7 +67,7 @@ def _to_out(event: EventDefinition) -> EventOut:
 @router.get(
     "/events/actions",
     response_model=list[ActionOut],
-    summary="Types d'actions disponibles",
+    summary="Available action types",
 )
 async def list_actions() -> list[ActionOut]:
     """Catalogue des actions, avec la description de leurs champs.
@@ -83,7 +84,7 @@ async def list_actions() -> list[ActionOut]:
 @router.post(
     "/servers/{server_id}/events/quick",
     response_model=QuickActionOut,
-    summary="Déclencher une action immédiate",
+    summary="Run an immediate action",
     dependencies=[CsrfProtected],
 )
 async def quick_action(
@@ -116,11 +117,11 @@ async def quick_action(
 @router.get(
     "/servers/{server_id}/events",
     response_model=list[EventOut],
-    summary="Lister les événements",
+    summary="List events",
 )
 async def list_events(access: ServerAccess, service: EventsDep) -> list[EventOut]:
     server, context = access
-    context.require(Permission.EVENT_RUN, action="consulter les événements")
+    context.require(Permission.EVENT_RUN, action=tr("view events"))
     return [_to_out(event) for event in await service.list_events(server)]
 
 
@@ -128,7 +129,7 @@ async def list_events(access: ServerAccess, service: EventsDep) -> list[EventOut
     "/servers/{server_id}/events",
     response_model=EventOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Créer un événement",
+    summary="Create an event",
     dependencies=[CsrfProtected],
 )
 async def create_event(
@@ -152,7 +153,7 @@ async def create_event(
 @router.put(
     "/servers/{server_id}/events/{event_id}",
     response_model=EventOut,
-    summary="Modifier un événement",
+    summary="Update an event",
     dependencies=[CsrfProtected],
 )
 async def update_event(
@@ -176,7 +177,7 @@ async def update_event(
 
 @router.delete(
     "/servers/{server_id}/events/{event_id}",
-    summary="Supprimer un événement",
+    summary="Delete an event",
     dependencies=[CsrfProtected],
 )
 async def delete_event(event_id: int, access: ServerAccess, service: EventsDep) -> dict[str, str]:
@@ -193,7 +194,7 @@ async def delete_event(event_id: int, access: ServerAccess, service: EventsDep) 
 @router.post(
     "/servers/{server_id}/events/{event_id}/run",
     response_model=EventRunOut,
-    summary="Déclencher un événement",
+    summary="Run an event",
     dependencies=[CsrfProtected],
 )
 async def run_event(
@@ -229,7 +230,7 @@ async def run_event(
 @router.get(
     "/servers/{server_id}/events/runs",
     response_model=list[EventRunOut],
-    summary="Historique des exécutions",
+    summary="Run history",
 )
 async def list_runs(
     access: ServerAccess,
@@ -237,7 +238,7 @@ async def list_runs(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> list[EventRunOut]:
     server, context = access
-    context.require(Permission.EVENT_RUN, action="consulter l'historique des événements")
+    context.require(Permission.EVENT_RUN, action=tr("view event history"))
     return [
         EventRunOut(
             id=run.id,
@@ -255,7 +256,7 @@ async def list_runs(
 
 @router.post(
     "/servers/{server_id}/events/runs/{run_id}/cancel",
-    summary="Annuler une exécution",
+    summary="Cancel a run",
     dependencies=[CsrfProtected],
 )
 async def cancel_run(run_id: int, access: ServerAccess, service: EventsDep) -> dict[str, bool]:

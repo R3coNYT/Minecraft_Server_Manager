@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from msm.i18n import tr
+
 
 class AutoRestartMode(str, Enum):
     """Quand MSM doit-il relancer un serveur qui s'est arrêté ?"""
@@ -72,34 +74,37 @@ class RestartPolicy:
             celui qui vient de survenir inclus.
         """
         if stop_requested:
-            return RestartDecision(False, reason="Arrêt demandé depuis le panel.")
+            return RestartDecision(False, reason=tr("Stop requested from the panel."))
 
         if self.mode is AutoRestartMode.NEVER:
-            return RestartDecision(False, reason="Redémarrage automatique désactivé.")
+            return RestartDecision(False, reason=tr("Automatic restart disabled."))
 
         crashed = exit_code is None or exit_code != 0
         if self.mode is AutoRestartMode.ON_CRASH and not crashed:
             return RestartDecision(
                 False,
-                reason="Le serveur s'est arrêté normalement ; le mode « à chaque plantage » "
-                "ne relance que sur erreur.",
+                reason=tr(
+                    "The server stopped normally; “on crash” mode only restarts after an error."
+                ),
             )
 
         if consecutive_crashes >= self.max_consecutive_crashes:
             return RestartDecision(
                 False,
-                reason=(
-                    f"{consecutive_crashes} plantages consécutifs : "
-                    "redémarrage automatique interrompu pour éviter une boucle."
+                reason=tr(
+                    "{count} consecutive crashes: automatic restart halted to avoid a loop.",
+                    count=consecutive_crashes,
                 ),
             )
 
         return RestartDecision(
             True,
             delay_s=self.compute_delay(consecutive_crashes),
-            reason=(
-                f"Redémarrage automatique ({self.mode.value}), "
-                f"tentative {consecutive_crashes + 1}/{self.max_consecutive_crashes}."
+            reason=tr(
+                "Automatic restart ({mode}), attempt {attempt}/{maximum}.",
+                mode=self.mode.value,
+                attempt=consecutive_crashes + 1,
+                maximum=self.max_consecutive_crashes,
             ),
         )
 

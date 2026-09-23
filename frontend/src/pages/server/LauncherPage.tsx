@@ -41,30 +41,32 @@ import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { SyncCountdown } from '@/components/launcher/SyncCountdown'
+import { t, tn, type MessageKey } from '@/i18n'
 
-const STATUS: Record<LauncherSyncStatus, { label: string; style: string }> = {
-  NEVER: { label: 'jamais synchronisé', style: 'bg-slate-700/40 text-slate-400 ring-slate-700' },
-  UP_TO_DATE: { label: 'à jour', style: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30' },
-  APPLIED: { label: 'appliquée', style: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30' },
-  PENDING_RESTART: {
-    label: 'en attente du redémarrage',
-    style: 'bg-sky-500/10 text-sky-300 ring-sky-500/30',
-  },
-  BLOCKED: { label: 'bloquée', style: 'bg-amber-500/10 text-amber-300 ring-amber-500/30' },
-  FAILED: { label: 'échec', style: 'bg-red-500/10 text-red-300 ring-red-500/30' },
+const STATUS_STYLES: Record<LauncherSyncStatus, string> = {
+  NEVER: 'bg-slate-700/40 text-slate-400 ring-slate-700',
+  UP_TO_DATE: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
+  APPLIED: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
+  PENDING_RESTART: 'bg-sky-500/10 text-sky-300 ring-sky-500/30',
+  BLOCKED: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
+  FAILED: 'bg-red-500/10 text-red-300 ring-red-500/30',
 }
 
-const SIDE_LABELS: Record<ModSide, string> = {
-  client: 'Client uniquement',
-  server: 'Serveur uniquement',
-  both: 'Client et serveur',
+function statusLabel(status: LauncherSyncStatus): string {
+  return t(`launcherPage.status.${status}`)
 }
 
-const SIDE_SOURCES: Record<LauncherLinkMod['side_source'], string> = {
-  override: 'forcé dans MSM',
-  manifest: 'déclaré par le manifest',
-  detected: 'détecté dans le JAR',
-  default: 'par défaut',
+const SIDES: ModSide[] = ['client', 'server', 'both']
+
+function sideLabel(side: ModSide): string {
+  return t(`launcherPage.side.${side}`)
+}
+
+const SIDE_SOURCES: Record<LauncherLinkMod['side_source'], MessageKey> = {
+  override: 'launcherPage.source.override',
+  manifest: 'launcherPage.source.manifest',
+  detected: 'launcherPage.source.detected',
+  default: 'launcherPage.source.default',
 }
 
 interface Draft {
@@ -106,10 +108,9 @@ export function LauncherPage() {
     onSuccess: (next) => {
       store(next)
       setConfirmMassDelete(false)
-      const status = STATUS[next.last_sync_status]
       push({
         kind: next.last_sync_status === 'FAILED' ? 'error' : 'success',
-        title: `Synchronisation ${status.label}`,
+        title: t('launcherPage.syncResult', { status: statusLabel(next.last_sync_status) }),
         detail: next.last_sync_error ?? undefined,
       })
       // Les fichiers ont pu changer sur le disque.
@@ -124,11 +125,11 @@ export function LauncherPage() {
       store(next)
       push(
         next.publish.up_to_date
-          ? { kind: 'success', title: 'État publié aux joueurs' }
+          ? { kind: 'success', title: t('launcherPage.published') }
           : {
               kind: 'error',
-              title: 'Publication impossible',
-              detail: next.publish.last_push_error ?? 'Aucun jeton d’écriture configuré.',
+              title: t('launcherPage.publishFailed'),
+              detail: next.publish.last_push_error ?? t('launcherPage.noToken'),
             },
       )
     },
@@ -142,8 +143,8 @@ export function LauncherPage() {
       store(next)
       push({
         kind: 'success',
-        title: 'Côté enregistré',
-        detail: 'Pris en compte à la prochaine synchronisation, lancée dans l’instant.',
+        title: t('launcherPage.sideSaved'),
+        detail: t('launcherPage.sideSavedDetail'),
       })
     },
     onError: (sideError) => pushError(sideError),
@@ -154,7 +155,11 @@ export function LauncherPage() {
     onSuccess: () => {
       queryClient.setQueryData(queryKeys.launcherLink(server.id), null)
       setConfirmRemove(false)
-      push({ kind: 'success', title: 'Liaison retirée', detail: 'Les mods installés restent en place.' })
+      push({
+        kind: 'success',
+        title: t('launcherPage.removed'),
+        detail: t('launcherPage.removedDetail'),
+      })
     },
     onError: (removeError) => pushError(removeError),
   })
@@ -170,19 +175,17 @@ export function LauncherPage() {
           <Card>
             <EmptyState
               icon={<Link2 className="size-8" />}
-              title="Aucun serveur de fichiers relié"
+              title={t('launcherPage.emptyTitle')}
               description={
                 <>
-                  Reliez ce serveur au serveur de fichiers de votre launcher : ses mods seront
-                  installés ici automatiquement, et les mods désactivés dans MSM le seront aussi
-                  pour les joueurs. Le protocole est décrit dans{' '}
+                  {t('launcherPage.emptyText')}{' '}
                   <code className="text-slate-300">docs/LAUNCHER_INTEGRATION.md</code>.
                 </>
               }
               action={
                 canEdit ? (
                   <Button variant="primary" size="sm" onClick={() => setEditing(true)}>
-                    Relier un serveur de fichiers
+                    {t('launcherPage.link')}
                   </Button>
                 ) : null
               }
@@ -231,12 +234,15 @@ export function LauncherPage() {
 
       <ConfirmDialog
         open={confirmMassDelete}
-        title="Confirmer la suppression massive"
+        title={t('launcherPage.massDeleteTitle')}
         description={link?.last_sync_error ?? undefined}
-        consequence={`Les fichiers retirés du manifest seront supprimés de « ${server.name} »${
-          link?.pending?.server_running ? ' au prochain démarrage' : ''
-        }. Les mods ajoutés à la main ne sont jamais touchés.`}
-        confirmLabel="Synchroniser quand même"
+        consequence={t(
+          link?.pending?.server_running
+            ? 'launcherPage.massDeleteConsequenceNextStart'
+            : 'launcherPage.massDeleteConsequence',
+          { server: server.name },
+        )}
+        confirmLabel={t('launcherPage.syncAnyway')}
         danger
         requireTyping={server.name}
         loading={sync.isPending}
@@ -247,9 +253,9 @@ export function LauncherPage() {
 
       <ConfirmDialog
         open={confirmRemove}
-        title="Retirer la liaison ?"
-        consequence="MSM cessera de synchroniser ce serveur et de publier l'état de ses mods. Les mods déjà installés restent en place."
-        confirmLabel="Retirer"
+        title={t('launcherPage.removeTitle')}
+        consequence={t('launcherPage.removeConsequence')}
+        confirmLabel={t('launcherPage.remove')}
         danger
         loading={remove.isPending}
         error={remove.error}
@@ -292,8 +298,8 @@ function ConfigurationForm({
     onSuccess: (next) => {
       push({
         kind: 'success',
-        title: 'Liaison enregistrée',
-        detail: next.enabled ? 'Première synchronisation dans quelques secondes.' : undefined,
+        title: t('launcherPage.saved'),
+        detail: next.enabled ? t('launcherPage.savedDetail') : undefined,
       })
       onDone(next)
     },
@@ -305,8 +311,8 @@ function ConfigurationForm({
   return (
     <Card>
       <CardHeader
-        title={link ? 'Modifier la liaison' : 'Relier un serveur de fichiers'}
-        subtitle="Tout part de MSM : il n'a pas besoin d'être joignable depuis Internet."
+        title={link ? t('launcherPage.editLink') : t('launcherPage.link')}
+        subtitle={t('launcherPage.formSubtitle')}
       />
       <form
         className="space-y-4 px-5 py-4"
@@ -318,8 +324,8 @@ function ConfigurationForm({
         <ErrorPanel error={save.error} />
 
         <Field
-          label="Adresse du serveur de fichiers"
-          hint="Celle que le launcher interroge : le manifest est lu à /manifest.json, les fichiers à /files/…"
+          label={t('launcherPage.url')}
+          hint={t('launcherPage.urlHint')}
         >
           <Input
             required
@@ -330,11 +336,11 @@ function ConfigurationForm({
         </Field>
 
         <Field
-          label="Jeton d'écriture"
+          label={t('launcherPage.token')}
           hint={
             link?.push_configured && !clearToken
-              ? `Enregistré (${link.push_token_hint ?? '…'}). Saisir un nouveau jeton pour le remplacer.`
-              : 'Le même que celui configuré sur le serveur de fichiers. Sans lui, MSM synchronise mais ne publie rien aux joueurs.'
+              ? t('launcherPage.tokenSaved', { hint: link.push_token_hint ?? '…' })
+              : t('launcherPage.tokenHelp')
           }
         >
           <Input
@@ -348,8 +354,8 @@ function ConfigurationForm({
         </Field>
         {link?.push_configured ? (
           <Checkbox
-            label="Retirer le jeton"
-            hint="La publication de l'état aux joueurs s'arrêtera."
+            label={t('launcherPage.clearToken')}
+            hint={t('launcherPage.clearTokenHint')}
             checked={clearToken}
             onChange={(event) => setClearToken(event.target.checked)}
           />
@@ -357,8 +363,8 @@ function ConfigurationForm({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
-            label="Dossiers synchronisés"
-            hint="Séparés par des virgules. Les autres fichiers du modpack sont ignorés."
+            label={t('launcherPage.paths')}
+            hint={t('launcherPage.pathsHint')}
           >
             <Input
               value={draft.sync_paths}
@@ -366,7 +372,7 @@ function ConfigurationForm({
               placeholder="mods/"
             />
           </Field>
-          <Field label="Intervalle (minutes)" hint="Entre 5 minutes et une semaine.">
+          <Field label={t('launcherPage.interval')} hint={t('launcherPage.intervalHint')}>
             <Input
               type="number"
               min={5}
@@ -378,18 +384,18 @@ function ConfigurationForm({
         </div>
 
         <Checkbox
-          label="Synchronisation active"
-          hint="Désactivée, plus rien n'est installé ni publié, y compris les changements en attente."
+          label={t('launcherPage.enabled')}
+          hint={t('launcherPage.enabledHint')}
           checked={draft.enabled}
           onChange={(event) => set('enabled', event.target.checked)}
         />
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => onDone(null)}>
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button type="submit" variant="primary" size="sm" loading={save.isPending}>
-            Enregistrer
+            {t('common.save')}
           </Button>
         </div>
       </form>
@@ -419,13 +425,12 @@ function SyncCard({
   onEdit: () => void
   onRemove: () => void
 }) {
-  const status = STATUS[link.last_sync_status]
   const summary = link.last_sync_summary
 
   return (
     <Card>
       <CardHeader
-        title="Synchronisation des mods"
+        title={t('launcherPage.syncTitle')}
         subtitle={
           <span className="font-mono">
             {link.file_server_url} · {link.sync_paths.join(', ')}
@@ -435,14 +440,14 @@ function SyncCard({
           canEdit ? (
             <div className="flex shrink-0 gap-1.5">
               <Button size="sm" variant="ghost" onClick={onEdit}>
-                Modifier
+                {t('common.edit')}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 icon={<Trash2 className="size-3.5" />}
                 onClick={onRemove}
-                aria-label="Retirer la liaison"
+                aria-label={t('launcherPage.removeLink')}
               />
               <Button
                 size="sm"
@@ -452,7 +457,7 @@ function SyncCard({
                 disabled={!link.enabled}
                 onClick={onSync}
               >
-                Synchroniser
+                {t('launcherPage.sync')}
               </Button>
             </div>
           ) : null
@@ -461,23 +466,25 @@ function SyncCard({
 
       <dl className="grid gap-x-6 gap-y-3 px-5 py-4 text-sm sm:grid-cols-4">
         <div>
-          <dt className="text-xs text-slate-500">Prochaine synchronisation</dt>
+          <dt className="text-xs text-slate-500">{t('launcherPage.nextSync')}</dt>
           <dd className="mt-0.5 text-slate-200">
             <SyncCountdown serverId={serverId} link={link} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-slate-500">Dernière</dt>
+          <dt className="text-xs text-slate-500">{t('launcherPage.last')}</dt>
           <dd className="mt-0.5 text-slate-200">{formatRelative(link.last_sync_at)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-slate-500">Résultat</dt>
+          <dt className="text-xs text-slate-500">{t('launcherPage.result')}</dt>
           <dd className="mt-0.5">
-            <Badge className={status.style}>{status.label}</Badge>
+            <Badge className={STATUS_STYLES[link.last_sync_status]}>
+              {statusLabel(link.last_sync_status)}
+            </Badge>
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-slate-500">Version du modpack</dt>
+          <dt className="text-xs text-slate-500">{t('launcherPage.packVersion')}</dt>
           <dd className="mt-0.5 text-slate-200">{link.pack_version ?? '—'}</dd>
         </div>
       </dl>
@@ -488,8 +495,8 @@ function SyncCard({
           <span>
             {pendingText(link.pending)}{' '}
             {link.pending.server_running
-              ? 'Ils seront appliqués au prochain démarrage du serveur, avant le lancement de Java.'
-              : 'Ils seront appliqués dans quelques secondes.'}
+              ? t('launcherPage.pendingAtStart')
+              : t('launcherPage.pendingSoon')}
           </span>
         </div>
       ) : null}
@@ -508,7 +515,7 @@ function SyncCard({
                   icon={<Wrench className="size-3.5" />}
                   onClick={onConfirmMassDelete}
                 >
-                  Confirmer et synchroniser
+                  {t('launcherPage.confirmSync')}
                 </Button>
               ) : null}
             </div>
@@ -518,11 +525,7 @@ function SyncCard({
 
       {summary.installs !== undefined && !link.last_sync_error ? (
         <p className="border-t border-slate-800 px-5 py-3 text-xs text-slate-400">
-          Dernier passage : {summary.installs} à installer, {summary.removes ?? 0} à retirer,{' '}
-          {summary.unchanged ?? 0} inchangé{(summary.unchanged ?? 0) > 1 ? 's' : ''}
-          {summary.adopted ? `, ${summary.adopted} repris en charge` : ''}
-          {summary.client_only ? `, ${summary.client_only} réservé${summary.client_only > 1 ? 's' : ''} aux joueurs` : ''}
-          .
+          {summaryText(summary)}
           {summary.notes?.map((note) => (
             <span key={note} className="block text-amber-300/90">
               {note}
@@ -534,17 +537,30 @@ function SyncCard({
   )
 }
 
+function summaryText(summary: LauncherLink['last_sync_summary']): string {
+  const parts = [
+    t('launcherPage.toInstall', { count: summary.installs ?? 0 }),
+    t('launcherPage.toRemove', { count: summary.removes ?? 0 }),
+    tn('launcherPage.unchanged', summary.unchanged ?? 0),
+  ]
+  if (summary.adopted) parts.push(t('launcherPage.adopted', { count: summary.adopted }))
+  if (summary.client_only) parts.push(tn('launcherPage.clientOnly', summary.client_only))
+  return t('launcherPage.lastRun', { parts: parts.join(', ') })
+}
+
 function pendingText(pending: NonNullable<LauncherLink['pending']>): string {
   const parts: string[] = []
   if (pending.installs) {
     parts.push(
-      `${pending.installs} fichier${pending.installs > 1 ? 's' : ''} à installer (${formatBytes(pending.download_bytes)}, déjà téléchargé${pending.installs > 1 ? 's' : ''})`,
+      tn('launcherPage.pendingInstalls', pending.installs, {
+        size: formatBytes(pending.download_bytes),
+      }),
     )
   }
   if (pending.removes) {
-    parts.push(`${pending.removes} à retirer`)
+    parts.push(t('launcherPage.toRemove', { count: pending.removes }))
   }
-  return `Changements en attente : ${parts.join(', ')}.`
+  return t('launcherPage.pending', { parts: parts.join(', ') })
 }
 
 // --------------------------------------------------------------------------- //
@@ -566,8 +582,8 @@ function PublishCard({
   return (
     <Card>
       <CardHeader
-        title="Publication aux joueurs"
-        subtitle="Les mods désactivés dans MSM sont retirés du modpack que les joueurs reçoivent."
+        title={t('launcherPage.publishTitle')}
+        subtitle={t('launcherPage.publishSubtitle')}
         action={
           canEdit && link.push_configured ? (
             <Button
@@ -577,7 +593,7 @@ function PublishCard({
               disabled={!link.enabled}
               onClick={onPublish}
             >
-              Publier
+              {t('launcherPage.publish')}
             </Button>
           ) : null
         }
@@ -585,14 +601,11 @@ function PublishCard({
       <div className="space-y-3 px-5 py-4 text-sm">
         {link.push_token_unreadable ? (
           <p className="text-amber-300">
-            Le jeton enregistré ne peut plus être déchiffré (clé secrète de MSM changée). Saisissez-le
-            à nouveau.
+            {t('launcherPage.tokenUnreadable')}
           </p>
         ) : !link.push_configured ? (
           <p className="text-slate-400">
-            Aucun jeton d'écriture : l'état des mods n'est pas publié. Ajoutez la route{' '}
-            <code className="text-slate-300">PUT /msm/state</code> au serveur de fichiers, puis
-            renseignez le même jeton ici.
+            {t('launcherPage.noTokenText', { route: 'PUT /msm/state' })}
           </p>
         ) : (
           <div className="flex flex-wrap items-center gap-3">
@@ -603,11 +616,13 @@ function PublishCard({
                   : 'bg-amber-500/10 text-amber-300 ring-amber-500/30'
               }
             >
-              {publish.up_to_date ? 'à jour' : 'envoi en attente'}
+              {publish.up_to_date ? t('launcherPage.upToDate') : t('launcherPage.sendPending')}
             </Badge>
             <span className="text-xs text-slate-400">
-              Révision {publish.state_revision}
-              {publish.last_push_at ? ` · envoyée ${formatRelative(publish.last_push_at)}` : ''}
+              {t('launcherPage.revision', { revision: publish.state_revision })}
+              {publish.last_push_at
+                ? t('launcherPage.sent', { when: formatRelative(publish.last_push_at) })
+                : ''}
             </span>
           </div>
         )}
@@ -621,7 +636,7 @@ function PublishCard({
         {publish.disabled_files.length > 0 ? (
           <div>
             <p className="mb-1.5 text-xs text-slate-500">
-              Désactivés ({publish.disabled_files.length})
+              {t('launcherPage.disabledFiles', { count: publish.disabled_files.length })}
             </p>
             <ul className="flex flex-wrap gap-1.5">
               {publish.disabled_files.map((path) => (
@@ -635,7 +650,7 @@ function PublishCard({
             </ul>
           </div>
         ) : (
-          <p className="text-xs text-slate-500">Aucun mod désactivé.</p>
+          <p className="text-xs text-slate-500">{t('launcherPage.noDisabled')}</p>
         )}
       </div>
     </Card>
@@ -662,8 +677,8 @@ function ModsCard({
   return (
     <Card>
       <CardHeader
-        title={`Modpack (${link.mods.length})`}
-        subtitle={`${clientOnly} réservé${clientOnly > 1 ? 's' : ''} aux joueurs, jamais installé${clientOnly > 1 ? 's' : ''} sur le serveur. Un mod mal détecté peut être forcé ici.`}
+        title={t('launcherPage.modpack', { count: link.mods.length })}
+        subtitle={tn('launcherPage.modpackSubtitle', clientOnly)}
       />
       <ul className="divide-y divide-slate-800/60">
         {link.mods.map((mod) => (
@@ -671,8 +686,8 @@ function ModsCard({
             <div className="min-w-0 flex-1">
               <p className="truncate font-mono text-sm text-slate-200">{mod.path}</p>
               <p className="text-xs text-slate-500">
-                {formatBytes(mod.size)} · {SIDE_SOURCES[mod.side_source]}
-                {mod.disabled_upstream ? ' · retiré du modpack des joueurs' : ''}
+                {formatBytes(mod.size)} · {t(SIDE_SOURCES[mod.side_source])}
+                {mod.disabled_upstream ? t('launcherPage.removedUpstream') : ''}
               </p>
             </div>
             <OnServerBadge mod={mod} />
@@ -683,16 +698,16 @@ function ModsCard({
               onChange={(event) =>
                 onSide(mod.path, event.target.value ? (event.target.value as ModSide) : null)
               }
-              aria-label={`Côté de ${mod.path}`}
+              aria-label={t('launcherPage.sideOf', { path: mod.path })}
             >
               <option value="">
                 {mod.side_source === 'override'
-                  ? 'Automatique'
-                  : `Auto : ${SIDE_LABELS[mod.side].toLowerCase()}`}
+                  ? t('launcherPage.automatic')
+                  : t('launcherPage.auto', { side: sideLabel(mod.side).toLowerCase() })}
               </option>
-              {(Object.keys(SIDE_LABELS) as ModSide[]).map((side) => (
+              {SIDES.map((side) => (
                 <option key={side} value={side}>
-                  {SIDE_LABELS[side]}
+                  {sideLabel(side)}
                 </option>
               ))}
             </Select>
@@ -705,13 +720,13 @@ function ModsCard({
 
 function OnServerBadge({ mod }: { mod: LauncherLinkMod }) {
   if (mod.side === 'client') {
-    return <Badge className="bg-slate-700/40 text-slate-400 ring-slate-700">joueurs seulement</Badge>
+    return <Badge className="bg-slate-700/40 text-slate-400 ring-slate-700">{t('launcherPage.playersOnly')}</Badge>
   }
   if (mod.on_server === 'enabled') {
-    return <Badge className="bg-emerald-500/10 text-emerald-300 ring-emerald-500/30">actif</Badge>
+    return <Badge className="bg-emerald-500/10 text-emerald-300 ring-emerald-500/30">{t('launcherPage.active')}</Badge>
   }
   if (mod.on_server === 'disabled') {
-    return <Badge className="bg-amber-500/10 text-amber-300 ring-amber-500/30">désactivé</Badge>
+    return <Badge className="bg-amber-500/10 text-amber-300 ring-amber-500/30">{t('launcherPage.disabled')}</Badge>
   }
-  return <Badge className="bg-sky-500/10 text-sky-300 ring-sky-500/30">à installer</Badge>
+  return <Badge className="bg-sky-500/10 text-sky-300 ring-sky-500/30">{t('launcherPage.toInstallBadge')}</Badge>
 }

@@ -1,0 +1,36 @@
+import { section } from '../section'
+
+export const console = section({
+  en: {
+    "console.noRight": "Your role does not allow writing to the console.",
+    "console.mustRun": "The server must be running to receive commands.",
+    "console.noStdin": "The server's standard input is not reachable: this start script does not pass it on. Enable PTY mode or configure RCON.",
+    "console.loadingHistory": "Loading history…",
+    "console.runningEmpty": "The server is running but has not written anything yet.",
+    "console.stoppedEmpty": "Start the server to see its console.",
+    "console.sensitive": "This command is sensitive.",
+    "console.refused": "Command refused",
+    "console.unavailable": "Console unavailable",
+    "console.placeholder": "Command (without the leading /) — ↑ to recall history",
+    "console.send": "Send",
+    "console.sensitiveTitle": "Sensitive command",
+    "console.sensitiveOn": "“{command}” on {server}",
+    "console.run": "Run",
+  },
+  fr: {
+    "console.noRight": "Votre rôle ne permet pas d'écrire dans la console.",
+    "console.mustRun": "Le serveur doit être démarré pour recevoir des commandes.",
+    "console.noStdin": "L'entrée standard du serveur n'est pas accessible : ce script de démarrage ne la transmet pas. Activer le mode PTY ou configurer RCON.",
+    "console.loadingHistory": "Chargement de l'historique…",
+    "console.runningEmpty": "Le serveur tourne mais n’a encore rien écrit.",
+    "console.stoppedEmpty": "Démarrer le serveur pour voir apparaître sa console.",
+    "console.sensitive": "Cette commande est sensible.",
+    "console.refused": "Commande refusée",
+    "console.unavailable": "Console indisponible",
+    "console.placeholder": "Commande (sans le / initial) — ↑ pour rappeler l’historique",
+    "console.send": "Envoyer",
+    "console.sensitiveTitle": "Commande sensible",
+    "console.sensitiveOn": "« {command} » sur {server}",
+    "console.run": "Exécuter",
+  },
+})

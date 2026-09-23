@@ -13,18 +13,9 @@ import { Button } from '@/components/ui/Button'
 import { Dialog } from '@/components/ui/Dialog'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { t, tn } from '@/i18n'
 
-const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: 'Administrateur',
-  MODERATOR: 'Modérateur',
-  VIEWER: 'Lecture seule',
-}
-
-const ROLE_HINTS: Record<Role, string> = {
-  ADMIN: 'Tous les droits, y compris les commandes sensibles et la gestion des comptes.',
-  MODERATOR: 'Démarrage, arrêt, console, kick et bannissement. Pas de configuration.',
-  VIEWER: 'Consultation seule : états, console et joueurs.',
-}
+const ROLES: Role[] = ['ADMIN', 'MODERATOR', 'VIEWER']
 
 export function UsersPage() {
   const queryClient = useQueryClient()
@@ -49,7 +40,7 @@ export function UsersPage() {
     mutationFn: () => api.users.create({ username, password, role }),
     onSuccess: (user) => {
       invalidate()
-      push({ kind: 'success', title: `Compte « ${user.username} » créé` })
+      push({ kind: 'success', title: t('users.created', { name: user.username }) })
       setCreateOpen(false)
       setUsername('')
       setPassword('')
@@ -62,7 +53,7 @@ export function UsersPage() {
       api.users.update(id, payload),
     onSuccess: () => {
       invalidate()
-      push({ kind: 'success', title: 'Compte modifié' })
+      push({ kind: 'success', title: t('users.updated') })
     },
     onError: (mutationError) => pushError(mutationError),
   })
@@ -71,7 +62,7 @@ export function UsersPage() {
     mutationFn: (id: number) => api.users.remove(id),
     onSuccess: () => {
       invalidate()
-      push({ kind: 'success', title: 'Compte supprimé' })
+      push({ kind: 'success', title: t('users.deleted') })
       setToDelete(null)
     },
     onError: (mutationError) => pushError(mutationError),
@@ -83,27 +74,27 @@ export function UsersPage() {
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-slate-100">Utilisateurs</h1>
+          <h1 className="text-lg font-semibold text-slate-100">{t('users.title')}</h1>
           <p className="text-sm text-slate-500">
-            Un changement de rôle ferme immédiatement les sessions ouvertes du compte.
+            {t('users.subtitle')}
           </p>
         </div>
         <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-          Nouveau compte
+          {t('users.new')}
         </Button>
       </div>
 
       <ErrorPanel error={error} />
 
       <Card>
-        <CardHeader title={`${users?.length ?? 0} compte(s)`} />
+        <CardHeader title={tn('users.count', users?.length ?? 0)} />
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
-              <th className="px-5 py-2.5 font-medium">Utilisateur</th>
-              <th className="px-5 py-2.5 font-medium">Rôle</th>
-              <th className="px-5 py-2.5 font-medium">Dernière connexion</th>
-              <th className="px-5 py-2.5 font-medium">Actif</th>
+              <th className="px-5 py-2.5 font-medium">{t('users.user')}</th>
+              <th className="px-5 py-2.5 font-medium">{t('users.role')}</th>
+              <th className="px-5 py-2.5 font-medium">{t('users.lastLogin')}</th>
+              <th className="px-5 py-2.5 font-medium">{t('users.active')}</th>
               <th className="px-5 py-2.5" />
             </tr>
           </thead>
@@ -114,7 +105,7 @@ export function UsersPage() {
                 <tr key={user.id}>
                   <td className="px-5 py-2.5">
                     <span className="text-slate-200">{user.username}</span>
-                    {isSelf ? <span className="ml-2 text-xs text-slate-600">(vous)</span> : null}
+                    {isSelf ? <span className="ml-2 text-xs text-slate-600">{t('users.you')}</span> : null}
                   </td>
                   <td className="px-5 py-2.5">
                     <Select
@@ -125,9 +116,9 @@ export function UsersPage() {
                         update.mutate({ id: user.id, payload: { role: event.target.value } })
                       }
                     >
-                      {(Object.keys(ROLE_LABELS) as Role[]).map((value) => (
+                      {ROLES.map((value) => (
                         <option key={value} value={value}>
-                          {ROLE_LABELS[value]}
+                          {t(`role.${value}`)}
                         </option>
                       ))}
                     </Select>
@@ -157,7 +148,7 @@ export function UsersPage() {
                       disabled={isSelf}
                       onClick={() => setToDelete(user)}
                     >
-                      <span className="sr-only">Supprimer</span>
+                      <span className="sr-only">{t('common.delete')}</span>
                     </Button>
                   </td>
                 </tr>
@@ -170,12 +161,12 @@ export function UsersPage() {
       <Dialog
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="Nouveau compte"
+        title={t('users.new')}
         size="sm"
         footer={
           <>
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -183,27 +174,27 @@ export function UsersPage() {
               disabled={!username.trim() || password.length < 10}
               onClick={() => create.mutate()}
             >
-              Créer
+              {t('users.create')}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
-          <Field label="Nom d'utilisateur">
+          <Field label={t('users.username')}>
             <Input value={username} onChange={(event) => setUsername(event.target.value)} autoFocus />
           </Field>
-          <Field label="Mot de passe" hint="10 caractères minimum. Une phrase de passe est idéale.">
+          <Field label={t('users.password')} hint={t('users.passwordHint')}>
             <Input
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
           </Field>
-          <Field label="Rôle" hint={ROLE_HINTS[role]}>
+          <Field label={t('users.role')} hint={t(`users.hint.${role}`)}>
             <Select value={role} onChange={(event) => setRole(event.target.value as Role)}>
-              {(Object.keys(ROLE_LABELS) as Role[]).map((value) => (
+              {ROLES.map((value) => (
                 <option key={value} value={value}>
-                  {ROLE_LABELS[value]}
+                  {t(`role.${value}`)}
                 </option>
               ))}
             </Select>
@@ -214,9 +205,9 @@ export function UsersPage() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title={`Supprimer « ${toDelete?.username} » ?`}
-        consequence="Le compte et ses sessions seront supprimés. Ses entrées d'audit sont conservées."
-        confirmLabel="Supprimer"
+        title={t('users.deleteTitle', { name: toDelete?.username ?? '' })}
+        consequence={t('users.deleteConsequence')}
+        confirmLabel={t('common.delete')}
         danger
         loading={remove.isPending}
         onConfirm={() => toDelete && remove.mutate(toDelete.id)}

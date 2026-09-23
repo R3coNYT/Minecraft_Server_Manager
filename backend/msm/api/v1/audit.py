@@ -19,7 +19,7 @@ router = APIRouter(prefix="/audit", tags=["audit"])
 AuditViewer = Annotated[AccessContext, Depends(require_permission(Permission.AUDIT_VIEW))]
 
 
-@router.get("", response_model=AuditPageOut, summary="Consulter le journal d'audit")
+@router.get("", response_model=AuditPageOut, summary="Read the audit log")
 async def search_audit(
     session: DbSession,
     _: AuditViewer,
@@ -72,7 +72,7 @@ async def search_audit(
     )
 
 
-@router.get("/actions", summary="Actions journalisables")
+@router.get("/actions", summary="Auditable actions")
 async def list_actions(_: AuditViewer) -> list[str]:
     """Valeurs possibles du filtre « action », pour alimenter l'interface."""
     return sorted(action.value for action in AuditAction)

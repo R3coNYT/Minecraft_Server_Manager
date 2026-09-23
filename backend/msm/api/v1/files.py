@@ -35,11 +35,12 @@ from msm.api.schemas import (
 from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction
 from msm.db.repositories import AuditRepository
+from msm.i18n import tr
 from msm.minecraft import properties as properties_module
 from msm.services.config_service import ConfigService
 from msm.services.file_service import FileService
 
-router = APIRouter(prefix="/servers/{server_id}", tags=["fichiers"])
+router = APIRouter(prefix="/servers/{server_id}", tags=["files"])
 
 #: Le nom d'un fichier géré ne contient jamais de séparateur de chemin.
 FileNameParam = Annotated[str, Path(max_length=160, pattern=r"^[^/\\]+$")]
@@ -63,12 +64,12 @@ ConfigsDep = Annotated[ConfigService, Depends(_configs)]
 @router.get(
     "/files/{area}",
     response_model=list[ManagedFileOut],
-    summary="Lister les fichiers d'un dossier",
+    summary="List files in a folder",
 )
 async def list_files(area: str, access: ServerAccess, service: FilesDep) -> list[ManagedFileOut]:
     """Contenu du dossier `mods` ou `plugins`, désactivés compris."""
     server, context = access
-    context.require(Permission.FILE_READ, action="consulter les fichiers")
+    context.require(Permission.FILE_READ, action=tr("view files"))
     return [ManagedFileOut(**item.to_dict()) for item in service.list_files(server, area)]
 
 
@@ -76,7 +77,7 @@ async def list_files(area: str, access: ServerAccess, service: FilesDep) -> list
     "/files/{area}",
     response_model=ManagedFileOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Téléverser un fichier",
+    summary="Upload a file",
     dependencies=[CsrfProtected],
 )
 async def upload_file(
@@ -84,7 +85,7 @@ async def upload_file(
     access: ServerAccess,
     service: FilesDep,
     ip: ClientIp,
-    file: Annotated[UploadFile, File(description="Fichier .jar à déposer")],
+    file: Annotated[UploadFile, File(description=".jar file to upload")],
     overwrite: Annotated[bool, Form()] = False,
 ) -> ManagedFileOut:
     """Dépose un fichier. Il n'est jamais exécuté par MSM."""
@@ -104,7 +105,7 @@ async def upload_file(
 
 @router.delete(
     "/files/{area}/{name}",
-    summary="Supprimer un fichier",
+    summary="Delete a file",
     dependencies=[CsrfProtected],
 )
 async def delete_file(
@@ -118,7 +119,7 @@ async def delete_file(
 @router.post(
     "/files/{area}/{name}/toggle",
     response_model=ManagedFileOut,
-    summary="Activer ou désactiver un fichier",
+    summary="Enable or disable a file",
     dependencies=[CsrfProtected],
 )
 async def toggle_file(
@@ -152,7 +153,7 @@ async def toggle_file(
 @router.get(
     "/configs",
     response_model=list[ConfigEntryOut],
-    summary="Parcourir les configurations",
+    summary="Browse configuration files",
 )
 async def browse_configs(
     access: ServerAccess,
@@ -161,25 +162,25 @@ async def browse_configs(
 ) -> list[ConfigEntryOut]:
     """Sous-dossiers et fichiers éditables du chemin demandé."""
     server, context = access
-    context.require(Permission.CONFIG_READ, action="consulter les configurations")
+    context.require(Permission.CONFIG_READ, action=tr("view configuration files"))
     return [ConfigEntryOut(**entry.to_dict()) for entry in service.browse(server, path)]
 
 
-@router.get("/configs/file", response_model=ConfigFileOut, summary="Lire un fichier")
+@router.get("/configs/file", response_model=ConfigFileOut, summary="Read a file")
 async def read_config(
     access: ServerAccess,
     service: ConfigsDep,
     path: Annotated[str, Query(min_length=1, max_length=1024)],
 ) -> ConfigFileOut:
     server, context = access
-    context.require(Permission.CONFIG_READ, action="lire une configuration")
+    context.require(Permission.CONFIG_READ, action=tr("read a configuration file"))
     return ConfigFileOut(**service.read_file(server, path))
 
 
 @router.put(
     "/configs/file",
     response_model=ConfigWriteOut,
-    summary="Enregistrer un fichier",
+    summary="Save a file",
     dependencies=[CsrfProtected],
 )
 async def write_config(
@@ -201,12 +202,12 @@ async def write_config(
 @router.get(
     "/properties",
     response_model=PropertiesOut,
-    summary="Lire server.properties",
+    summary="Read server.properties",
 )
 async def read_properties(access: ServerAccess) -> PropertiesOut:
     """Clés du fichier, enrichies de leur type quand il est connu."""
     server, context = access
-    context.require(Permission.CONFIG_READ, action="consulter server.properties")
+    context.require(Permission.CONFIG_READ, action=tr("view server.properties"))
 
     from pathlib import Path as FsPath
 
@@ -220,7 +221,7 @@ async def read_properties(access: ServerAccess) -> PropertiesOut:
 @router.put(
     "/properties",
     response_model=PropertiesUpdateOut,
-    summary="Modifier server.properties",
+    summary="Update server.properties",
     dependencies=[CsrfProtected],
 )
 async def update_properties(
@@ -232,7 +233,7 @@ async def update_properties(
 ) -> PropertiesUpdateOut:
     """Modifie les clés demandées en préservant commentaires et ordre du fichier."""
     server, context = access
-    context.require(Permission.PROPERTIES_WRITE, action="modifier server.properties")
+    context.require(Permission.PROPERTIES_WRITE, action=tr("edit server.properties"))
 
     from pathlib import Path as FsPath
 
@@ -242,8 +243,10 @@ async def update_properties(
     if updated:
         AuditRepository(session).record(
             action=AuditAction.PROPERTIES_UPDATED,
-            summary=(
-                f"Modification de server.properties sur « {server.name} » : {', '.join(updated)}."
+            summary=tr(
+                "server.properties changed on “{name}”: {keys}.",
+                name=server.name,
+                keys=", ".join(updated),
             ),
             actor_id=context.user_id,
             actor_username=context.username,

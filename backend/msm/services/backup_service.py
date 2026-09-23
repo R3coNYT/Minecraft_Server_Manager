@@ -55,6 +55,7 @@ from msm.exceptions import (
     ServerAlreadyRunning,
     ValidationError,
 )
+from msm.i18n import format_datetime, tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
@@ -102,7 +103,7 @@ class BackupProgress:
 def archive_name(server_name: str, moment: datetime, kind: str) -> str:
     """Nom de fichier lisible et triable : `survie-20260811-174205-manual.tar.gz`."""
     slug = "".join(c if c.isalnum() or c in "-_" else "-" for c in server_name.lower())[:48]
-    return f"{slug or 'serveur'}-{moment.strftime('%Y%m%d-%H%M%S')}-{kind}.tar.gz"
+    return f"{slug or 'server'}-{moment.strftime('%Y%m%d-%H%M%S')}-{kind}.tar.gz"
 
 
 class BackupService:
@@ -137,9 +138,9 @@ class BackupService:
         backup = await self._session.get(Backup, backup_id)
         if backup is None or backup.server_id != server.id:
             raise NotFoundError(
-                "Sauvegarde introuvable.",
-                cause=f"Aucune sauvegarde n'a l'identifiant {backup_id} sur ce serveur.",
-                remediation="Rafraîchir la liste des sauvegardes.",
+                tr("Backup not found."),
+                cause=tr("No backup has the identifier {id} on this server.", id=backup_id),
+                remediation=tr("Refresh the backup list."),
             )
         return backup
 
@@ -156,9 +157,9 @@ class BackupService:
         backup = await self.get_backup(server, backup_id)
         if backup.status is not BackupStatus.COMPLETED:
             raise ValidationError(
-                "Sauvegarde incomplète.",
-                cause=f"Cette sauvegarde est à l'état {backup.status.value}.",
-                remediation="Attendre la fin de la sauvegarde, ou en créer une nouvelle.",
+                tr("Incomplete backup."),
+                cause=tr("This backup is in the {state} state.", state=backup.status.value),
+                remediation=tr("Wait for the backup to finish, or create a new one."),
             )
         return await asyncio.to_thread(read_manifest, self.archive_path(backup))
 
@@ -173,14 +174,14 @@ class BackupService:
         kind: str = KIND_MANUAL,
         ip_address: str | None = None,
     ) -> Backup:
-        context.require(Permission.BACKUP_CREATE, action="créer une sauvegarde")
+        context.require(Permission.BACKUP_CREATE, action=tr("create a backup"))
 
         directory = Path(server.directory)
         if not directory.is_dir():
             raise ValidationError(
-                "Dossier du serveur introuvable.",
-                cause=f"{directory} n'existe pas ou n'est pas lisible.",
-                remediation="Vérifier le chemin du serveur dans ses réglages.",
+                tr("Server folder not found."),
+                cause=tr("{path} does not exist or cannot be read.", path=directory),
+                remediation=tr("Check the server path in its settings."),
             )
 
         self._check_backup_root(directory)
@@ -200,7 +201,7 @@ class BackupService:
 
         self._record(
             AuditAction.BACKUP_CREATED,
-            f"Sauvegarde de « {server.name} » lancée.",
+            tr("Backup of “{name}” started.", name=server.name),
             server,
             context,
             ip_address,
@@ -242,17 +243,15 @@ class BackupService:
         except ValueError:
             return
         raise ValidationError(
-            "Emplacement de sauvegarde invalide.",
-            cause=f"Le dossier des sauvegardes ({root}) est à l'intérieur du serveur.",
-            remediation=(
-                "Choisir un autre dossier via MSM_BACKUP_DIR, hors des dossiers de serveur."
-            ),
+            tr("Invalid backup location."),
+            cause=tr("The backup folder ({root}) is inside the server.", root=root),
+            remediation=tr("Choose another folder through MSM_BACKUP_DIR, outside server folders."),
         )
 
     async def cancel_backup(
         self, server: Server, backup_id: int, *, context: AccessContext
     ) -> bool:
-        context.require(Permission.BACKUP_CREATE, action="annuler une sauvegarde")
+        context.require(Permission.BACKUP_CREATE, action=tr("cancel a backup"))
         await self.get_backup(server, backup_id)
 
         task = _ACTIVE_BACKUPS.get(backup_id)
@@ -275,37 +274,38 @@ class BackupService:
         ip_address: str | None = None,
     ) -> Backup:
         """Remplace mondes et configurations par ceux d'une sauvegarde."""
-        context.require(Permission.BACKUP_RESTORE, action="restaurer une sauvegarde")
+        context.require(Permission.BACKUP_RESTORE, action=tr("restore a backup"))
         backup = await self.get_backup(server, backup_id)
 
         if backup.status is not BackupStatus.COMPLETED:
             raise ValidationError(
-                "Sauvegarde inutilisable.",
-                cause=f"Cette sauvegarde est à l'état {backup.status.value}.",
-                remediation="Choisir une sauvegarde terminée.",
+                tr("Unusable backup."),
+                cause=tr("This backup is in the {state} state.", state=backup.status.value),
+                remediation=tr("Choose a completed backup."),
             )
 
         runtime = self._supervisor.find(server.id)
         if runtime is not None and runtime.state.is_running:
             raise ServerAlreadyRunning(
-                "Le serveur doit être arrêté pour être restauré.",
-                cause=(
-                    "Restaurer sous un serveur en cours d'exécution écraserait des fichiers "
-                    "qu'il est en train de lire et d'écrire."
+                tr("The server must be stopped to be restored."),
+                cause=tr(
+                    "Restoring under a running server would overwrite files it is reading "
+                    "and writing."
                 ),
-                remediation="Arrêter le serveur, puis relancer la restauration.",
+                remediation=tr("Stop the server, then start the restore again."),
             )
 
         if not confirm:
             raise ConfirmationRequired(
-                "Confirmation requise.",
-                cause=(
-                    "La restauration remplace les mondes et les configurations actuels "
-                    f"par ceux du {backup.created_at:%d/%m/%Y à %H:%M}."
+                tr("Confirmation required."),
+                cause=tr(
+                    "The restore replaces the current worlds and configuration files with "
+                    "those from {date}.",
+                    date=format_datetime(backup.created_at),
                 ),
-                remediation=(
-                    "Renvoyer la requête avec `confirm: true`. "
-                    "Une sauvegarde de sécurité sera prise automatiquement avant."
+                remediation=tr(
+                    "Send the request again with `confirm: true`. A safety backup will be "
+                    "taken automatically first."
                 ),
                 context={"backup_id": backup.id},
             )
@@ -325,8 +325,11 @@ class BackupService:
 
         self._record(
             AuditAction.BACKUP_RESTORED,
-            f"Restauration de « {server.name} » depuis la sauvegarde du "
-            f"{backup.created_at:%d/%m/%Y %H:%M}.",
+            tr(
+                "“{name}” restored from the backup of {date}.",
+                name=server.name,
+                date=format_datetime(backup.created_at),
+            ),
             server,
             context,
             ip_address,
@@ -352,14 +355,14 @@ class BackupService:
         context: AccessContext,
         ip_address: str | None = None,
     ) -> None:
-        context.require(Permission.BACKUP_CREATE, action="supprimer une sauvegarde")
+        context.require(Permission.BACKUP_CREATE, action=tr("delete a backup"))
         backup = await self.get_backup(server, backup_id)
 
         if backup.id in _ACTIVE_BACKUPS:
             raise ValidationError(
-                "Sauvegarde en cours.",
-                cause="Cette sauvegarde est en train d'être écrite.",
-                remediation="L'annuler d'abord, ou attendre qu'elle se termine.",
+                tr("Backup in progress."),
+                cause=tr("This backup is being written."),
+                remediation=tr("Cancel it first, or wait for it to finish."),
             )
 
         try:
@@ -372,7 +375,7 @@ class BackupService:
         await self._session.delete(backup)
         self._record(
             AuditAction.BACKUP_DELETED,
-            f"Sauvegarde du {backup.created_at:%d/%m/%Y %H:%M} supprimée.",
+            tr("Backup of {date} deleted.", date=format_datetime(backup.created_at)),
             server,
             context,
             ip_address,
@@ -389,7 +392,7 @@ class BackupService:
     ) -> None:
         self._record(
             AuditAction.BACKUP_DOWNLOADED,
-            f"Téléchargement de la sauvegarde du {backup.created_at:%d/%m/%Y %H:%M}.",
+            tr("Backup of {date} downloaded.", date=format_datetime(backup.created_at)),
             server,
             context,
             ip_address,
@@ -403,7 +406,7 @@ class BackupService:
         interrupted = list((await self._session.execute(statement)).scalars())
         for backup in interrupted:
             backup.status = BackupStatus.FAILED
-            backup.error = "Sauvegarde interrompue par un redémarrage de MSM."
+            backup.error = tr("Backup interrupted by an MSM restart.")
         if interrupted:
             logger.info("backups_marked_interrupted", count=len(interrupted))
         return len(interrupted)
@@ -477,12 +480,13 @@ def _check_free_space(destination: Path, needed: int, margin_mb: int) -> None:
     required = needed + margin_mb * 1024 * 1024
     if free < required:
         raise ValidationError(
-            "Espace disque insuffisant.",
-            cause=(
-                f"{free / 1_073_741_824:.1f} Go disponibles pour "
-                f"{required / 1_073_741_824:.1f} Go nécessaires."
+            tr("Not enough disk space."),
+            cause=tr(
+                "{free} GB available for {required} GB needed.",
+                free=f"{free / 1_073_741_824:.1f}",
+                required=f"{required / 1_073_741_824:.1f}",
             ),
-            remediation="Libérer de l'espace ou supprimer d'anciennes sauvegardes.",
+            remediation=tr("Free some space or delete old backups."),
         )
 
 
@@ -510,15 +514,15 @@ async def _run_backup(
         # toute la durée de la sauvegarde.
         bus.publish(topic, replace(progress, server_name=server_name).to_dict())
 
-    publish(BackupProgress(backup_id, server_id, "RUNNING", "Analyse du contenu"))
+    publish(BackupProgress(backup_id, server_id, "RUNNING", tr("Analysing content")))
 
     try:
         selection = await asyncio.to_thread(select_content, directory)
         if not selection.entries:
             raise ValidationError(
-                "Rien à sauvegarder.",
-                cause=f"Aucun monde ni fichier de configuration trouvé dans {directory}.",
-                remediation="Démarrer le serveur une première fois pour qu'il crée son monde.",
+                tr("Nothing to back up."),
+                cause=tr("No world or configuration file found in {path}.", path=directory),
+                remediation=tr("Start the server once so that it creates its world."),
             )
         _check_free_space(destination, selection.total_bytes, settings.backup_free_space_margin_mb)
 
@@ -535,21 +539,21 @@ async def _run_backup(
             # être touché depuis un autre thread.
             loop.call_soon_threadsafe(
                 publish,
-                BackupProgress(backup_id, server_id, "RUNNING", "Copie des fichiers", done, total),
+                BackupProgress(backup_id, server_id, "RUNNING", tr("Copying files"), done, total),
             )
 
         runtime = supervisor.find(server_id)
         write = _write(selection.entries, destination, extra, on_progress, lambda: cancelled)
 
         if runtime is not None and runtime.state.is_running:
-            publish(BackupProgress(backup_id, server_id, "RUNNING", "Suspension des écritures"))
+            publish(BackupProgress(backup_id, server_id, "RUNNING", tr("Pausing writes")))
             async with frozen_world(runtime, bus):
                 result = await write
         else:
             result = await write
 
         await _finish(backup_id, BackupStatus.COMPLETED, size=result.size_bytes)
-        publish(BackupProgress(backup_id, server_id, "COMPLETED", "Sauvegarde terminée", 1, 1))
+        publish(BackupProgress(backup_id, server_id, "COMPLETED", tr("Backup completed"), 1, 1))
         logger.info(
             "backup_completed",
             server_id=server_id,
@@ -567,15 +571,17 @@ async def _run_backup(
         destination.unlink(missing_ok=True)
         # Bouclier : sans lui, l'écriture du statut serait à son tour annulée et
         # la sauvegarde resterait « en cours » pour toujours.
-        await asyncio.shield(_finish(backup_id, BackupStatus.FAILED, error="Sauvegarde annulée."))
+        await asyncio.shield(_finish(backup_id, BackupStatus.FAILED, error=tr("Backup cancelled.")))
         publish(
-            BackupProgress(backup_id, server_id, "FAILED", "Annulée", error="Sauvegarde annulée.")
+            BackupProgress(
+                backup_id, server_id, "FAILED", tr("Cancelled"), error=tr("Backup cancelled.")
+            )
         )
         raise
     except BackupCancelled:
         destination.unlink(missing_ok=True)
-        await _finish(backup_id, BackupStatus.FAILED, error="Sauvegarde annulée.")
-        publish(BackupProgress(backup_id, server_id, "FAILED", "Annulée"))
+        await _finish(backup_id, BackupStatus.FAILED, error=tr("Backup cancelled."))
+        publish(BackupProgress(backup_id, server_id, "FAILED", tr("Cancelled")))
     except Exception as exc:
         # Message **et** cause : cette chaîne est tout ce que l'interface montre
         # de l'échec, « Rien à sauvegarder. » seul n'aiderait personne.
@@ -586,7 +592,7 @@ async def _run_backup(
         )
         destination.unlink(missing_ok=True)
         await _finish(backup_id, BackupStatus.FAILED, error=message)
-        publish(BackupProgress(backup_id, server_id, "FAILED", "Échec", error=message))
+        publish(BackupProgress(backup_id, server_id, "FAILED", tr("Failed"), error=message))
         logger.warning("backup_failed", server_id=server_id, backup_id=backup_id, error=message)
 
 

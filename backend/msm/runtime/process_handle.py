@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from msm.exceptions import ConsoleUnavailable
+from msm.i18n import tr
 from msm.launchers.base import ProcessSpec
 from msm.logging_conf import get_logger
 from msm.runtime.backends import ProcessBackend, SpawnedProcess, get_backend
@@ -132,7 +133,7 @@ class ProcessHandle:
     async def start(self, spec: ProcessSpec) -> SpawnedProcess:
         """Lance le processus. Une instance ne peut servir qu'une fois."""
         if self._spawned is not None:
-            raise RuntimeError("Ce ProcessHandle a déjà été utilisé.")
+            raise RuntimeError("This ProcessHandle has already been used.")
 
         spawned = await self._backend.spawn(spec)
         self._spawned = spawned
@@ -170,7 +171,7 @@ class ProcessHandle:
             except ValueError:
                 # Ligne plus longue que STREAM_BUFFER_LIMIT : asyncio a vidé son
                 # tampon. On le signale plutôt que de laisser un trou silencieux.
-                yield "[MSM] Ligne de log tronquée : elle dépassait la taille maximale (1 Mio)."
+                yield tr("[MSM] Log line truncated: it exceeded the maximum size (1 MiB).")
                 continue
             except (asyncio.IncompleteReadError, ConnectionResetError):
                 break
@@ -189,20 +190,20 @@ class ProcessHandle:
         """
         if self._spawned is None or not self.running:
             raise ConsoleUnavailable(
-                "Le serveur n'est pas en cours d'exécution.",
-                cause="Aucun processus actif auquel envoyer la commande.",
-                remediation="Démarrer le serveur avant d'envoyer une commande.",
+                tr("The server is not running."),
+                cause=tr("No live process to send the command to."),
+                remediation=tr("Start the server before sending a command."),
             )
 
         stdin = self._spawned.process.stdin
         if stdin is None or self._stdin_broken or stdin.is_closing():
             self._stdin_broken = True
             raise ConsoleUnavailable(
-                "Console en lecture seule.",
-                cause="L'entrée standard du processus n'est pas accessible.",
-                remediation=(
-                    "Ce script de démarrage ne transmet pas l'entrée standard au serveur. "
-                    "Activer le mode PTY ou configurer RCON dans les réglages du serveur."
+                tr("Read-only console."),
+                cause=tr("The process's standard input is not reachable."),
+                remediation=tr(
+                    "This start script does not pass standard input on to the server. "
+                    "Enable PTY mode or configure RCON in the server settings."
                 ),
             )
 
@@ -212,11 +213,13 @@ class ProcessHandle:
         except (BrokenPipeError, ConnectionResetError, RuntimeError) as exc:
             self._stdin_broken = True
             raise ConsoleUnavailable(
-                "Commande non transmise.",
-                cause=f"L'entrée standard du serveur s'est fermée ({type(exc).__name__}).",
-                remediation=(
-                    "Vérifier que le script de démarrage ne redirige pas l'entrée standard "
-                    "(par exemple `< /dev/null`), ou configurer RCON."
+                tr("Command not delivered."),
+                cause=tr(
+                    "The server's standard input has closed ({error}).", error=type(exc).__name__
+                ),
+                remediation=tr(
+                    "Check that the start script does not redirect standard input "
+                    "(for example `< /dev/null`), or configure RCON."
                 ),
             ) from exc
 
@@ -226,7 +229,7 @@ class ProcessHandle:
     async def wait(self) -> int:
         """Attend la fin du processus et renvoie son code de sortie."""
         if self._waiter is None:
-            raise RuntimeError("Le processus n'a pas été démarré.")
+            raise RuntimeError("The process has not been started.")
         return await asyncio.shield(self._waiter)
 
     async def _wait_for_exit(self, timeout: float) -> bool:
@@ -263,25 +266,31 @@ class ProcessHandle:
                 await self.write_line(stop_command)
                 notify(
                     StopStage.COMMAND,
-                    f"Commande « {stop_command} » envoyée, arrêt propre en cours "
-                    f"(jusqu'à {stop_timeout_s:.0f} s).",
+                    tr(
+                        "Command “{command}” sent, clean shutdown in progress (up to {seconds} s).",
+                        command=stop_command,
+                        seconds=f"{stop_timeout_s:.0f}",
+                    ),
                 )
                 if await self._wait_for_exit(stop_timeout_s):
                     return self._outcome(StopStage.COMMAND, forced=False, started_at=started_at)
             except ConsoleUnavailable as exc:
-                notify(StopStage.COMMAND, f"Arrêt propre impossible : {exc.cause}")
+                notify(StopStage.COMMAND, tr("Clean shutdown impossible: {cause}", cause=exc.cause))
         else:
             notify(
                 StopStage.COMMAND,
-                "Entrée standard indisponible : passage direct à l'arrêt système.",
+                tr("Standard input unavailable: going straight to a system stop."),
             )
 
         # --- Étape 2 : signal d'arrêt au groupe (POSIX) ------------------
         if self._backend.supports_graceful_signal:
             notify(
                 StopStage.SIGNAL,
-                f"Le serveur n'a pas répondu : envoi du signal d'arrêt au groupe "
-                f"de processus (jusqu'à {kill_timeout_s:.0f} s).",
+                tr(
+                    "The server did not respond: sending the stop signal to the process "
+                    "group (up to {seconds} s).",
+                    seconds=f"{kill_timeout_s:.0f}",
+                ),
             )
             self._backend.request_graceful_stop(self._spawned)
             if await self._wait_for_exit(kill_timeout_s):
@@ -290,7 +299,7 @@ class ProcessHandle:
         # --- Étape 3 : terminaison forcée de l'arbre ---------------------
         notify(
             StopStage.KILL,
-            "Arrêt forcé du groupe de processus du serveur.",
+            tr("Forced stop of the server's process group."),
         )
         logger.warning("process_force_kill", pid=self.pid, group_id=self.group_id)
         self._backend.kill_tree(self._spawned)

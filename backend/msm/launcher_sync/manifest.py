@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 
 #: Taille maximale d'un fichier annoncé : un JAR de mod dépasse rarement 100 Mo.
 MAX_FILE_BYTES = 1024 * 1024 * 1024
@@ -85,11 +86,11 @@ class Manifest:
 
 def _refuse(cause: str) -> ValidationError:
     return ValidationError(
-        "Manifest refusé.",
+        tr("Manifest refused."),
         cause=cause,
-        remediation=(
-            "Régénérer le manifest sur le serveur de fichiers, puis relancer la "
-            "synchronisation. Rien n'a été modifié sur le serveur Minecraft."
+        remediation=tr(
+            "Regenerate the manifest on the file server, then synchronise again. Nothing "
+            "was changed on the Minecraft server."
         ),
     )
 
@@ -101,40 +102,40 @@ def validate_path(raw: Any) -> str:
     pas une coquille à réparer, c'est un manifest qu'on ne doit pas appliquer.
     """
     if not isinstance(raw, str) or not raw:
-        raise _refuse("Une entrée n'a pas de chemin.")
+        raise _refuse(tr("An entry has no path."))
     if len(raw) > MAX_PATH_LENGTH:
-        raise _refuse(f"Chemin trop long ({len(raw)} caractères).")
+        raise _refuse(tr("Path too long ({length} characters).", length=len(raw)))
     if "\x00" in raw or "\\" in raw:
-        raise _refuse(f"Caractère interdit dans le chemin « {raw[:80]} ».")
+        raise _refuse(tr("Forbidden character in the path “{path}”.", path=raw[:80]))
     if raw.startswith("/") or re.match(r"^[A-Za-z]:", raw):
-        raise _refuse(f"Chemin absolu refusé : « {raw[:80]} ».")
+        raise _refuse(tr("Absolute path refused: “{path}”.", path=raw[:80]))
 
     parts = raw.split("/")
     if any(part in ("", ".", "..") for part in parts):
-        raise _refuse(f"Chemin non normalisé ou remontant : « {raw[:80]} ».")
+        raise _refuse(tr("Non-normalised or climbing path: “{path}”.", path=raw[:80]))
     return raw
 
 
 def _entry(raw: Any, *, disabled: bool) -> ManifestEntry:
     if not isinstance(raw, dict):
-        raise _refuse("Une entrée de `files` n'est pas un objet.")
+        raise _refuse(tr("An entry of `files` is not an object."))
 
     path = validate_path(raw.get("path"))
 
     sha = raw.get("sha256")
     if not isinstance(sha, str) or not _SHA256_RE.match(sha):
-        raise _refuse(f"Empreinte SHA-256 invalide pour « {path} ».")
+        raise _refuse(tr("Invalid SHA-256 checksum for “{path}”.", path=path))
 
     size = raw.get("size")
     if not isinstance(size, int) or isinstance(size, bool) or not 0 <= size <= MAX_FILE_BYTES:
-        raise _refuse(f"Taille invalide pour « {path} ».")
+        raise _refuse(tr("Invalid size for “{path}”.", path=path))
 
     side_raw = raw.get("side")
     side: str | None = None
     if side_raw is not None:
         side = SIDE_ALIASES.get(str(side_raw).lower())
         if side is None:
-            raise _refuse(f"Côté inconnu « {side_raw} » pour « {path} ».")
+            raise _refuse(tr("Unknown side “{side}” for “{path}”.", side=side_raw, path=path))
 
     return ManifestEntry(path=path, sha256=sha.lower(), size=size, side=side, disabled=disabled)
 
@@ -142,16 +143,16 @@ def _entry(raw: Any, *, disabled: bool) -> ManifestEntry:
 def parse_manifest(raw: Any) -> Manifest:
     """Valide un manifest décodé. Lève :class:`ValidationError` au moindre écart."""
     if not isinstance(raw, dict):
-        raise _refuse("Le manifest n'est pas un objet JSON.")
+        raise _refuse(tr("The manifest is not a JSON object."))
 
     files = raw.get("files")
     if not isinstance(files, list):
-        raise _refuse("Le champ `files` est absent ou n'est pas une liste.")
+        raise _refuse(tr("The `files` field is missing or is not a list."))
     disabled = raw.get("disabledFiles", [])
     if not isinstance(disabled, list):
-        raise _refuse("Le champ `disabledFiles` n'est pas une liste.")
+        raise _refuse(tr("The `disabledFiles` field is not a list."))
     if len(files) + len(disabled) > MAX_ENTRIES:
-        raise _refuse(f"Plus de {MAX_ENTRIES} fichiers annoncés.")
+        raise _refuse(tr("More than {maximum} files listed.", maximum=MAX_ENTRIES))
 
     entries = [_entry(item, disabled=False) for item in files]
     entries += [_entry(item, disabled=True) for item in disabled]
@@ -162,7 +163,7 @@ def parse_manifest(raw: Any) -> Manifest:
         # `mods/a.jar` désignent le même fichier.
         key = entry.path.casefold()
         if key in seen:
-            raise _refuse(f"Chemin annoncé deux fois : « {entry.path} ».")
+            raise _refuse(tr("Path listed twice: “{path}”.", path=entry.path))
         seen.add(key)
 
     loader = None

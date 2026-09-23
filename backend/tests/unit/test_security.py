@@ -45,7 +45,7 @@ class TestPasswords:
 
         with pytest.raises(ValidationError) as excinfo:
             validate_password_strength("court")
-        assert excinfo.value.remediation and "phrase de passe" in excinfo.value.remediation
+        assert excinfo.value.remediation and "passphrase" in excinfo.value.remediation
 
     def test_empty_password_is_refused(self) -> None:
         with pytest.raises(ValidationError):

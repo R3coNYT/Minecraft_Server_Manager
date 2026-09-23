@@ -196,5 +196,5 @@ class TestRingBuffer:
         assert [line.seq for line in buffer.tail(10)] == [4, 5]
 
     def test_maxlen_must_be_positive(self) -> None:
-        with pytest.raises(ValueError, match="positif"):
+        with pytest.raises(ValueError, match="positive"):
             RingBuffer(maxlen=0)

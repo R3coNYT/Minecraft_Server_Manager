@@ -16,6 +16,7 @@ import re
 from enum import IntEnum
 
 from msm.core.commands import command_verb
+from msm.i18n import tr
 
 #: Sélecteurs qui visent l'ensemble des joueurs.
 _BROAD_SELECTOR_RE = re.compile(r"@[ae](\[|\b)")
@@ -75,22 +76,20 @@ DESTRUCTIVE_VERBS: frozenset[str] = frozenset(
 
 #: Explications affichées dans la boîte de confirmation, par verbe.
 _EXPLANATIONS: dict[str, str] = {
-    "stop": "Le serveur va s'arrêter et tous les joueurs connectés seront déconnectés.",
-    "restart": "Le serveur va redémarrer et tous les joueurs seront déconnectés.",
-    "kill": "Les entités ciblées seront tuées, sans possibilité d'annulation.",
-    "op": "Le joueur obtiendra les pleins pouvoirs administrateur sur le serveur.",
-    "deop": "Le joueur perdra ses droits administrateur.",
-    "ban": "Le joueur ne pourra plus se connecter au serveur.",
-    "ban-ip": "Toutes les connexions depuis cette adresse IP seront bloquées.",
-    "whitelist": "L'accès au serveur va être restreint ou ouvert.",
-    "reload": "Le rechargement à chaud peut déstabiliser les plugins et corrompre des données.",
-    "gamerule": "Une règle de jeu du monde va être modifiée durablement.",
-    "save-off": "Les sauvegardes automatiques seront désactivées : risque de perte de données.",
-    "difficulty": "La difficulté du monde va changer pour tous les joueurs.",
-    "worldborder": "La bordure du monde va être modifiée pour tous les joueurs.",
-    "forceload": (
-        "Des chunks vont être maintenus chargés en permanence (impact sur les performances)."
-    ),
+    "stop": "The server will stop and every connected player will be disconnected.",
+    "restart": "The server will restart and every player will be disconnected.",
+    "kill": "The targeted entities will be killed, with no way to undo it.",
+    "op": "The player will get full administrator powers on the server.",
+    "deop": "The player will lose their administrator rights.",
+    "ban": "The player will no longer be able to join the server.",
+    "ban-ip": "Every connection from this IP address will be blocked.",
+    "whitelist": "Access to the server is about to be restricted or opened.",
+    "reload": "A hot reload can destabilise plugins and corrupt data.",
+    "gamerule": "A game rule of the world is about to change permanently.",
+    "save-off": "Automatic saving will be disabled: risk of data loss.",
+    "difficulty": "The world difficulty will change for every player.",
+    "worldborder": "The world border will change for every player.",
+    "forceload": "Chunks will be kept loaded permanently (performance impact).",
 }
 
 
@@ -121,15 +120,16 @@ def explain(command: str) -> str | None:
         return None
 
     verb = command_verb(command)
-    explanation = _EXPLANATIONS.get(verb)
-    if explanation is None:
-        explanation = (
-            "Cette commande modifie durablement l'état du serveur."
+    template = _EXPLANATIONS.get(verb)
+    if template is None:
+        template = (
+            "This command permanently changes the server state."
             if level is DangerLevel.SENSITIVE
-            else "Cette commande est irréversible et affecte tous les joueurs."
+            else "This command cannot be undone and affects every player."
         )
+    explanation = tr(template)
     if level is DangerLevel.DESTRUCTIVE and _BROAD_SELECTOR_RE.search(command):
-        explanation += " Elle vise l'ensemble des joueurs connectés."
+        explanation += " " + tr("It targets every connected player.")
     return explanation
 
 

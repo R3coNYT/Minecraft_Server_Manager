@@ -180,4 +180,22 @@ boucle.
 | Aucun arrêt par motif (`pkill -f`) | un signal ne cible qu'un identifiant de groupe précis |
 | Toute erreur métier porte `cause` et `remediation` | l'interface affiche « Cause / Action » sans cas particulier |
 | Les commentaires expliquent *pourquoi*, pas *quoi* | le code dit déjà ce qu'il fait |
-| Français pour les messages destinés à l'utilisateur | l'interface est en français |
+| Textes destinés à l'utilisateur écrits en anglais, puis traduits | l'interface est bilingue (voir ci-dessous) |
+
+## Traduction
+
+L'anglais est la langue source ; le français est une traduction. La langue est
+un réglage global du panneau (**Réglages → Langue**, clé `ui.language` de
+`app_settings`), lu par le frontend sur `GET /api/v1/ui`.
+
+- **Backend** : tout texte destiné à l'utilisateur passe par
+  `tr("English text {param}", param=…)` (`msm/i18n`). La traduction se trouve
+  dans `msm/i18n/fr/<domaine>.py`, indexée par le texte anglais.
+  `tests/unit/test_i18n.py` refuse une chaîne sans traduction française ou dont
+  les paramètres divergent.
+- **Frontend** : `t('section.key', params)` et `tn('section.key', count)` pour
+  les pluriels (`_one` / `_other`). Chaque section de `src/i18n/messages/`
+  déclare `en` et `fr` ; TypeScript refuse une clé manquante d'un côté.
+- Ne sont pas traduits : les journaux techniques, la CLI, les résumés
+  OpenAPI, et les textes déjà enregistrés (journal d'audit, dernières erreurs),
+  qui restent dans la langue active au moment où ils ont été écrits.

@@ -26,7 +26,7 @@ import { ApiError, api } from '@/lib/api'
 import { hasPermission, useMe } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { useRealtime } from '@/stores/realtime'
-import { formatBytes, formatRelative } from '@/lib/format'
+import { formatBytes, formatDateTime, formatPercent, formatRelative } from '@/lib/format'
 import type { Backup } from '@/lib/types'
 import { useServerContext } from './context'
 import { Badge, Card, CardHeader, EmptyState, LoadingBlock } from '@/components/ui/primitives'
@@ -35,6 +35,7 @@ import { Dialog } from '@/components/ui/Dialog'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { cn } from '@/lib/cn'
+import { t, type MessageKey } from '@/i18n'
 
 const STATUS_STYLES: Record<string, string> = {
   RUNNING: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
@@ -43,9 +44,9 @@ const STATUS_STYLES: Record<string, string> = {
   PENDING: 'bg-slate-700/40 text-slate-300 ring-slate-600',
 }
 
-const KIND_LABELS: Record<string, string> = {
-  manual: 'manuelle',
-  'pre-restore': 'avant restauration',
+const KIND_LABELS: Record<string, MessageKey> = {
+  manual: 'backups.kind.manual',
+  'pre-restore': 'backups.kind.pre-restore',
 }
 
 /** Détail du contenu d'une archive, lu à la demande. */
@@ -69,12 +70,12 @@ function ManifestDialog({
     <Dialog
       open
       onClose={onClose}
-      title={`Sauvegarde du ${new Date(backup.created_at).toLocaleString('fr-FR')}`}
-      description="Contenu déclaré par l'archive."
+      title={t('backups.manifestTitle', { date: formatDateTime(backup.created_at) })}
+      description={t('backups.manifestDescription')}
       size="lg"
       footer={
         <Button variant="ghost" onClick={onClose}>
-          Fermer
+          {t('common.close')}
         </Button>
       }
     >
@@ -85,20 +86,20 @@ function ManifestDialog({
         <div className="space-y-4 text-sm">
           <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
             <p className="text-slate-300">
-              Mondes sauvegardés : {(data.content.worlds ?? []).join(', ') || '—'}
+              {t('backups.worlds', { worlds: (data.content.worlds ?? []).join(', ') || '—' })}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {data.content.file_count ?? 0} fichiers,{' '}
-              {formatBytes(data.content.total_bytes ?? 0)} avant compression
+              {t('backups.files', {
+                count: data.content.file_count ?? 0,
+                size: formatBytes(data.content.total_bytes ?? 0),
+              })}
             </p>
           </div>
 
           <div className="flex items-start gap-2.5 rounded-lg border border-slate-800 bg-slate-900/40 px-4 py-3">
             <Info className="mt-0.5 size-4 shrink-0 text-slate-500" />
             <p className="text-xs text-slate-400">
-              Les mods et plugins ne sont pas dans l'archive — ils se retéléchargent. Voici la
-              liste de ceux qui étaient installés, pour les remettre en place après une
-              reconstruction.
+              {t('backups.modsNote')}
             </p>
           </div>
 
@@ -108,7 +109,7 @@ function ManifestDialog({
                 {kind} ({data[kind].length})
               </p>
               {data[kind].length === 0 ? (
-                <p className="text-xs text-slate-600">Aucun.</p>
+                <p className="text-xs text-slate-600">{t('backups.none')}</p>
               ) : (
                 <ul className="max-h-48 space-y-0.5 overflow-y-auto">
                   {data[kind].map((item) => (
@@ -118,7 +119,7 @@ function ManifestDialog({
                     >
                       <span className={cn('truncate', item.enabled ? 'text-slate-300' : 'text-slate-600')}>
                         {item.name}
-                        {item.enabled ? '' : ' (désactivé)'}
+                        {item.enabled ? '' : t('backups.disabledSuffix')}
                       </span>
                       <span className="shrink-0 tabular-nums text-slate-600">
                         {formatBytes(item.size_bytes)}
@@ -166,7 +167,7 @@ export function BackupsPage() {
   const create = useMutation({
     mutationFn: () => api.backups.create(server.id),
     onSuccess: () => {
-      push({ kind: 'info', title: 'Sauvegarde lancée', detail: 'Sa progression suit ci-dessous.' })
+      push({ kind: 'info', title: t('backups.started'), detail: t('backups.startedDetail') })
       void queryClient.invalidateQueries({ queryKey: ['backups', server.id] })
     },
     onError: (error) => pushError(error),
@@ -183,8 +184,8 @@ export function BackupsPage() {
     onSuccess: () => {
       push({
         kind: 'success',
-        title: 'Restauration terminée',
-        detail: 'Une sauvegarde de sécurité a été prise avant remplacement.',
+        title: t('backups.restored'),
+        detail: t('backups.restoredDetail'),
       })
       setToRestore(null)
       void queryClient.invalidateQueries({ queryKey: ['backups', server.id] })
@@ -197,7 +198,7 @@ export function BackupsPage() {
   const remove = useMutation({
     mutationFn: (backup: Backup) => api.backups.remove(server.id, backup.id),
     onSuccess: () => {
-      push({ kind: 'success', title: 'Sauvegarde supprimée' })
+      push({ kind: 'success', title: t('backups.deleted') })
       setToDelete(null)
       void queryClient.invalidateQueries({ queryKey: ['backups', server.id] })
     },
@@ -215,8 +216,8 @@ export function BackupsPage() {
 
         <Card>
           <CardHeader
-            title="Sauvegardes"
-            subtitle="Mondes et configurations. Les mods sont inventoriés, pas archivés."
+            title={t('backups.title')}
+            subtitle={t('backups.subtitle')}
             action={
               canBackup ? (
                 <Button
@@ -226,7 +227,7 @@ export function BackupsPage() {
                   loading={create.isPending}
                   onClick={() => create.mutate()}
                 >
-                  Sauvegarder maintenant
+                  {t('backups.now')}
                 </Button>
               ) : undefined
             }
@@ -234,16 +235,15 @@ export function BackupsPage() {
 
           {running ? (
             <p className="border-b border-slate-800/60 px-5 py-2.5 text-xs text-slate-500">
-              Le serveur tourne : ses écritures seront suspendues le temps de la copie, puis
-              rétablies. Les joueurs ne sont pas déconnectés.
+              {t('backups.runningNote')}
             </p>
           ) : null}
 
           {items.length === 0 ? (
             <EmptyState
               icon={<Archive className="size-8" />}
-              title="Aucune sauvegarde"
-              description="Une sauvegarde qu'on ne fait pas ne protège de rien."
+              title={t('backups.empty')}
+              description={t('backups.emptyHint')}
             />
           ) : (
             <ul className="divide-y divide-slate-800/60">
@@ -255,10 +255,10 @@ export function BackupsPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm text-slate-200">
-                          {new Date(backup.created_at).toLocaleString('fr-FR')}
+                          {formatDateTime(backup.created_at)}
                         </span>
-                        <Badge className={cn(STATUS_STYLES[state])}>{state}</Badge>
-                        <Badge>{KIND_LABELS[backup.kind] ?? backup.kind}</Badge>
+                        <Badge className={cn(STATUS_STYLES[state])}>{t(`backups.status.${state}` as MessageKey)}</Badge>
+                        <Badge>{KIND_LABELS[backup.kind] ? t(KIND_LABELS[backup.kind]!) : backup.kind}</Badge>
                         {backup.size_bytes ? (
                           <span className="text-xs tabular-nums text-slate-500">
                             {formatBytes(backup.size_bytes)}
@@ -275,7 +275,8 @@ export function BackupsPage() {
                             />
                           </div>
                           <p className="mt-1 text-[11px] text-slate-500">
-                            {live?.phase ?? 'En cours'} — {live?.percent ?? 0} %
+                            {live?.phase ?? t('backups.inProgress')} —{' '}
+                            {formatPercent(live?.percent ?? 0)}
                           </p>
                         </div>
                       ) : (
@@ -297,7 +298,7 @@ export function BackupsPage() {
                           loading={cancel.isPending}
                           onClick={() => cancel.mutate(backup)}
                         >
-                          Annuler
+                          {t('common.cancel')}
                         </Button>
                       ) : null}
 
@@ -309,14 +310,14 @@ export function BackupsPage() {
                             icon={<Info className="size-3.5" />}
                             onClick={() => setToInspect(backup)}
                           >
-                            <span className="sr-only">Contenu</span>
+                            <span className="sr-only">{t('backups.content')}</span>
                           </Button>
                           {canBackup ? (
                             <a
                               href={api.backups.downloadUrl(server.id, backup.id)}
                               download
                               className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100"
-                              title="Télécharger l'archive"
+                              title={t('backups.download')}
                             >
                               <Download className="size-3.5" />
                             </a>
@@ -328,11 +329,11 @@ export function BackupsPage() {
                               icon={<HardDriveDownload className="size-3.5" />}
                               disabled={running}
                               title={
-                                running ? 'Arrêter le serveur pour pouvoir restaurer' : undefined
+                                running ? t('backups.stopToRestore') : undefined
                               }
                               onClick={() => setToRestore(backup)}
                             >
-                              Restaurer
+                              {t('backups.restore')}
                             </Button>
                           ) : null}
                         </>
@@ -345,7 +346,7 @@ export function BackupsPage() {
                           icon={<Trash2 className="size-3.5" />}
                           onClick={() => setToDelete(backup)}
                         >
-                          <span className="sr-only">Supprimer</span>
+                          <span className="sr-only">{t('common.delete')}</span>
                         </Button>
                       ) : null}
                     </div>
@@ -367,15 +368,13 @@ export function BackupsPage() {
 
       <ConfirmDialog
         open={toRestore !== null}
-        title="Restaurer cette sauvegarde ?"
+        title={t('backups.restoreTitle')}
         consequence={
           toRestore
-            ? `Les mondes et configurations actuels seront remplacés par ceux du ${new Date(
-                toRestore.created_at,
-              ).toLocaleString('fr-FR')}. Une sauvegarde de sécurité de l'état actuel est prise automatiquement avant.`
+            ? t('backups.restoreConsequence', { date: formatDateTime(toRestore.created_at) })
             : undefined
         }
-        confirmLabel="Restaurer"
+        confirmLabel={t('backups.restore')}
         danger
         requireTyping={server.name}
         loading={restore.isPending}
@@ -386,9 +385,9 @@ export function BackupsPage() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title="Supprimer cette sauvegarde ?"
-        consequence="L'archive sera définitivement effacée du disque."
-        confirmLabel="Supprimer"
+        title={t('backups.deleteTitle')}
+        consequence={t('backups.deleteConsequence')}
+        confirmLabel={t('common.delete')}
         danger
         loading={remove.isPending}
         onConfirm={() => toDelete && remove.mutate(toDelete)}

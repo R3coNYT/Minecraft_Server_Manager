@@ -213,13 +213,13 @@ class TestParseSteps:
         assert [step.action for step in steps] == ["say", "delay", "give"]
 
     def test_empty_sequence_is_refused(self) -> None:
-        with pytest.raises(ValidationError, match="vide"):
+        with pytest.raises(ValidationError, match="Empty"):
             parse_steps([])
 
     def test_oversized_sequence_is_refused(self) -> None:
         steps = [{"action": "say", "params": {"message": "x"}}] * (MAX_STEPS + 1)
 
-        with pytest.raises(ValidationError, match="trop long"):
+        with pytest.raises(ValidationError, match="too long"):
             parse_steps(steps)
 
     def test_error_points_at_the_faulty_step(self) -> None:
@@ -232,7 +232,7 @@ class TestParseSteps:
                 ]
             )
 
-        assert "Étape 2" in excinfo.value.message
+        assert "Step 2" in excinfo.value.message
 
     def test_max_danger_of_a_sequence(self) -> None:
         steps = parse_steps(

@@ -28,10 +28,11 @@ from msm.api.deps import (
 from msm.api.schemas import CsrfOut, LoginRequest, MeOut, PasswordChangeRequest, UserOut
 from msm.config import Settings
 from msm.db.models.user import User
+from msm.i18n import tr
 from msm.security.rbac import AccessContext, build_context
 from msm.security.tokens import generate_token
 
-router = APIRouter(prefix="/auth", tags=["authentification"])
+router = APIRouter(prefix="/auth", tags=["authentication"])
 
 
 def _set_session_cookies(response: Response, token: str, settings: Settings) -> str:
@@ -73,7 +74,7 @@ def _clear_session_cookies(response: Response, settings: Settings) -> None:
     response.delete_cookie(CSRF_COOKIE_NAME, path="/")
 
 
-@router.post("/login", response_model=MeOut, summary="Ouvrir une session")
+@router.post("/login", response_model=MeOut, summary="Sign in")
 async def login(
     payload: LoginRequest,
     response: Response,
@@ -95,7 +96,7 @@ async def login(
     return _me(user, build_context(user))
 
 
-@router.post("/logout", summary="Fermer la session", dependencies=[CsrfProtected])
+@router.post("/logout", summary="Sign out", dependencies=[CsrfProtected])
 async def logout(
     response: Response,
     auth: AuthServiceDep,
@@ -107,16 +108,16 @@ async def logout(
     if msm_session:
         await auth.logout(msm_session, ip_address=ip)
     _clear_session_cookies(response, settings)
-    return {"status": "déconnecté"}
+    return {"status": "signed_out"}
 
 
-@router.get("/me", response_model=MeOut, summary="Compte courant")
+@router.get("/me", response_model=MeOut, summary="Current account")
 async def me(user: CurrentUser, context: GlobalContext) -> MeOut:
     """Profil de l'utilisateur connecté et ses permissions effectives."""
     return _me(user, context)
 
 
-@router.get("/csrf", response_model=CsrfOut, summary="Renouveler le jeton anti-CSRF")
+@router.get("/csrf", response_model=CsrfOut, summary="Renew the anti-CSRF token")
 async def csrf(response: Response, settings: AppSettings, user: CurrentUser) -> CsrfOut:
     """Fournit un jeton anti-CSRF frais, par exemple après un rechargement."""
     token = generate_token()
@@ -132,7 +133,7 @@ async def csrf(response: Response, settings: AppSettings, user: CurrentUser) -> 
     return CsrfOut(csrf_token=token)
 
 
-@router.post("/password", summary="Changer son mot de passe", dependencies=[CsrfProtected])
+@router.post("/password", summary="Change own password", dependencies=[CsrfProtected])
 async def change_password(
     payload: PasswordChangeRequest,
     response: Response,
@@ -149,4 +150,4 @@ async def change_password(
         ip_address=ip,
     )
     _clear_session_cookies(response, settings)
-    return {"status": "mot de passe modifié", "detail": "Toutes les sessions ont été fermées."}
+    return {"status": "password_changed", "detail": tr("All sessions have been closed.")}

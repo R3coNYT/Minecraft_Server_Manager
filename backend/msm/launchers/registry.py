@@ -8,6 +8,7 @@ Ajouter un launcher se résume à l'enregistrer ici (ou depuis un module externe
 from __future__ import annotations
 
 from msm.exceptions import LaunchError
+from msm.i18n import tr
 from msm.launchers.base import LaunchContext, Launcher, ProcessSpec
 from msm.launchers.batch import BatchLauncher
 from msm.launchers.custom import CustomLauncher
@@ -20,7 +21,7 @@ _REGISTRY: dict[str, Launcher] = {}
 def register(launcher: Launcher, *, replace: bool = False) -> None:
     """Enregistre un launcher sous sa clé."""
     if launcher.key in _REGISTRY and not replace:
-        raise ValueError(f"Un launcher est déjà enregistré sous la clé « {launcher.key} ».")
+        raise ValueError(f"A launcher is already registered under the key {launcher.key!r}.")
     _REGISTRY[launcher.key] = launcher
 
 
@@ -29,11 +30,11 @@ def get(key: str) -> Launcher:
     try:
         return _REGISTRY[key]
     except KeyError:
-        known = ", ".join(sorted(_REGISTRY)) or "aucun"
+        known = ", ".join(sorted(_REGISTRY)) or tr("none")
         raise LaunchError(
-            "Mode de démarrage inconnu.",
-            cause=f"« {key} » ne correspond à aucun mode de démarrage enregistré.",
-            remediation=f"Choisir l'un des modes disponibles : {known}.",
+            tr("Unknown start method."),
+            cause=tr("“{key}” matches no registered start method.", key=key),
+            remediation=tr("Choose one of the available methods: {methods}.", methods=known),
         ) from None
 
 
@@ -47,8 +48,8 @@ def describe_all() -> list[dict[str, str | None]]:
     return [
         {
             "key": launcher.key,
-            "label": launcher.label,
-            "description": launcher.description,
+            "label": tr(launcher.label),
+            "description": tr(launcher.description),
             "unavailable_reason": launcher.is_available(),
         }
         for launcher in all_launchers()

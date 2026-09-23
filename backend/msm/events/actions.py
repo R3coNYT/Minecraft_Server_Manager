@@ -26,6 +26,7 @@ from typing import Any, ClassVar
 from msm.core import commands
 from msm.core.danger import DangerLevel, classify
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 
 #: Durée maximale d'une attente, pour qu'un événement mal saisi ne bloque pas une
 #: exécution pendant des jours.
@@ -72,12 +73,12 @@ class Field:
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
-            "label": self.label,
+            "label": tr(self.label),
             "type": self.type,
             "required": self.required,
             "default": self.default,
-            "placeholder": self.placeholder,
-            "help": self.help,
+            "placeholder": tr(self.placeholder) if self.placeholder else "",
+            "help": tr(self.help) if self.help else "",
             "minimum": self.minimum,
             "maximum": self.maximum,
         }
@@ -108,8 +109,8 @@ class Action(ABC):
     def to_dict(self) -> dict[str, Any]:
         return {
             "key": self.key,
-            "label": self.label,
-            "description": self.description,
+            "label": tr(self.label),
+            "description": tr(self.description) if self.description else "",
             "danger": self.danger.name,
             "fields": [item.to_dict() for item in self.fields],
         }
@@ -120,15 +121,19 @@ class Action(ABC):
         value = str(params.get(name, "") or "").strip()
         if not value:
             raise ValidationError(
-                f"{label} manquant.",
-                cause=f"Le champ « {label} » est vide.",
-                remediation=f"Saisir {label.lower()}.",
+                tr("Missing value: {label}.", label=tr(label)),
+                cause=tr("The field “{label}” is empty.", label=tr(label)),
+                remediation=tr("Fill in the field “{label}”.", label=tr(label)),
             )
         if len(value) > max_length:
             raise ValidationError(
-                f"{label} trop long.",
-                cause=f"{len(value)} caractères pour un maximum de {max_length}.",
-                remediation="Raccourcir le texte.",
+                tr("Too long: {label}.", label=tr(label)),
+                cause=tr(
+                    "{length} characters for a maximum of {maximum}.",
+                    length=len(value),
+                    maximum=max_length,
+                ),
+                remediation=tr("Shorten the text."),
             )
         return value
 
@@ -150,15 +155,15 @@ class SayAction(Action):
     """Message diffusé dans le chat de tous les joueurs."""
 
     key = "say"
-    label = "Message global"
-    description = "Affiche un message dans le chat de tous les joueurs connectés."
-    fields = (Field("message", "Message", "text", placeholder="Bonjour à tous !"),)
+    label = "Broadcast message"
+    description = "Shows a message in the chat of every connected player."
+    fields = (Field("message", "Message", "text", placeholder="Hello everyone!"),)
 
     def validate(self, params: dict[str, Any]) -> dict[str, Any]:
         return {"message": self._text(params, "message", label="Message")}
 
     def describe(self, params: dict[str, Any]) -> str:
-        return f"Message global : « {params['message']} »"
+        return tr("Broadcast message: “{message}”", message=params["message"])
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         sent = await ctx.send(commands.build_say(params["message"]))
@@ -169,33 +174,31 @@ class TitleAction(Action):
     """Grand texte affiché au centre de l'écran."""
 
     key = "title"
-    label = "Titre à l'écran"
-    description = "Affiche un grand texte, avec un sous-titre facultatif."
+    label = "On-screen title"
+    description = "Shows large text, with an optional subtitle."
     fields = (
-        Field("title", "Titre", "text", placeholder="ÉVÉNEMENT"),
+        Field("title", "Title", "text", placeholder="EVENT"),
         Field(
             "subtitle",
-            "Sous-titre",
+            "Subtitle",
             "text",
             required=False,
-            placeholder="L'événement commence !",
+            placeholder="The event is starting!",
         ),
-        Field("target", "Cible", "target", required=False, default="@a"),
+        Field("target", "Target", "target", required=False, default="@a"),
         Field(
             "fade_in",
-            "Apparition (ticks)",
+            "Fade in (ticks)",
             "number",
             required=False,
             default=10,
             minimum=0,
             maximum=200,
         ),
-        Field(
-            "stay", "Durée (ticks)", "number", required=False, default=70, minimum=0, maximum=600
-        ),
+        Field("stay", "Stay (ticks)", "number", required=False, default=70, minimum=0, maximum=600),
         Field(
             "fade_out",
-            "Disparition (ticks)",
+            "Fade out (ticks)",
             "number",
             required=False,
             default=20,
@@ -206,7 +209,7 @@ class TitleAction(Action):
 
     def validate(self, params: dict[str, Any]) -> dict[str, Any]:
         clean: dict[str, Any] = {
-            "title": self._text(params, "title", label="Titre", max_length=256),
+            "title": self._text(params, "title", label="Title", max_length=256),
             "target": commands.validate_target(str(params.get("target") or "@a")),
         }
         subtitle = str(params.get("subtitle", "") or "").strip()
@@ -219,8 +222,13 @@ class TitleAction(Action):
 
     def describe(self, params: dict[str, Any]) -> str:
         subtitle = params.get("subtitle")
-        detail = f" / « {subtitle} »" if subtitle else ""
-        return f"Titre à l'écran : « {params['title']} »{detail}"
+        if subtitle:
+            return tr(
+                "On-screen title: “{title}” / “{subtitle}”",
+                title=params["title"],
+                subtitle=subtitle,
+            )
+        return tr("On-screen title: “{title}”", title=params["title"])
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         target = params["target"]
@@ -254,11 +262,11 @@ class ActionBarAction(Action):
     """Message discret affiché au-dessus de la barre d'objets."""
 
     key = "actionbar"
-    label = "Barre d'action"
-    description = "Affiche un message court au-dessus de la barre d'objets."
+    label = "Action bar"
+    description = "Shows a short message above the hotbar."
     fields = (
-        Field("message", "Message", "text", placeholder="Plus que 5 minutes !"),
-        Field("target", "Cible", "target", required=False, default="@a"),
+        Field("message", "Message", "text", placeholder="Only 5 minutes left!"),
+        Field("target", "Target", "target", required=False, default="@a"),
     )
 
     def validate(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -268,7 +276,7 @@ class ActionBarAction(Action):
         }
 
     def describe(self, params: dict[str, Any]) -> str:
-        return f"Barre d'action : « {params['message']} »"
+        return tr("Action bar: “{message}”", message=params["message"])
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         sent = await ctx.send(
@@ -286,17 +294,17 @@ class GiveAction(Action):
     """Distribution d'un objet."""
 
     key = "give"
-    label = "Donner un objet"
-    description = "Donne un objet à un joueur ou à tous les joueurs connectés."
+    label = "Give an item"
+    description = "Gives an item to one player or to every connected player."
     fields = (
-        Field("item", "Objet", "text", placeholder="diamond", help="Identifiant Minecraft."),
-        Field("count", "Quantité", "number", default=1, minimum=1, maximum=6400),
-        Field("target", "Cible", "target", required=False, default="@a"),
+        Field("item", "Item", "text", placeholder="diamond", help="Minecraft identifier."),
+        Field("count", "Quantity", "number", default=1, minimum=1, maximum=6400),
+        Field("target", "Target", "target", required=False, default="@a"),
     )
 
     def validate(self, params: dict[str, Any]) -> dict[str, Any]:
         return {
-            "item": commands.validate_resource(str(params.get("item", "")), kind="objet"),
+            "item": commands.validate_resource(str(params.get("item", "")), kind="item"),
             "count": commands.validate_count(_positive_int(params.get("count", 1), "count")),
             "target": commands.validate_target(str(params.get("target") or "@a")),
         }
@@ -304,7 +312,12 @@ class GiveAction(Action):
     def describe(self, params: dict[str, Any]) -> str:
         # Le signe multiplié est volontaire : il se lit mieux que la lettre x
         # dans une liste d'étapes.
-        return f"Donner {params['count']} × {params['item']} à {params['target']}"  # noqa: RUF001
+        return tr(
+            "Give {count} × {item} to {target}",  # noqa: RUF001
+            count=params["count"],
+            item=params["item"],
+            target=params["target"],
+        )
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         sent = await ctx.send(
@@ -317,16 +330,16 @@ class TeleportAction(Action):
     """Téléportation vers un joueur ou des coordonnées."""
 
     key = "teleport"
-    label = "Téléporter"
-    description = "Téléporte des joueurs vers un autre joueur ou vers des coordonnées."
+    label = "Teleport"
+    description = "Teleports players to another player or to coordinates."
     fields = (
-        Field("target", "Qui déplacer", "target", default="@a"),
+        Field("target", "Who to move", "target", default="@a"),
         Field(
             "destination",
             "Destination",
             "text",
-            placeholder="Flavien ou 100 64 -200",
-            help="Pseudo, sélecteur, ou trois coordonnées séparées par des espaces.",
+            placeholder="Steve or 100 64 -200",
+            help="Username, selector, or three coordinates separated by spaces.",
         ),
     )
 
@@ -340,9 +353,9 @@ class TeleportAction(Action):
                 coordinates = [float(part) for part in parts]
             except ValueError:
                 raise ValidationError(
-                    "Destination invalide.",
-                    cause=f"« {raw} » ne ressemble ni à un pseudo ni à des coordonnées.",
-                    remediation="Saisir un pseudo, ou trois nombres séparés par des espaces.",
+                    tr("Invalid destination."),
+                    cause=tr("“{value}” looks like neither a username nor coordinates.", value=raw),
+                    remediation=tr("Enter a username, or three numbers separated by spaces."),
                 ) from None
             return {"target": target, "coordinates": coordinates}
 
@@ -351,8 +364,18 @@ class TeleportAction(Action):
     def describe(self, params: dict[str, Any]) -> str:
         if "coordinates" in params:
             x, y, z = params["coordinates"]
-            return f"Téléporter {params['target']} en {x:g} {y:g} {z:g}"
-        return f"Téléporter {params['target']} vers {params['destination']}"
+            return tr(
+                "Teleport {target} to {x} {y} {z}",
+                target=params["target"],
+                x=f"{x:g}",
+                y=f"{y:g}",
+                z=f"{z:g}",
+            )
+        return tr(
+            "Teleport {target} to {destination}",
+            target=params["target"],
+            destination=params["destination"],
+        )
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         if "coordinates" in params:
@@ -368,16 +391,16 @@ class KillAction(Action):
     """Élimination de joueurs ou d'entités."""
 
     key = "kill"
-    label = "Tuer"
-    description = "Tue les cibles désignées. Irréversible."
+    label = "Kill"
+    description = "Kills the given targets. Cannot be undone."
     danger = DangerLevel.DESTRUCTIVE
-    fields = (Field("target", "Cible", "target", default="@a"),)
+    fields = (Field("target", "Target", "target", default="@a"),)
 
     def validate(self, params: dict[str, Any]) -> dict[str, Any]:
         return {"target": commands.validate_target(str(params.get("target") or "@a"))}
 
     def describe(self, params: dict[str, Any]) -> str:
-        return f"Tuer {params['target']}"
+        return tr("Kill {target}", target=params["target"])
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         sent = await ctx.send(commands.build_kill(params["target"]))
@@ -391,10 +414,12 @@ class DelayAction(Action):
     """Pause entre deux étapes."""
 
     key = "delay"
-    label = "Attendre"
-    description = "Marque une pause avant l'étape suivante."
+    label = "Wait"
+    description = "Pauses before the next step."
     fields = (
-        Field("seconds", "Durée (secondes)", "number", default=10, minimum=1, maximum=MAX_DELAY_S),
+        Field(
+            "seconds", "Duration (seconds)", "number", default=10, minimum=1, maximum=MAX_DELAY_S
+        ),
     )
 
     def validate(self, params: dict[str, Any]) -> dict[str, Any]:
@@ -404,8 +429,12 @@ class DelayAction(Action):
     def describe(self, params: dict[str, Any]) -> str:
         seconds = params["seconds"]
         if seconds >= 60:
-            return f"Attendre {seconds // 60} min {seconds % 60:02d} s"
-        return f"Attendre {seconds} s"
+            return tr(
+                "Wait {minutes} min {seconds} s",
+                minutes=seconds // 60,
+                seconds=f"{seconds % 60:02d}",
+            )
+        return tr("Wait {seconds} s", seconds=seconds)
 
     async def execute(self, ctx: ExecutionContext, params: dict[str, Any]) -> ActionResult:
         await ctx.sleep(float(params["seconds"]))
@@ -422,15 +451,15 @@ class CommandAction(Action):
     """
 
     key = "command"
-    label = "Commande personnalisée"
-    description = "Exécute une commande console arbitraire."
+    label = "Custom command"
+    description = "Runs an arbitrary console command."
     fields = (
         Field(
             "command",
-            "Commande",
+            "Command",
             "text",
             placeholder="weather clear",
-            help="Sans le / initial. Le niveau de risque est déduit de la commande.",
+            help="Without the leading /. The risk level is inferred from the command.",
         ),
     )
 
@@ -438,7 +467,7 @@ class CommandAction(Action):
         return {"command": commands.sanitize_command(str(params.get("command", "")))}
 
     def describe(self, params: dict[str, Any]) -> str:
-        return f"Commande : {params['command']}"
+        return tr("Command: {command}", command=params["command"])
 
     def danger_for(self, params: dict[str, Any]) -> DangerLevel:
         return classify(params.get("command", ""))
@@ -455,16 +484,21 @@ def _positive_int(value: Any, name: str, *, maximum: int = 10_000) -> int:
         number = int(value)
     except (TypeError, ValueError):
         raise ValidationError(
-            "Valeur numérique attendue.",
-            cause=f"« {value} » n'est pas un nombre entier ({name}).",
-            remediation="Saisir un nombre entier.",
+            tr("Numeric value expected."),
+            cause=tr("“{value}” is not a whole number ({name}).", value=value, name=name),
+            remediation=tr("Enter a whole number."),
         ) from None
 
     if number < 0 or number > maximum:
         raise ValidationError(
-            "Valeur hors limites.",
-            cause=f"{number} n'est pas compris entre 0 et {maximum} ({name}).",
-            remediation=f"Saisir une valeur entre 0 et {maximum}.",
+            tr("Value out of range."),
+            cause=tr(
+                "{number} is not between 0 and {maximum} ({name}).",
+                number=number,
+                maximum=maximum,
+                name=name,
+            ),
+            remediation=tr("Enter a value between 0 and {maximum}.", maximum=maximum),
         )
     return number
 

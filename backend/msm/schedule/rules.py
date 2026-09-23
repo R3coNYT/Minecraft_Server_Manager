@@ -28,6 +28,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 
 #: Un intervalle plus court n'a pas de sens pour les actions concernées
 #: (sauvegarde, redémarrage) et saturerait la machine.
@@ -36,13 +37,13 @@ MAX_INTERVAL_MINUTES = 60 * 24 * 30
 
 #: Jours de la semaine, du lundi au dimanche — la convention de `weekday()`.
 DAY_LABELS: tuple[str, ...] = (
-    "lundi",
-    "mardi",
-    "mercredi",
-    "jeudi",
-    "vendredi",
-    "samedi",
-    "dimanche",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
 )
 
 
@@ -88,9 +89,9 @@ def _zone(name: str) -> ZoneInfo:
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError, KeyError) as exc:
         raise ValidationError(
-            "Fuseau horaire inconnu.",
-            cause=f"« {name} » n'est pas un identifiant de fuseau reconnu.",
-            remediation="Utiliser un identifiant comme « Europe/Paris » ou « UTC ».",
+            tr("Unknown time zone."),
+            cause=tr("“{name}” is not a recognised time zone identifier.", name=name),
+            remediation=tr("Use an identifier such as “Europe/Paris” or “UTC”."),
         ) from exc
 
 
@@ -98,43 +99,48 @@ def parse_rule(raw: Any) -> Rule:
     """Valide une règle venant de l'interface ou de la base."""
     if not isinstance(raw, dict):
         raise ValidationError(
-            "Règle de planification invalide.",
-            cause="La règle doit être un objet décrivant le déclenchement.",
-            remediation="Reconstruire la planification depuis l'interface.",
+            tr("Invalid schedule rule."),
+            cause=tr("The rule must be an object describing the trigger."),
+            remediation=tr("Rebuild the schedule from the interface."),
         )
 
     try:
         trigger = TriggerKind(str(raw.get("trigger", "")).upper())
     except ValueError as exc:
         raise ValidationError(
-            "Type de déclenchement inconnu.",
-            cause=f"« {raw.get('trigger')} » n'est pas un déclenchement reconnu.",
-            remediation="Choisir « intervalle », « quotidien » ou « hebdomadaire ».",
+            tr("Unknown trigger type."),
+            cause=tr("“{trigger}” is not a recognised trigger.", trigger=raw.get("trigger")),
+            remediation=tr("Choose “interval”, “daily” or “weekly”."),
         ) from exc
 
     timezone = str(raw.get("timezone") or "UTC")
     _zone(timezone)
 
     if trigger is TriggerKind.INTERVAL:
-        minutes = _int(raw.get("interval_minutes"), label="Intervalle")
+        minutes = _int(raw.get("interval_minutes"), label=tr("Interval"))
         if not MIN_INTERVAL_MINUTES <= minutes <= MAX_INTERVAL_MINUTES:
             raise ValidationError(
-                "Intervalle hors limites.",
-                cause=(
-                    f"{minutes} minutes demandées, "
-                    f"pour {MIN_INTERVAL_MINUTES} à {MAX_INTERVAL_MINUTES}."
+                tr("Interval out of range."),
+                cause=tr(
+                    "{minutes} minutes requested, for {minimum} to {maximum}.",
+                    minutes=minutes,
+                    minimum=MIN_INTERVAL_MINUTES,
+                    maximum=MAX_INTERVAL_MINUTES,
                 ),
-                remediation=f"Choisir un intervalle d'au moins {MIN_INTERVAL_MINUTES} minutes.",
+                remediation=tr(
+                    "Choose an interval of at least {minimum} minutes.",
+                    minimum=MIN_INTERVAL_MINUTES,
+                ),
             )
         return Rule(trigger=trigger, interval_minutes=minutes, timezone=timezone)
 
-    hour = _int(raw.get("hour"), label="Heure")
-    minute = _int(raw.get("minute", 0), label="Minute")
+    hour = _int(raw.get("hour"), label=tr("Hour"))
+    minute = _int(raw.get("minute", 0), label=tr("Minute"))
     if not 0 <= hour <= 23 or not 0 <= minute <= 59:
         raise ValidationError(
-            "Heure invalide.",
-            cause=f"{hour:02d}:{minute:02d} n'est pas une heure valide.",
-            remediation="Saisir une heure entre 00:00 et 23:59.",
+            tr("Invalid time."),
+            cause=tr("{time} is not a valid time.", time=f"{hour:02d}:{minute:02d}"),
+            remediation=tr("Enter a time between 00:00 and 23:59."),
         )
 
     if trigger is TriggerKind.DAILY:
@@ -143,16 +149,16 @@ def parse_rule(raw: Any) -> Rule:
     raw_days = raw.get("days") or []
     if not isinstance(raw_days, list) or not raw_days:
         raise ValidationError(
-            "Aucun jour sélectionné.",
-            cause="Une planification hebdomadaire doit viser au moins un jour.",
-            remediation="Cocher au moins un jour de la semaine.",
+            tr("No day selected."),
+            cause=tr("A weekly schedule must target at least one day."),
+            remediation=tr("Tick at least one day of the week."),
         )
-    days = sorted({_int(day, label="Jour") for day in raw_days})
+    days = sorted({_int(day, label=tr("Day")) for day in raw_days})
     if any(day < 0 or day > 6 for day in days):
         raise ValidationError(
-            "Jour invalide.",
-            cause="Les jours vont de 0 (lundi) à 6 (dimanche).",
-            remediation="Reconstruire la planification depuis l'interface.",
+            tr("Invalid day."),
+            cause=tr("Days range from 0 (Monday) to 6 (Sunday)."),
+            remediation=tr("Rebuild the schedule from the interface."),
         )
     return Rule(
         trigger=trigger,
@@ -168,9 +174,9 @@ def _int(value: Any, *, label: str) -> int:
         return int(value)
     except (TypeError, ValueError) as exc:
         raise ValidationError(
-            f"{label} invalide.",
-            cause=f"« {value} » n'est pas un nombre entier.",
-            remediation=f"Saisir {label.lower()} sous forme de nombre.",
+            tr("Invalid value: {label}.", label=label),
+            cause=tr("“{value}” is not a whole number.", value=value),
+            remediation=tr("Enter {label} as a number.", label=label.lower()),
         ) from exc
 
 
@@ -233,9 +239,9 @@ def next_occurrence(rule: Rule, after: datetime, *, last_run: datetime | None = 
             return candidate
 
     raise ValidationError(  # pragma: no cover - impossible avec `days` non vide
-        "Planification impossible.",
-        cause="Aucune occurrence trouvée dans les huit prochains jours.",
-        remediation="Vérifier les jours sélectionnés.",
+        tr("Cannot schedule."),
+        cause=tr("No occurrence found in the next eight days."),
+        remediation=tr("Check the selected days."),
     )
 
 
@@ -245,12 +251,12 @@ def describe(rule: Rule) -> str:
         minutes = rule.interval_minutes
         if minutes % 60 == 0:
             hours = minutes // 60
-            return f"Toutes les {hours} h" if hours > 1 else "Toutes les heures"
-        return f"Toutes les {minutes} min"
+            return tr("Every {hours} h", hours=hours) if hours > 1 else tr("Every hour")
+        return tr("Every {minutes} min", minutes=minutes)
 
     moment = f"{rule.hour:02d}:{rule.minute:02d}"
     if rule.trigger is TriggerKind.DAILY:
-        return f"Chaque jour à {moment} ({rule.timezone})"
+        return tr("Every day at {time} ({zone})", time=moment, zone=rule.timezone)
 
-    days = ", ".join(DAY_LABELS[day] for day in rule.days)
-    return f"Chaque {days} à {moment} ({rule.timezone})"
+    days = ", ".join(tr(DAY_LABELS[day]) for day in rule.days)
+    return tr("Every {days} at {time} ({zone})", days=days, time=moment, zone=rule.timezone)

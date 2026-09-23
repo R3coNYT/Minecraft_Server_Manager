@@ -20,6 +20,7 @@ import { Badge, Card, CardHeader, EmptyState, Input, LoadingBlock } from '@/comp
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { PlayerAvatar } from '@/components/players/PlayerAvatar'
 import { PlayerActionsMenu } from '@/components/players/PlayerActionsMenu'
+import { t, tn } from '@/i18n'
 
 export function PlayersPage() {
   const { server, status } = useServerContext()
@@ -60,10 +61,10 @@ export function PlayersPage() {
 
         <Card>
           <CardHeader
-            title={`${onlineCount} joueur${onlineCount > 1 ? 's' : ''} connecté${onlineCount > 1 ? 's' : ''}`}
+            title={tn('players.online', onlineCount)}
             subtitle={
               data && data.length > onlineCount
-                ? `${data.length - onlineCount} autre(s) déjà venu(s) sur ce serveur`
+                ? tn('players.others', data.length - onlineCount)
                 : undefined
             }
             action={
@@ -73,7 +74,7 @@ export function PlayersPage() {
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Rechercher…"
+                    placeholder={t('players.search')}
                     className="border-0 bg-transparent px-0 py-1.5 text-xs focus:border-0"
                   />
                 </div>
@@ -86,17 +87,17 @@ export function PlayersPage() {
               icon={<Users className="size-8" />}
               title={
                 query
-                  ? 'Aucun joueur ne correspond'
+                  ? t('players.noMatch')
                   : running
-                    ? 'Aucun joueur connecté'
-                    : 'Serveur arrêté'
+                    ? t('players.noneOnline')
+                    : t('players.stopped')
               }
               description={
                 query
-                  ? 'Modifier la recherche.'
+                  ? t('players.changeSearch')
                   : running
-                    ? 'Les arrivées et départs apparaîtront ici en temps réel.'
-                    : "Démarrer le serveur pour suivre les joueurs. L'historique reste consultable."
+                    ? t('players.liveHint')
+                    : t('players.stoppedHint')
               }
             />
           ) : (
@@ -104,11 +105,11 @@ export function PlayersPage() {
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
                   <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
-                    <th className="px-5 py-2.5 font-medium">Joueur</th>
-                    <th className="px-5 py-2.5 font-medium">Statut</th>
-                    <th className="px-5 py-2.5 font-medium">Dernière présence</th>
-                    <th className="px-5 py-2.5 font-medium" title="Non exposé par Minecraft">
-                      Ping
+                    <th className="px-5 py-2.5 font-medium">{t('players.player')}</th>
+                    <th className="px-5 py-2.5 font-medium">{t('players.status')}</th>
+                    <th className="px-5 py-2.5 font-medium">{t('players.lastSeen')}</th>
+                    <th className="px-5 py-2.5 font-medium" title={t('players.pingHint')}>
+                      {t('players.ping')}
                     </th>
                     <th className="px-5 py-2.5" />
                   </tr>
@@ -126,7 +127,7 @@ export function PlayersPage() {
                           <div className="min-w-0">
                             <p className="truncate text-slate-100">{player.username}</p>
                             <p className="truncate font-mono text-[11px] text-slate-600">
-                              {player.uuid ?? 'UUID inconnu'}
+                              {player.uuid ?? t('players.unknownUuid')}
                             </p>
                           </div>
                         </div>
@@ -136,15 +137,15 @@ export function PlayersPage() {
                         <div className="flex flex-wrap items-center gap-1.5">
                           {player.online ? (
                             <Badge className="bg-emerald-500/10 text-emerald-300 ring-emerald-500/30">
-                              En ligne
+                              {t('players.onlineBadge')}
                             </Badge>
                           ) : (
-                            <Badge>Hors ligne</Badge>
+                            <Badge>{t('players.offlineBadge')}</Badge>
                           )}
                           {player.is_op ? (
                             <Badge className="bg-amber-500/10 text-amber-300 ring-amber-500/30">
                               <Shield className="size-3" />
-                              Opérateur
+                              {t('players.operator')}
                               {player.op_level ? ` ${player.op_level}` : ''}
                             </Badge>
                           ) : null}
@@ -154,25 +155,24 @@ export function PlayersPage() {
                               {...(player.ban_reason ? { title: player.ban_reason } : {})}
                             >
                               <Ban className="size-3" />
-                              Banni
+                              {t('players.banned')}
                             </Badge>
                           ) : null}
                         </div>
                       </td>
 
                       <td className="px-5 py-2.5 text-xs text-slate-500">
-                        {player.online ? 'Maintenant' : formatRelative(player.last_seen)}
+                        {player.online ? t('players.now') : formatRelative(player.last_seen)}
                         {player.total_sessions > 0 ? (
                           <span className="ml-1.5 text-slate-600">
-                            · {player.total_sessions} session
-                            {player.total_sessions > 1 ? 's' : ''}
+                            {tn('players.sessions', player.total_sessions)}
                           </span>
                         ) : null}
                       </td>
 
                       <td
                         className="px-5 py-2.5 text-slate-600"
-                        title="Minecraft n'expose pas le ping par joueur"
+                        title={t('players.pingNotExposed')}
                       >
                         {player.ping_ms ?? '—'}
                       </td>
@@ -193,8 +193,7 @@ export function PlayersPage() {
         </Card>
 
         <p className="px-1 text-xs text-slate-600">
-          Le ping par joueur n'est pas exposé par Minecraft : aucune commande console ne le
-          fournit. La colonne se remplira si un fournisseur RCON ou un plugin est ajouté.
+          {t('players.pingNote')}
         </p>
       </div>
     </div>

@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from msm.exceptions import LaunchError
+from msm.i18n import tr
 from msm.launchers.base import LaunchContext, Launcher, ProcessSpec
 
 
@@ -17,10 +18,10 @@ class CustomLauncher(Launcher):
     """Démarre le serveur avec une liste d'arguments définie par l'administrateur."""
 
     key: ClassVar[str] = "custom"
-    label: ClassVar[str] = "Commande personnalisée"
+    label: ClassVar[str] = "Custom command"
     description: ClassVar[str] = (
-        "Liste d'arguments libre, exécutée sans interpréteur shell. "
-        "Le premier élément est le programme à lancer."
+        "Free-form argument list, run without a shell interpreter. "
+        "The first item is the program to launch."
     )
 
     def build_spec(self, ctx: LaunchContext) -> ProcessSpec:
@@ -28,28 +29,29 @@ class CustomLauncher(Launcher):
 
         if not ctx.custom_argv:
             raise LaunchError(
-                "Aucune commande personnalisée configurée.",
-                cause="La liste d'arguments de démarrage est vide.",
-                remediation=(
-                    "Saisir la commande sous forme d'arguments séparés, "
-                    "par exemple : `java`, `-Xmx4G`, `-jar`, `server.jar`, `nogui`."
+                tr("No custom command configured."),
+                cause=tr("The start argument list is empty."),
+                remediation=tr(
+                    "Enter the command as separate arguments, for example: "
+                    "`java`, `-Xmx4G`, `-jar`, `server.jar`, `nogui`."
                 ),
             )
 
         if any(not isinstance(arg, str) or not arg for arg in ctx.custom_argv):
             raise LaunchError(
-                "Commande personnalisée invalide.",
-                cause="Un des arguments est vide ou n'est pas du texte.",
-                remediation="Supprimer les arguments vides de la liste.",
+                tr("Invalid custom command."),
+                cause=tr("One of the arguments is empty or not text."),
+                remediation=tr("Remove the empty arguments from the list."),
             )
 
         program, *arguments = ctx.custom_argv
         resolved = self._resolve_executable(
             program,
-            label="Programme de démarrage",
-            remediation=(
-                f"Vérifier que « {program} » existe, est exécutable, "
-                "et est accessible depuis le PATH ou par chemin complet."
+            label=tr("Start program"),
+            remediation=tr(
+                "Check that “{program}” exists, is executable and can be reached from the "
+                "PATH or by its full path.",
+                program=program,
             ),
         )
 

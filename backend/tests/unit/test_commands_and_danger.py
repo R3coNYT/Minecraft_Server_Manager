@@ -109,7 +109,7 @@ class TestDangerClassification:
     def test_explanation_is_provided_for_risky_commands(self) -> None:
         assert explain("say bonjour") is None
         message = explain("stop")
-        assert message and "joueurs" in message
+        assert message and "player" in message
 
 
 class TestValidators:

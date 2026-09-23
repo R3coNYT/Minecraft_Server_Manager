@@ -7,6 +7,7 @@ import { useLifecycleActions } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { locale, t } from '@/i18n'
 
 interface ServerActionsProps {
   serverId: number
@@ -46,21 +47,23 @@ export function ServerActions({
         push({
           kind: result.forced ? 'warning' : 'success',
           title: result.forced
-            ? `« ${serverName} » a dû être arrêté de force`
-            : `« ${serverName} » est arrêté`,
+            ? t('actions.forcedTitle', { name: serverName })
+            : t('actions.stoppedTitle', { name: serverName }),
           detail: result.forced
-            ? "Le serveur n'a pas répondu à la commande d'arrêt propre."
-            : `Arrêt en ${result.duration_s.toFixed(1).replace('.', ',')} s.`,
+            ? t('actions.forcedDetail')
+            : t('actions.stoppedDetail', {
+                seconds: result.duration_s.toLocaleString(locale(), { maximumFractionDigits: 1 }),
+              }),
         })
       } else if (action === 'restart') {
         await actions.restart.mutateAsync()
-        push({ kind: 'success', title: `« ${serverName} » redémarre` })
+        push({ kind: 'success', title: t('actions.restarting', { name: serverName }) })
       } else {
         await actions.kill.mutateAsync()
         push({
           kind: 'warning',
-          title: `« ${serverName} » a été terminé`,
-          detail: "Le monde n'a pas été sauvegardé.",
+          title: t('actions.killedTitle', { name: serverName }),
+          detail: t('actions.killedDetail'),
         })
       }
       setPending(null)
@@ -73,9 +76,9 @@ export function ServerActions({
   const start = async () => {
     try {
       await actions.start.mutateAsync()
-      push({ kind: 'success', title: `« ${serverName} » démarre` })
+      push({ kind: 'success', title: t('actions.starting', { name: serverName }) })
     } catch (error) {
-      pushError(error, 'Démarrage impossible')
+      pushError(error, t('actions.startFailed'))
     }
   }
 
@@ -91,7 +94,7 @@ export function ServerActions({
             loading={actions.start.isPending}
             onClick={() => void start()}
           >
-            Démarrer
+            {t('actions.start')}
           </Button>
         ) : (
           <>
@@ -103,7 +106,7 @@ export function ServerActions({
               loading={actions.restart.isPending}
               onClick={() => setPending('restart')}
             >
-              Redémarrer
+              {t('actions.restart')}
             </Button>
             <Button
               size={size}
@@ -113,7 +116,7 @@ export function ServerActions({
               loading={actions.stop.isPending}
               onClick={() => setPending('stop')}
             >
-              Arrêter
+              {t('actions.stop')}
             </Button>
           </>
         )}
@@ -124,18 +127,18 @@ export function ServerActions({
             variant="ghost"
             icon={<Zap className="size-4" />}
             onClick={() => setPending('kill')}
-            title="Terminer le processus sans sauvegarder"
+            title={t('actions.killHint')}
           >
-            Forcer
+            {t('actions.kill')}
           </Button>
         ) : null}
       </div>
 
       <ConfirmDialog
         open={pending === 'stop'}
-        title={`Arrêter « ${serverName} » ?`}
-        consequence="Les joueurs connectés seront déconnectés. Le monde est sauvegardé avant l'arrêt."
-        confirmLabel="Arrêter"
+        title={t('actions.stopTitle', { name: serverName })}
+        consequence={t('actions.stopConsequence')}
+        confirmLabel={t('actions.stop')}
         danger
         loading={actions.stop.isPending}
         onConfirm={() => void run('stop')}
@@ -144,9 +147,9 @@ export function ServerActions({
 
       <ConfirmDialog
         open={pending === 'restart'}
-        title={`Redémarrer « ${serverName} » ?`}
-        consequence="Les joueurs seront déconnectés le temps du redémarrage."
-        confirmLabel="Redémarrer"
+        title={t('actions.restartTitle', { name: serverName })}
+        consequence={t('actions.restartConsequence')}
+        confirmLabel={t('actions.restart')}
         loading={actions.restart.isPending}
         onConfirm={() => void run('restart')}
         onClose={() => setPending(null)}
@@ -154,9 +157,9 @@ export function ServerActions({
 
       <ConfirmDialog
         open={pending === 'kill'}
-        title={`Forcer l'arrêt de « ${serverName} » ?`}
-        consequence="Le processus est terminé immédiatement : le monde n'est PAS sauvegardé et les dernières minutes de jeu seront perdues. À réserver aux serveurs qui ne répondent plus."
-        confirmLabel="Terminer le processus"
+        title={t('actions.killTitle', { name: serverName })}
+        consequence={t('actions.killConsequence')}
+        confirmLabel={t('actions.killConfirm')}
         danger
         requireTyping={serverName}
         loading={actions.kill.isPending}

@@ -32,6 +32,7 @@ from typing import Any, ClassVar
 
 import psutil
 
+from msm.i18n import tr
 from msm.launchers.base import ProcessSpec
 from msm.logging_conf import get_logger
 from msm.runtime.backends.base import STREAM_BUFFER_LIMIT, ProcessBackend, SpawnedProcess
@@ -157,10 +158,10 @@ class WindowsProcessBackend(ProcessBackend):
         moins atomique.
         """
         if not _HAS_PYWIN32:
-            return None, (
-                "pywin32 n'est pas installé : l'arrêt forcé parcourra l'arbre des "
-                "processus au lieu d'utiliser un Job Object. "
-                'Installer avec `pip install "msm[windows]"` pour un arrêt atomique.'
+            return None, tr(
+                "pywin32 is not installed: a forced stop will walk the process tree "
+                "instead of using a Job Object. Install it with "
+                '`pip install "msm[windows]"` for an atomic stop.'
             )
 
         try:  # pragma: no cover - dépend du système
@@ -185,9 +186,10 @@ class WindowsProcessBackend(ProcessBackend):
             return job, None
         except Exception as exc:  # pragma: no cover - dépend du système
             logger.warning("job_object_unavailable", pid=pid, error=str(exc))
-            return None, (
-                f"Impossible de créer un Job Object ({exc}). "
-                "L'arrêt forcé utilisera le parcours de l'arbre des processus."
+            return None, tr(
+                "Could not create a Job Object ({error}). A forced stop will walk the "
+                "process tree.",
+                error=exc,
             )
 
     def _kill_tree_via_psutil(self, pid: int, create_time: float | None) -> bool:
@@ -224,15 +226,15 @@ class WindowsProcessBackend(ProcessBackend):
             from msm.exceptions import ServerStartFailed
 
             raise ServerStartFailed(
-                "Impossible de lancer un serveur.",
-                cause=(
-                    "La boucle d'événements asyncio utilisée (SelectorEventLoop) ne sait "
-                    "pas créer de sous-processus sous Windows."
+                tr("Cannot launch a server."),
+                cause=tr(
+                    "The asyncio event loop in use (SelectorEventLoop) cannot create "
+                    "subprocesses on Windows."
                 ),
-                remediation=(
-                    "Démarrer MSM avec la boucle Proactor : "
+                remediation=tr(
+                    "Start MSM with the Proactor loop: "
                     "`asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())`, "
-                    "ou lancer uvicorn sans `--loop uvloop`."
+                    "or run uvicorn without `--loop uvloop`."
                 ),
             )
 

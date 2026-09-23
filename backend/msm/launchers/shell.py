@@ -17,6 +17,7 @@ import sys
 from typing import ClassVar
 
 from msm.exceptions import LaunchError
+from msm.i18n import tr
 from msm.launchers.base import LaunchContext, Launcher, ProcessSpec
 
 
@@ -24,24 +25,24 @@ class ShellLauncher(Launcher):
     """Démarre le serveur via un script ``.sh``."""
 
     key: ClassVar[str] = "shell"
-    label: ClassVar[str] = "Script shell (run.sh)"
-    description: ClassVar[str] = "Exécute un script shell, typiquement `run.sh` de Forge/NeoForge."
+    label: ClassVar[str] = "Shell script (run.sh)"
+    description: ClassVar[str] = "Runs a shell script, typically the Forge/NeoForge `run.sh`."
 
     def build_spec(self, ctx: LaunchContext) -> ProcessSpec:
         directory = self._require_directory(ctx)
 
         if not ctx.script_path:
             raise LaunchError(
-                "Aucun script configuré.",
-                cause="Le serveur est en mode « Script shell » mais aucun script n'est renseigné.",
-                remediation="Sélectionner le script de démarrage (par exemple `run.sh`).",
+                tr("No script configured."),
+                cause=tr("The server is in “Shell script” mode but no script is set."),
+                remediation=tr("Select the start script (for example `run.sh`)."),
             )
 
-        script = ctx.resolve_in_directory(ctx.script_path, label="Script de démarrage")
+        script = ctx.resolve_in_directory(ctx.script_path, label=tr("Start script"))
         self._require_file(
             script,
-            label="Script de démarrage",
-            remediation=f"Placer le script dans {directory} puis vérifier son nom.",
+            label=tr("Start script"),
+            remediation=tr("Put the script in {folder}, then check its name.", folder=directory),
         )
 
         argv: list[str]
@@ -51,20 +52,19 @@ class ShellLauncher(Launcher):
             bash = self._resolve_executable(
                 "bash",
                 label="bash",
-                remediation=(
-                    "Installer Git for Windows (qui fournit bash) ou WSL, puis s'assurer "
-                    "que `bash` est accessible dans le PATH. "
-                    "Sous Windows, un serveur Forge/NeoForge peut aussi être démarré "
-                    "via `run.bat` en changeant le mode de lancement."
+                remediation=tr(
+                    "Install Git for Windows (which provides bash) or WSL, then make sure "
+                    "`bash` is on the PATH. On Windows, a Forge/NeoForge server can also be "
+                    "started through `run.bat` by changing the start method."
                 ),
             )
             argv = [bash, str(script)]
         else:
             if not os.access(script, os.X_OK):
                 raise LaunchError(
-                    "Impossible de démarrer le serveur.",
-                    cause=f"{script.name} n'est pas exécutable.",
-                    remediation=f"chmod +x {script}",
+                    tr("Cannot start the server."),
+                    cause=tr("{script} is not executable.", script=script.name),
+                    remediation=tr("Run: chmod +x {script}", script=script),
                 )
             argv = [str(script)]
 

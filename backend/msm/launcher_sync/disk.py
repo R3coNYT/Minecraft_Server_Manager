@@ -14,6 +14,7 @@ import hashlib
 import shutil
 from pathlib import Path
 
+from msm.i18n import tr
 from msm.launcher_sync.plan import LocalFile, Plan
 from msm.logging_conf import get_logger
 from msm.security.safe_path import resolve_within
@@ -126,9 +127,9 @@ def apply_plan(server_dir: Path, staging_dir: Path, plan: Plan) -> list[str]:
                 target.unlink()
 
     if plan.installs:
-        messages.append(f"{len(plan.installs)} fichier(s) installé(s) ou mis à jour.")
+        messages.append(tr("{count} file(s) installed or updated.", count=len(plan.installs)))
     if plan.removes:
-        messages.append(f"{len(plan.removes)} fichier(s) retiré(s).")
+        messages.append(tr("{count} file(s) removed.", count=len(plan.removes)))
     return messages
 
 

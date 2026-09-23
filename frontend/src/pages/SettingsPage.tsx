@@ -11,9 +11,53 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Bell, Send, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useToasts } from '@/stores/toasts'
-import { Card, CardHeader, Checkbox, Field, Input, LoadingBlock } from '@/components/ui/primitives'
+import { Card, CardHeader, Checkbox, Field, Input, LoadingBlock, Select } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { t, useLanguage, type Language } from '@/i18n'
+import { UI_SETTINGS_KEY } from '@/components/common/LanguageBoundary'
+
+const LANGUAGE_NAMES: Record<Language, string> = { en: 'English', fr: 'Français' }
+
+/** Langue du panneau : un réglage global, partagé par tous les utilisateurs. */
+function LanguageCard() {
+  const queryClient = useQueryClient()
+  const pushError = useToasts((state) => state.pushError)
+  const language = useLanguage((state) => state.language)
+
+  const change = useMutation({
+    mutationFn: (value: Language) => api.ui.setLanguage(value),
+    onSuccess: (result) => {
+      queryClient.setQueryData(UI_SETTINGS_KEY, result)
+      // Les textes produits par le serveur (erreurs, résumés, libellés) changent
+      // aussi de langue : tout recharger plutôt que de les trier.
+      void queryClient.invalidateQueries()
+      useLanguage.getState().setLanguage(result.language)
+    },
+    onError: (error) => pushError(error),
+  })
+
+  return (
+    <Card>
+      <CardHeader title={t('settings.languageTitle')} subtitle={t('settings.languageSubtitle')} />
+      <div className="px-5 py-4">
+        <Field label={t('settings.language')}>
+          <Select
+            value={language}
+            disabled={change.isPending}
+            onChange={(event) => change.mutate(event.target.value as Language)}
+          >
+            {(Object.keys(LANGUAGE_NAMES) as Language[]).map((value) => (
+              <option key={value} value={value}>
+                {LANGUAGE_NAMES[value]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+    </Card>
+  )
+}
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
@@ -52,11 +96,11 @@ export function SettingsPage() {
     onSuccess: (result) =>
       push(
         result.sent
-          ? { kind: 'success', title: 'Message envoyé', detail: 'Vérifier le salon Discord.' }
+          ? { kind: 'success', title: t('settings.testSent'), detail: t('settings.testSentDetail') }
           : {
               kind: 'error',
-              title: "Discord n'a pas accepté le message",
-              detail: "Vérifier que le webhook existe toujours dans les réglages du salon.",
+              title: t('settings.testRefused'),
+              detail: t('settings.testRefusedDetail'),
             },
       ),
     onError: (error) => pushError(error),
@@ -73,10 +117,12 @@ export function SettingsPage() {
       <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
         <ErrorPanel error={settings.error} />
 
+        <LanguageCard />
+
         <Card>
           <CardHeader
-            title="Notifications Discord"
-            subtitle="Être prévenu quand quelque chose se passe mal, sans regarder le panneau."
+            title={t('settings.discordTitle')}
+            subtitle={t('settings.discordSubtitle')}
           />
 
           <div className="space-y-5 px-5 py-4">
@@ -84,18 +130,17 @@ export function SettingsPage() {
               <div className="flex items-start gap-2.5 rounded-lg border border-amber-900/60 bg-amber-950/30 px-3.5 py-3">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-400" />
                 <p className="text-sm text-amber-100/90">
-                  L'adresse enregistrée n'est plus déchiffrable : la clé secrète de MSM a changé.
-                  Les notifications sont inactives tant qu'elle n'est pas ressaisie.
+                  {t('settings.unreadable')}
                 </p>
               </div>
             ) : null}
 
             <Field
-              label="Adresse du webhook"
+              label={t('settings.webhook')}
               hint={
                 current?.webhook_configured
-                  ? `Enregistrée (${current.webhook_hint}). Saisir une nouvelle adresse pour la remplacer.`
-                  : 'Discord → Paramètres du salon → Intégrations → Webhooks → Copier l’URL.'
+                  ? t('settings.webhookSaved', { hint: current.webhook_hint ?? '' })
+                  : t('settings.webhookHelp')
               }
             >
               <div className="flex gap-2">
@@ -112,7 +157,7 @@ export function SettingsPage() {
                   loading={update.isPending}
                   onClick={() => update.mutate({ webhook_url: webhook })}
                 >
-                  Enregistrer
+                  {t('common.save')}
                 </Button>
               </div>
             </Field>
@@ -125,7 +170,7 @@ export function SettingsPage() {
                 loading={update.isPending}
                 onClick={() => update.mutate({ enabled: !current?.enabled })}
               >
-                {current?.enabled ? 'Désactiver les notifications' : 'Activer les notifications'}
+                {current?.enabled ? t('settings.disable') : t('settings.enable')}
               </Button>
               <Button
                 variant="ghost"
@@ -134,7 +179,7 @@ export function SettingsPage() {
                 loading={test.isPending}
                 onClick={() => test.mutate()}
               >
-                Envoyer un test
+                {t('settings.sendTest')}
               </Button>
               {current?.webhook_configured ? (
                 <Button
@@ -142,13 +187,13 @@ export function SettingsPage() {
                   icon={<Trash2 className="size-4" />}
                   onClick={() => update.mutate({ clear_webhook: true })}
                 >
-                  Retirer l'adresse
+                  {t('settings.removeAddress')}
                 </Button>
               ) : null}
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-medium text-slate-300">Événements notifiés</p>
+              <p className="mb-2 text-xs font-medium text-slate-300">{t('settings.events')}</p>
               <div className="space-y-2">
                 {events.map((event) => (
                   <Checkbox
@@ -172,7 +217,7 @@ export function SettingsPage() {
                 loading={update.isPending}
                 onClick={() => update.mutate({ events: checked })}
               >
-                Enregistrer la sélection
+                {t('settings.saveSelection')}
               </Button>
             </div>
 

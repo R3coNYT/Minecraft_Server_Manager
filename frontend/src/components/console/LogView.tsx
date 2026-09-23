@@ -20,6 +20,7 @@ import type { LogLevel, LogLine } from '@/lib/types'
 import { cn } from '@/lib/cn'
 import { Button } from '@/components/ui/Button'
 import { EmptyState } from '@/components/ui/primitives'
+import { locale, t, tn } from '@/i18n'
 
 /** Nombre de lignes réellement rendues ; au-delà, seules les plus récentes. */
 const RENDER_WINDOW = 2000
@@ -56,7 +57,7 @@ function lineTime(line: LogLine): string {
   const date = new Date(line.ts)
   return Number.isNaN(date.getTime())
     ? '--:--:--'
-    : date.toLocaleTimeString('fr-FR', { hour12: false })
+    : date.toLocaleTimeString(locale(), { hour12: false })
 }
 
 interface LogViewProps {
@@ -127,7 +128,7 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
                   setSearchOpen(false)
                 }
               }}
-              placeholder="Filtrer les lignes affichées…"
+              placeholder={t('logView.filter')}
               className="flex-1 bg-transparent text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none"
             />
             <span className="text-[11px] tabular-nums text-slate-500">
@@ -139,7 +140,7 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
                 setSearchOpen(false)
               }}
               className="rounded p-0.5 text-slate-500 hover:text-slate-200"
-              aria-label="Fermer la recherche"
+              aria-label={t('logView.closeSearch')}
             >
               <X className="size-3.5" />
             </button>
@@ -147,14 +148,14 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
         ) : (
           <>
             <span className="text-[11px] tabular-nums text-slate-500">
-              {lines.length} ligne{lines.length > 1 ? 's' : ''}
+              {tn('logView.lines', lines.length)}
             </span>
             {missed > 0 ? (
               <span
                 className="rounded bg-amber-950/60 px-2 py-0.5 text-[11px] text-amber-300"
-                title="Le tampon d'historique a été dépassé : ces lignes ne sont plus disponibles."
+                title={t('logView.lostHint')}
               >
-                {missed} ligne{missed > 1 ? 's' : ''} perdue{missed > 1 ? 's' : ''}
+                {tn('logView.lost', missed)}
               </span>
             ) : null}
             <div className="flex-1" />
@@ -164,7 +165,7 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
               icon={<Search className="size-3.5" />}
               onClick={() => setSearchOpen(true)}
             >
-              Rechercher
+              {t('logView.search')}
             </Button>
             <Button
               size="sm"
@@ -172,7 +173,7 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
               icon={<Eraser className="size-3.5" />}
               onClick={onClear}
             >
-              Effacer
+              {t('logView.clear')}
             </Button>
           </>
         )}
@@ -186,19 +187,18 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
         >
           {visible.length === 0 ? (
             <EmptyState
-              title={query ? 'Aucune ligne ne correspond' : 'Console vide'}
+              title={query ? t('logView.noMatch') : t('logView.empty')}
               description={
                 query
-                  ? 'Modifier le filtre pour afficher davantage de lignes.'
-                  : (emptyHint ?? 'Les lignes apparaîtront ici dès le démarrage du serveur.')
+                  ? t('logView.changeFilter')
+                  : (emptyHint ?? t('logView.emptyHint'))
               }
             />
           ) : (
             <>
               {hidden > 0 ? (
                 <p className="pb-2 text-[11px] text-slate-600">
-                  {hidden} ligne{hidden > 1 ? 's' : ''} plus ancienne
-                  {hidden > 1 ? 's' : ''} masquée{hidden > 1 ? 's' : ''}
+                  {tn('logView.hidden', hidden)}
                 </p>
               ) : null}
               {visible.map((line) => (
@@ -230,7 +230,7 @@ export function LogView({ lines, missed, onClear, emptyHint }: LogViewProps) {
             className="absolute bottom-3 right-4 flex items-center gap-1.5 rounded-full bg-slate-800 px-3 py-1.5 text-xs text-slate-200 shadow-lg ring-1 ring-slate-700 transition-colors hover:bg-slate-700"
           >
             <ArrowDown className="size-3.5" />
-            Suivre le flux
+            {t('logView.follow')}
           </button>
         ) : null}
       </div>

@@ -25,6 +25,7 @@ from msm.db.models.audit import AuditAction, AuditResult
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
 from msm.exceptions import ConfirmationRequired
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
@@ -53,14 +54,16 @@ class ConsoleService:
         command = sanitize_command(raw_command)
         level = classify(command)
 
-        context.require(Permission.CONSOLE_WRITE, action="envoyer une commande")
+        context.require(Permission.CONSOLE_WRITE, action=tr("send a command"))
         if level is not DangerLevel.SAFE:
             try:
-                context.require(Permission.CONSOLE_DANGEROUS, action="exécuter cette commande")
+                context.require(Permission.CONSOLE_DANGEROUS, action=tr("run this command"))
             except Exception:
                 self._audit.record(
                     action=AuditAction.COMMAND_SENT,
-                    summary=f"Commande refusée sur « {server.name} » : {command}",
+                    summary=tr(
+                        "Command refused on “{name}”: {command}", name=server.name, command=command
+                    ),
                     actor_id=context.user_id,
                     actor_username=context.username,
                     actor_role=context.role.value,
@@ -77,9 +80,9 @@ class ConsoleService:
             # Le refus n'est pas une erreur : le client doit simplement rejouer
             # la requête avec `confirm: true` après affichage de l'avertissement.
             raise ConfirmationRequired(
-                "Confirmation requise.",
-                cause=explain(command) or "Cette commande est sensible.",
-                remediation="Renvoyer la requête avec `confirm: true` pour confirmer.",
+                tr("Confirmation required."),
+                cause=explain(command) or tr("This command is sensitive."),
+                remediation=tr("Send the request again with `confirm: true` to confirm."),
                 context={
                     "command": command,
                     "danger": level.name,
@@ -92,7 +95,7 @@ class ConsoleService:
 
         self._audit.record(
             action=AuditAction.COMMAND_SENT,
-            summary=f"Commande sur « {server.name} » : {sent}",
+            summary=tr("Command on “{name}”: {command}", name=server.name, command=sent),
             actor_id=context.user_id,
             actor_username=context.username,
             actor_role=context.role.value,

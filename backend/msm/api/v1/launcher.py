@@ -51,8 +51,8 @@ def _out(integration: LauncherIntegration, supervisor: Supervisor) -> LauncherOu
 @router.get(
     "/servers/{server_id}/launcher",
     response_model=LauncherOut,
-    summary="État de l'intégration launcher",
-    responses={204: {"description": "Aucune intégration configurée"}},
+    summary="Launcher integration status",
+    responses={204: {"description": "No integration configured"}},
 )
 async def get_integration(
     access: ServerAccess, service: LauncherDep, supervisor: SupervisorDep
@@ -68,7 +68,7 @@ async def get_integration(
 @router.put(
     "/servers/{server_id}/launcher",
     response_model=LauncherOut,
-    summary="Configurer l'intégration launcher",
+    summary="Configure the launcher integration",
     dependencies=[CsrfProtected],
 )
 async def configure_integration(
@@ -96,7 +96,7 @@ async def configure_integration(
 
 @router.delete(
     "/servers/{server_id}/launcher",
-    summary="Retirer l'intégration launcher",
+    summary="Remove the launcher integration",
     dependencies=[CsrfProtected],
 )
 async def remove_integration(
@@ -111,7 +111,7 @@ async def remove_integration(
 @router.post(
     "/servers/{server_id}/launcher/sync",
     response_model=LauncherOut,
-    summary="Synchroniser maintenant",
+    summary="Synchronise now",
     dependencies=[CsrfProtected],
 )
 async def sync_integration(
@@ -132,7 +132,7 @@ async def sync_integration(
 @router.post(
     "/servers/{server_id}/launcher/publish",
     response_model=LauncherOut,
-    summary="Publier l'état des mods aux joueurs",
+    summary="Publish mod state to players",
     dependencies=[CsrfProtected],
 )
 async def publish_integration(
@@ -145,7 +145,7 @@ async def publish_integration(
 @router.put(
     "/servers/{server_id}/launcher/side",
     response_model=LauncherOut,
-    summary="Forcer le côté d'un mod",
+    summary="Override a mod's side",
     dependencies=[CsrfProtected],
 )
 async def set_side(

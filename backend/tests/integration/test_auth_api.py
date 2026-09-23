@@ -66,7 +66,7 @@ class TestLogin:
         )
 
         assert response.status_code == 401
-        assert response.json()["message"] == "Identifiants incorrects."
+        assert response.json()["message"] == "Incorrect credentials."
 
     async def test_account_locks_after_repeated_failures(self, client: AsyncClient) -> None:
         for _ in range(8):
@@ -81,7 +81,7 @@ class TestLogin:
             json={"username": ADMIN_USERNAME, "password": ADMIN_PASSWORD},
         )
         assert response.status_code == 401
-        assert "verrouillé" in response.json()["message"].lower()
+        assert "locked" in response.json()["message"].lower()
 
 
 class TestSession:

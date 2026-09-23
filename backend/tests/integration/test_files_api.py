@@ -393,7 +393,7 @@ class TestServerProperties:
             f"/api/v1/servers/{server['id']}/properties", json={"changes": {"pvp": "false"}}
         )
         assert write.status_code == 422
-        assert "Démarrer le serveur" in write.json()["remediation"]
+        assert "Start the server" in write.json()["remediation"]
 
 
 class TestPermissions:

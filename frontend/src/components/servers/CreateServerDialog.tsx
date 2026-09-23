@@ -12,12 +12,13 @@ import { FolderSearch, Info } from 'lucide-react'
 import { api } from '@/lib/api'
 import { queryKeys, useLaunchers } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
-import { formatBytes, CAPABILITY_LABELS } from '@/lib/format'
+import { capabilityLabel, formatBytes } from '@/lib/format'
 import type { Detection } from '@/lib/types'
 import { Dialog } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import { Badge, Checkbox, Field, Input, Select } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { t, tn } from '@/i18n'
 
 interface CreateServerDialogProps {
   open: boolean
@@ -81,7 +82,7 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
     onSuccess: (server) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.servers })
       void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard })
-      push({ kind: 'success', title: `« ${server.name} » ajouté` })
+      push({ kind: 'success', title: t('create.added', { name: server.name }) })
       reset()
       onClose()
     },
@@ -96,8 +97,8 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
         reset()
         onClose()
       }}
-      title="Ajouter un serveur"
-      description="Indiquer le dossier du serveur ; MSM analyse son contenu et propose une configuration."
+      title={t('create.title')}
+      description={t('create.description')}
       footer={
         <>
           <Button
@@ -107,7 +108,7 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
               onClose()
             }}
           >
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -115,15 +116,15 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
             disabled={!name.trim() || !directory.trim()}
             onClick={() => create.mutate()}
           >
-            Ajouter
+            {t('create.submit')}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <Field
-          label="Dossier du serveur"
-          hint="Chemin absolu, par exemple /data/minecraft/survie ou C:\\serveurs\\survie"
+          label={t('create.directory')}
+          hint={t('create.directoryHint')}
         >
           <div className="flex gap-2">
             <Input
@@ -139,7 +140,7 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
               disabled={!directory.trim()}
               onClick={() => detect.mutate()}
             >
-              Analyser
+              {t('create.analyse')}
             </Button>
           </div>
         </Field>
@@ -155,15 +156,15 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
               {detection.minecraft_version ? (
                 <Badge>Minecraft {detection.minecraft_version}</Badge>
               ) : null}
-              {detection.port ? <Badge>Port {detection.port}</Badge> : null}
+              {detection.port ? <Badge>{t('create.port', { port: detection.port })}</Badge> : null}
               {detection.capabilities.map((capability) => (
-                <Badge key={capability}>{CAPABILITY_LABELS[capability] ?? capability}</Badge>
+                <Badge key={capability}>{capabilityLabel(capability)}</Badge>
               ))}
             </div>
 
             {detection.jars.length > 0 ? (
               <p className="text-xs text-slate-500">
-                {detection.jars.length} fichier(s) .jar :{' '}
+                {tn('create.jars', detection.jars.length)}{' '}
                 {detection.jars
                   .slice(0, 3)
                   .map((jar) => `${jar.name} (${formatBytes(jar.size_bytes)})`)
@@ -181,15 +182,15 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
         ) : null}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Nom affiché">
+          <Field label={t('create.name')}>
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Serveur Survie"
+              placeholder={t('create.namePlaceholder')}
             />
           </Field>
 
-          <Field label="Mode de démarrage">
+          <Field label={t('create.launcher')}>
             <Select value={launcherKey} onChange={(event) => setLauncherKey(event.target.value)}>
               {(launchers ?? []).map((launcher) => (
                 <option
@@ -198,14 +199,14 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
                   disabled={launcher.unavailable_reason !== null}
                 >
                   {launcher.label}
-                  {launcher.unavailable_reason ? ' — indisponible' : ''}
+                  {launcher.unavailable_reason ? t('create.unavailable') : ''}
                 </option>
               ))}
             </Select>
           </Field>
 
           {needsJar ? (
-            <Field label="Fichier JAR" hint="Relatif au dossier du serveur">
+            <Field label={t('create.jarFile')} hint={t('create.relative')}>
               <Input
                 value={jarPath}
                 onChange={(event) => setJarPath(event.target.value)}
@@ -214,7 +215,7 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
               />
             </Field>
           ) : (
-            <Field label="Script de démarrage" hint="Relatif au dossier du serveur">
+            <Field label={t('create.script')} hint={t('create.relative')}>
               <Input
                 value={scriptPath}
                 onChange={(event) => setScriptPath(event.target.value)}
@@ -224,7 +225,7 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
             </Field>
           )}
 
-          <Field label="Mémoire maximale (Mo)">
+          <Field label={t('create.memory')}>
             <Input
               type="number"
               min={512}
@@ -236,8 +237,8 @@ export function CreateServerDialog({ open, onClose }: CreateServerDialogProps) {
         </div>
 
         <Checkbox
-          label="Accepter automatiquement le CLUF Minecraft"
-          hint="MSM passera eula.txt à true au premier démarrage. En cochant, vous acceptez le contrat de licence de Minecraft."
+          label={t('create.eula')}
+          hint={t('create.eulaHint')}
           checked={acceptEula}
           onChange={(event) => setAcceptEula(event.target.checked)}
         />

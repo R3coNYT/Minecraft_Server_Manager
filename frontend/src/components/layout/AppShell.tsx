@@ -20,6 +20,7 @@ import { useRealtime } from '@/stores/realtime'
 import { cn } from '@/lib/cn'
 import { StatusDot } from '@/components/servers/ServerStatusBadge'
 import { Button } from '@/components/ui/Button'
+import { t, type MessageKey } from '@/i18n'
 
 function ConnectionIndicator() {
   const connection = useRealtime((state) => state.connection)
@@ -27,9 +28,9 @@ function ConnectionIndicator() {
 
   if (connection === 'open') {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-emerald-400" title="Flux temps réel actif">
+      <span className="flex items-center gap-1.5 text-xs text-emerald-400" title={t('shell.realtimeActive')}>
         <Wifi className="size-3.5" />
-        Temps réel
+        {t('shell.realtime')}
       </span>
     )
   }
@@ -37,10 +38,10 @@ function ConnectionIndicator() {
   return (
     <span
       className="flex items-center gap-1.5 text-xs text-amber-400"
-      title="Le flux temps réel est interrompu ; reconnexion automatique en cours"
+      title={t('shell.realtimeDown')}
     >
       <WifiOff className="size-3.5" />
-      {connection === 'connecting' ? 'Connexion…' : `Reconnexion (${attempts})`}
+      {connection === 'connecting' ? t('shell.connecting') : t('shell.reconnecting', { attempts })}
     </span>
   )
 }
@@ -69,30 +70,30 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       <nav className="flex flex-col gap-1 px-2">
         <NavLink to="/" end className={linkClass} onClick={onNavigate}>
           <LayoutDashboard className="size-4" />
-          Tableau de bord
+          {t('shell.dashboard')}
         </NavLink>
         {hasPermission(me, 'audit:view') ? (
           <NavLink to="/audit" className={linkClass} onClick={onNavigate}>
             <ScrollText className="size-4" />
-            Journal d'audit
+            {t('shell.audit')}
           </NavLink>
         ) : null}
         {hasPermission(me, 'user:manage') ? (
           <NavLink to="/users" className={linkClass} onClick={onNavigate}>
             <Users className="size-4" />
-            Utilisateurs
+            {t('shell.users')}
           </NavLink>
         ) : null}
         {hasPermission(me, 'settings:manage') ? (
           <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
             <SlidersHorizontal className="size-4" />
-            Réglages
+            {t('shell.settings')}
           </NavLink>
         ) : null}
       </nav>
 
       <div className="mt-6 px-4 text-xs font-medium uppercase tracking-wide text-slate-600">
-        Serveurs
+        {t('shell.servers')}
       </div>
       <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-4">
         {(servers ?? []).map((server) => {
@@ -110,7 +111,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           )
         })}
         {servers?.length === 0 ? (
-          <p className="px-3 py-2 text-xs text-slate-600">Aucun serveur enregistré.</p>
+          <p className="px-3 py-2 text-xs text-slate-600">{t('shell.noServers')}</p>
         ) : null}
       </nav>
     </div>
@@ -152,7 +153,7 @@ export function AppShell() {
           <button
             className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 lg:hidden"
             onClick={() => setMobileOpen((open) => !open)}
-            aria-label="Menu"
+            aria-label={t('shell.menu')}
           >
             {mobileOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>
@@ -165,7 +166,7 @@ export function AppShell() {
           <div className="hidden items-center gap-2 border-l border-slate-800 pl-3 sm:flex">
             <div className="text-right">
               <p className="text-xs font-medium text-slate-200">{me?.username}</p>
-              <p className="text-[11px] text-slate-500">{me?.role}</p>
+              <p className="text-[11px] text-slate-500">{me ? t(`role.${me.role}` as MessageKey) : ''}</p>
             </div>
           </div>
 
@@ -175,9 +176,9 @@ export function AppShell() {
             icon={<LogOut className="size-4" />}
             onClick={() => void onLogout()}
             loading={logout.isPending}
-            title="Se déconnecter"
+            title={t('shell.signOut')}
           >
-            <span className="sr-only">Se déconnecter</span>
+            <span className="sr-only">{t('shell.signOut')}</span>
           </Button>
         </header>
 

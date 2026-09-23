@@ -168,7 +168,7 @@ class TestDownload:
         with pytest.raises(ValidationError) as excinfo:
             await _download(target, tmp_path / "server.jar", client=client)
 
-        assert "empreinte" in (excinfo.value.cause or "")
+        assert "checksum" in (excinfo.value.cause or "")
         assert not (tmp_path / "server.jar").exists()
         assert not (tmp_path / "server.jar.part").exists()
         await client.aclose()

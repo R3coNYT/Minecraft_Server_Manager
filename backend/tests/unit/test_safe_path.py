@@ -174,7 +174,7 @@ class TestUploadNames:
 
 class TestUploadSize:
     def test_empty_file_is_refused(self) -> None:
-        with pytest.raises(UnsafeUploadError, match="vide"):
+        with pytest.raises(UnsafeUploadError, match="Empty"):
             check_size(0, maximum=1024)
 
     def test_oversized_file_is_refused(self) -> None:

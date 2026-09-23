@@ -24,6 +24,7 @@ from sqlalchemy.sql.elements import ColumnElement
 from msm.db.models.metrics import MetricSample
 from msm.db.models.server import Server
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 
 #: Fenêtres proposées, avec la largeur d'un palier d'agrégation.
 RANGES: dict[str, tuple[timedelta, timedelta]] = {
@@ -78,9 +79,9 @@ class MetricsService:
     async def history(self, server: Server, *, range_key: str = "24h") -> dict[str, Any]:
         if range_key not in RANGES:
             raise ValidationError(
-                "Période inconnue.",
-                cause=f"« {range_key} » n'est pas une période reconnue.",
-                remediation=f"Utiliser l'une de : {', '.join(RANGES)}.",
+                tr("Unknown range."),
+                cause=tr("“{range}” is not a recognised range.", range=range_key),
+                remediation=tr("Use one of: {choices}.", choices=", ".join(RANGES)),
             )
 
         window, bucket = RANGES[range_key]

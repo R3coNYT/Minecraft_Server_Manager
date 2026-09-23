@@ -87,13 +87,13 @@ def init_engine(settings: Settings) -> AsyncEngine:
 
 def get_engine() -> AsyncEngine:
     if _engine is None:
-        raise RuntimeError("Le moteur de base de données n'a pas été initialisé.")
+        raise RuntimeError("Database engine not initialised.")
     return _engine
 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     if _session_factory is None:
-        raise RuntimeError("La fabrique de sessions n'a pas été initialisée.")
+        raise RuntimeError("Session factory not initialised.")
     return _session_factory
 
 

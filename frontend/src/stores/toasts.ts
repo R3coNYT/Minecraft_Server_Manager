@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import { ApiError } from '@/lib/api'
+import { t } from '@/i18n'
 
 export type ToastKind = 'success' | 'error' | 'info' | 'warning'
 
@@ -38,7 +39,7 @@ export const useToasts = create<ToastState>((set, get) => ({
 
   dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
 
-  pushError: (error, fallback = 'Action impossible') => {
+  pushError: (error, fallback = t('common.actionFailed')) => {
     const apiError = error instanceof ApiError ? error : null
     get().push({
       kind: 'error',

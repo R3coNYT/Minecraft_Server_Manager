@@ -23,10 +23,11 @@ from msm.api.schemas import (
 )
 from msm.core.permissions import Permission
 from msm.db.models.misc import Backup, BackupStatus
+from msm.i18n import tr
 from msm.services.backup_service import BackupService
 from msm.services.metrics_service import RANGES, MetricsService
 
-router = APIRouter(tags=["sauvegardes"])
+router = APIRouter(tags=["backups"])
 
 
 def _backups(session: DbSession, supervisor: SupervisorDep, settings: AppSettings) -> BackupService:
@@ -64,7 +65,7 @@ def _to_out(backup: Backup) -> BackupOut:
 @router.get(
     "/servers/{server_id}/backups",
     response_model=list[BackupOut],
-    summary="Lister les sauvegardes",
+    summary="List backups",
 )
 async def list_backups(access: ServerAccess, service: BackupsDep) -> list[BackupOut]:
     server, _ = access
@@ -75,7 +76,7 @@ async def list_backups(access: ServerAccess, service: BackupsDep) -> list[Backup
     "/servers/{server_id}/backups",
     response_model=BackupOut,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Lancer une sauvegarde",
+    summary="Start a backup",
     dependencies=[CsrfProtected],
 )
 async def create_backup(access: ServerAccess, service: BackupsDep, ip: ClientIp) -> BackupOut:
@@ -91,7 +92,7 @@ async def create_backup(access: ServerAccess, service: BackupsDep, ip: ClientIp)
 @router.get(
     "/servers/{server_id}/backups/{backup_id}/manifest",
     response_model=BackupManifestOut,
-    summary="Contenu déclaré d'une sauvegarde",
+    summary="Backup manifest",
 )
 async def backup_manifest(
     backup_id: int, access: ServerAccess, service: BackupsDep
@@ -103,7 +104,7 @@ async def backup_manifest(
 
 @router.get(
     "/servers/{server_id}/backups/{backup_id}/download",
-    summary="Télécharger une archive",
+    summary="Download an archive",
     response_class=FileResponse,
 )
 async def download_backup(
@@ -111,7 +112,7 @@ async def download_backup(
 ) -> FileResponse:
     """Sort l'archive de la machine — d'où la permission et la trace d'audit."""
     server, context = access
-    context.require(Permission.BACKUP_CREATE, action="télécharger une sauvegarde")
+    context.require(Permission.BACKUP_CREATE, action=tr("download a backup"))
 
     backup = await service.get_backup(server, backup_id)
     path = service.archive_path(backup)
@@ -122,7 +123,7 @@ async def download_backup(
 @router.post(
     "/servers/{server_id}/backups/{backup_id}/restore",
     response_model=BackupOut,
-    summary="Restaurer une sauvegarde",
+    summary="Restore a backup",
     dependencies=[CsrfProtected],
 )
 async def restore_backup(
@@ -142,7 +143,7 @@ async def restore_backup(
 
 @router.post(
     "/servers/{server_id}/backups/{backup_id}/cancel",
-    summary="Annuler une sauvegarde en cours",
+    summary="Cancel a running backup",
     dependencies=[CsrfProtected],
 )
 async def cancel_backup(
@@ -154,7 +155,7 @@ async def cancel_backup(
 
 @router.delete(
     "/servers/{server_id}/backups/{backup_id}",
-    summary="Supprimer une sauvegarde",
+    summary="Delete a backup",
     dependencies=[CsrfProtected],
 )
 async def delete_backup(
@@ -171,19 +172,19 @@ async def delete_backup(
 @router.get(
     "/servers/{server_id}/metrics",
     response_model=MetricsOut,
-    summary="Historique des ressources",
+    summary="Resource history",
 )
 async def server_metrics(
     access: ServerAccess,
     service: MetricsDep,
-    range_key: Annotated[str, Query(alias="range", description="1h, 6h, 24h ou 7d")] = "24h",
+    range_key: Annotated[str, Query(alias="range", description="1h, 6h, 24h or 7d")] = "24h",
 ) -> MetricsOut:
     """Points agrégés sur la période demandée, avec les pointes observées."""
     server, _ = access
     return MetricsOut.model_validate(await service.history(server, range_key=range_key))
 
 
-@router.get("/metrics/ranges", summary="Périodes disponibles")
+@router.get("/metrics/ranges", summary="Available ranges")
 async def metric_ranges() -> list[str]:
     """Valeurs acceptées par le paramètre `range`."""
     return list(RANGES)

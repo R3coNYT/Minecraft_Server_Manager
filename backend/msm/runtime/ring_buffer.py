@@ -26,7 +26,7 @@ class RingBuffer:
 
     def __init__(self, maxlen: int = 5000) -> None:
         if maxlen < 1:
-            raise ValueError("maxlen doit être strictement positif")
+            raise ValueError("maxlen must be strictly positive")
         self._maxlen = maxlen
         self._lines: deque[LogLine] = deque(maxlen=maxlen)
         self._dropped = 0
@@ -136,7 +136,7 @@ class RingBuffer:
     def resize(self, maxlen: int) -> None:
         """Change la capacité en conservant les lignes les plus récentes."""
         if maxlen < 1:
-            raise ValueError("maxlen doit être strictement positif")
+            raise ValueError("maxlen must be strictly positive")
         if maxlen == self._maxlen:
             return
         kept = list(self._lines)[-maxlen:]

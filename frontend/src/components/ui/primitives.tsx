@@ -3,6 +3,7 @@
 import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 export function Card({
   className,
@@ -136,11 +137,11 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn('size-5 animate-spin text-slate-500', className)} />
 }
 
-export function LoadingBlock({ label = 'Chargement…' }: { label?: string }) {
+export function LoadingBlock({ label }: { label?: string }) {
   return (
     <div className="flex items-center justify-center gap-3 py-16 text-sm text-slate-500">
       <Spinner />
-      {label}
+      {label ?? t('common.loading')}
     </div>
   )
 }

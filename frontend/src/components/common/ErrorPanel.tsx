@@ -9,6 +9,7 @@
 import { AlertTriangle, Wrench } from 'lucide-react'
 import { ApiError } from '@/lib/api'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 interface ErrorPanelProps {
   error: unknown
@@ -37,7 +38,7 @@ export function ErrorPanel({ error, className, compact = false }: ErrorPanelProp
 
           {!compact && apiError?.cause ? (
             <p className="mt-1.5 text-xs text-red-300/80">
-              <span className="font-medium">Cause : </span>
+              <span className="font-medium">{t('common.cause')}</span>
               {apiError.cause}
             </p>
           ) : null}
@@ -46,7 +47,7 @@ export function ErrorPanel({ error, className, compact = false }: ErrorPanelProp
             <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-200/90">
               <Wrench className="mt-0.5 size-3 shrink-0" />
               <span>
-                <span className="font-medium">Action : </span>
+                <span className="font-medium">{t('common.fix')}</span>
                 {apiError.remediation}
               </span>
             </p>
@@ -54,7 +55,7 @@ export function ErrorPanel({ error, className, compact = false }: ErrorPanelProp
 
           {!compact && apiError?.traceId ? (
             <p className="mt-2 font-mono text-[11px] text-red-400/50">
-              trace {apiError.traceId}
+              {t('common.trace')}{apiError.traceId}
             </p>
           ) : null}
         </div>

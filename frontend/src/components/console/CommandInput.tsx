@@ -16,6 +16,7 @@ import { ApiError, api } from '@/lib/api'
 import { useToasts } from '@/stores/toasts'
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { t } from '@/i18n'
 
 interface CommandInputProps {
   serverId: number
@@ -65,13 +66,13 @@ export function CommandInput({
         // Le serveur décrit lui-même la conséquence : on l'affiche telle quelle.
         setPending({
           command,
-          consequence: error.cause ?? 'Cette commande est sensible.',
+          consequence: error.cause ?? t('console.sensitive'),
           strong: command.trim().toLowerCase().startsWith('stop'),
         })
         return
       }
       if (pending) setConfirmError(error)
-      else pushError(error, 'Commande refusée')
+      else pushError(error, t('console.refused'))
     } finally {
       setSending(false)
     }
@@ -120,8 +121,8 @@ export function CommandInput({
             disabled={disabled || sending}
             placeholder={
               disabled
-                ? (disabledReason ?? 'Console indisponible')
-                : 'Commande (sans le / initial) — ↑ pour rappeler l’historique'
+                ? (disabledReason ?? t('console.unavailable'))
+                : t('console.placeholder')
             }
             className="console-line min-w-0 flex-1 bg-transparent text-slate-100 placeholder:text-slate-600 focus:outline-none disabled:cursor-not-allowed"
             spellCheck={false}
@@ -135,7 +136,7 @@ export function CommandInput({
             loading={sending && !pending}
             onClick={() => value.trim() && void send(value.trim(), false)}
           >
-            Envoyer
+            {t('console.send')}
           </Button>
         </div>
         {disabled && disabledReason ? (
@@ -145,10 +146,10 @@ export function CommandInput({
 
       <ConfirmDialog
         open={pending !== null}
-        title="Commande sensible"
-        description={pending ? `« ${pending.command} » sur ${serverName}` : undefined}
+        title={t('console.sensitiveTitle')}
+        description={pending ? t('console.sensitiveOn', { command: pending.command, server: serverName }) : undefined}
         consequence={pending?.consequence}
-        confirmLabel="Exécuter"
+        confirmLabel={t('console.run')}
         danger
         requireTyping={pending?.strong ? serverName : null}
         loading={sending}

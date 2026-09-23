@@ -19,6 +19,7 @@ import unicodedata
 from pathlib import Path
 
 from msm.exceptions import UnsafeUploadError
+from msm.i18n import tr
 
 #: Caractères conservés dans un nom de fichier. Tout le reste devient `_`.
 _SAFE_CHARS_RE = re.compile(r"[^A-Za-z0-9._+-]")
@@ -45,9 +46,9 @@ def sanitize_filename(raw: str, *, allowed_suffixes: frozenset[str]) -> str:
     """
     if not isinstance(raw, str) or not raw.strip():
         raise UnsafeUploadError(
-            "Nom de fichier manquant.",
-            cause="Le téléversement n'indique aucun nom de fichier.",
-            remediation="Réessayer en sélectionnant le fichier depuis l'explorateur.",
+            tr("Missing file name."),
+            cause=tr("The upload gives no file name."),
+            remediation=tr("Try again, selecting the file from the file browser."),
         )
 
     # Seul le dernier segment est retenu : « ../../evil.jar » devient « evil.jar ».
@@ -60,9 +61,9 @@ def sanitize_filename(raw: str, *, allowed_suffixes: frozenset[str]) -> str:
 
     if not candidate:
         raise UnsafeUploadError(
-            "Nom de fichier invalide.",
-            cause="Le nom ne contient aucun caractère exploitable après nettoyage.",
-            remediation="Renommer le fichier avec des lettres, chiffres, `-` ou `_`.",
+            tr("Invalid file name."),
+            cause=tr("The name has no usable character left after cleaning."),
+            remediation=tr("Rename the file using letters, digits, `-` or `_`."),
         )
 
     if len(candidate) > MAX_FILENAME_LENGTH:
@@ -76,16 +77,16 @@ def sanitize_filename(raw: str, *, allowed_suffixes: frozenset[str]) -> str:
     if suffix not in allowed_suffixes:
         expected = ", ".join(sorted(allowed_suffixes))
         raise UnsafeUploadError(
-            "Type de fichier non autorisé.",
-            cause=f"« {path.name} » n'a pas une extension attendue ici.",
-            remediation=f"Ce dossier n'accepte que les fichiers : {expected}.",
+            tr("File type not allowed."),
+            cause=tr("“{name}” does not have an extension expected here.", name=path.name),
+            remediation=tr("This folder only accepts: {expected}.", expected=expected),
         )
 
     if path.stem.casefold() in _WINDOWS_RESERVED:
         raise UnsafeUploadError(
-            "Nom de fichier réservé.",
-            cause=f"« {path.stem} » est un nom réservé par Windows.",
-            remediation="Renommer le fichier avant de le téléverser.",
+            tr("Reserved file name."),
+            cause=tr("“{name}” is a name reserved by Windows.", name=path.stem),
+            remediation=tr("Rename the file before uploading it."),
         )
 
     return path.name
@@ -95,15 +96,19 @@ def check_size(size: int, *, maximum: int) -> int:
     """Vérifie la taille annoncée d'un téléversement."""
     if size <= 0:
         raise UnsafeUploadError(
-            "Fichier vide.",
-            cause="Le fichier téléversé ne contient aucune donnée.",
-            remediation="Vérifier le fichier source puis réessayer.",
+            tr("Empty file."),
+            cause=tr("The uploaded file contains no data."),
+            remediation=tr("Check the source file, then try again."),
         )
     if size > maximum:
         raise UnsafeUploadError(
-            "Fichier trop volumineux.",
-            cause=f"{size / 1024 / 1024:.1f} Mo pour une limite de {maximum // 1024 // 1024} Mo.",
-            remediation="Augmenter MSM_UPLOAD_MAX_SIZE_MB, ou déposer le fichier manuellement.",
+            tr("File too large."),
+            cause=tr(
+                "{size} MB for a {limit} MB limit.",
+                size=f"{size / 1024 / 1024:.1f}",
+                limit=maximum // 1024 // 1024,
+            ),
+            remediation=tr("Raise MSM_UPLOAD_MAX_SIZE_MB, or copy the file by hand."),
         )
     return size
 

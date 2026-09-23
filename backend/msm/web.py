@@ -58,7 +58,7 @@ def mount_frontend(app: FastAPI, directory: Path | None = None) -> bool:
     if root is None or not (root / "index.html").is_file():
         logger.info(
             "frontend_not_mounted",
-            hint="index.html introuvable",
+            hint="index.html not found",
             directory=str(root) if root else None,
         )
         app.state.frontend_root = None

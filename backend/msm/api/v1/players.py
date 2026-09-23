@@ -30,10 +30,11 @@ from msm.api.schemas import (
     TeleportRequest,
 )
 from msm.core.permissions import Permission
+from msm.i18n import tr
 from msm.services.player_service import PlayerService
 from msm.services.skin_service import SkinService
 
-router = APIRouter(prefix="/servers/{server_id}", tags=["joueurs"])
+router = APIRouter(prefix="/servers/{server_id}", tags=["players"])
 
 #: Un pseudo Minecraft : 1 à 16 caractères alphanumériques ou `_`.
 UsernameParam = Annotated[str, Path(pattern=r"^[A-Za-z0-9_]{1,16}$", max_length=16)]
@@ -46,7 +47,7 @@ def _players(session: DbSession, supervisor: SupervisorDep) -> PlayerService:
 PlayersDep = Annotated[PlayerService, Depends(_players)]
 
 
-@router.get("/players", response_model=list[PlayerOut], summary="Lister les joueurs")
+@router.get("/players", response_model=list[PlayerOut], summary="List players")
 async def list_players(
     access: ServerAccess,
     service: PlayersDep,
@@ -58,14 +59,14 @@ async def list_players(
     serveur pour les statuts, la base pour l'historique.
     """
     server, context = access
-    context.require(Permission.PLAYER_VIEW, action="consulter les joueurs")
+    context.require(Permission.PLAYER_VIEW, action=tr("view players"))
     players = await service.list_players(server, include_offline=include_offline)
     return [PlayerOut(**player.to_dict()) for player in players]
 
 
 @router.get(
     "/players/{username}/skin.png",
-    summary="Skin d'un joueur",
+    summary="Player skin",
     response_class=Response,
 )
 async def player_skin(
@@ -83,7 +84,7 @@ async def player_skin(
     réseau isolé une fois le cache constitué.
     """
     server, context = access
-    context.require(Permission.PLAYER_VIEW, action="consulter les joueurs")
+    context.require(Permission.PLAYER_VIEW, action=tr("view players"))
 
     players = await service.list_players(server)
     uuid = next(
@@ -110,7 +111,7 @@ async def player_skin(
 @router.post(
     "/players/{username}/op",
     response_model=PlayerActionOut,
-    summary="Promouvoir opérateur",
+    summary="Grant operator",
     dependencies=[CsrfProtected],
 )
 async def op_player(
@@ -123,7 +124,7 @@ async def op_player(
 @router.post(
     "/players/{username}/deop",
     response_model=PlayerActionOut,
-    summary="Retirer les droits d'opérateur",
+    summary="Revoke operator",
     dependencies=[CsrfProtected],
 )
 async def deop_player(
@@ -136,7 +137,7 @@ async def deop_player(
 @router.post(
     "/players/{username}/kick",
     response_model=PlayerActionOut,
-    summary="Expulser",
+    summary="Kick",
     dependencies=[CsrfProtected],
 )
 async def kick_player(
@@ -155,7 +156,7 @@ async def kick_player(
 @router.post(
     "/players/{username}/ban",
     response_model=PlayerActionOut,
-    summary="Bannir",
+    summary="Ban",
     dependencies=[CsrfProtected],
 )
 async def ban_player(
@@ -174,7 +175,7 @@ async def ban_player(
 @router.post(
     "/players/{username}/unban",
     response_model=PlayerActionOut,
-    summary="Lever un bannissement",
+    summary="Lift a ban",
     dependencies=[CsrfProtected],
 )
 async def unban_player(
@@ -187,7 +188,7 @@ async def unban_player(
 @router.post(
     "/players/{username}/kill",
     response_model=PlayerActionOut,
-    summary="Tuer",
+    summary="Kill",
     dependencies=[CsrfProtected],
 )
 async def kill_player(
@@ -200,7 +201,7 @@ async def kill_player(
 @router.post(
     "/players/{username}/give",
     response_model=PlayerActionOut,
-    summary="Donner un objet",
+    summary="Give an item",
     dependencies=[CsrfProtected],
 )
 async def give_player(
@@ -221,7 +222,7 @@ async def give_player(
 @router.post(
     "/players/{username}/teleport",
     response_model=PlayerActionOut,
-    summary="Téléporter",
+    summary="Teleport",
     dependencies=[CsrfProtected],
 )
 async def teleport_player(

@@ -29,11 +29,12 @@ from msm.api.schemas import (
 )
 from msm.core.permissions import Permission
 from msm.db.models.server import Server
+from msm.i18n import tr
 from msm.runtime.stats import system_stats
 from msm.security.rbac import AccessContext
 from msm.services.lifecycle_service import LifecycleService
 
-router = APIRouter(prefix="/servers", tags=["serveurs"])
+router = APIRouter(prefix="/servers", tags=["servers"])
 
 
 async def _to_out(
@@ -69,25 +70,25 @@ async def _to_out(
 # --------------------------------------------------------------------------- #
 #  Consultation
 # --------------------------------------------------------------------------- #
-@router.get("", response_model=list[ServerOut], summary="Lister les serveurs")
+@router.get("", response_model=list[ServerOut], summary="List servers")
 async def list_servers(
     service: ServerServiceDep,
     supervisor: SupervisorDep,
     context: GlobalContext,
 ) -> list[ServerOut]:
     """Serveurs visibles par l'utilisateur."""
-    context.require(Permission.SERVER_VIEW, action="consulter les serveurs")
+    context.require(Permission.SERVER_VIEW, action=tr("view servers"))
     return [await _to_out(server, service, supervisor) for server in await service.list_servers()]
 
 
-@router.get("/dashboard", response_model=DashboardOut, summary="Tableau de bord")
+@router.get("/dashboard", response_model=DashboardOut, summary="Dashboard")
 async def dashboard(
     service: ServerServiceDep,
     supervisor: SupervisorDep,
     context: GlobalContext,
 ) -> DashboardOut:
     """Vue d'ensemble : agrégats, serveurs et ressources de la machine."""
-    context.require(Permission.SERVER_VIEW, action="consulter le tableau de bord")
+    context.require(Permission.SERVER_VIEW, action=tr("view the dashboard"))
     servers = [
         await _to_out(server, service, supervisor) for server in await service.list_servers()
     ]
@@ -101,7 +102,7 @@ async def dashboard(
 @router.post(
     "/detect",
     response_model=DetectionOut,
-    summary="Analyser un dossier",
+    summary="Analyse a folder",
     dependencies=[CsrfProtected],
 )
 async def detect_directory(
@@ -141,7 +142,7 @@ async def detect_directory(
     )
 
 
-@router.get("/{server_id}", response_model=ServerOut, summary="Détail d'un serveur")
+@router.get("/{server_id}", response_model=ServerOut, summary="Server details")
 async def get_server(
     access: ServerAccess, service: ServerServiceDep, supervisor: SupervisorDep
 ) -> ServerOut:
@@ -149,7 +150,7 @@ async def get_server(
     return await _to_out(server, service, supervisor)
 
 
-@router.get("/{server_id}/status", summary="État du serveur")
+@router.get("/{server_id}/status", summary="Server status")
 async def server_status(access: ServerAccess, supervisor: SupervisorDep) -> dict[str, Any]:
     """Instantané du runtime, sans relire la base."""
     server, _ = access
@@ -164,7 +165,7 @@ async def server_status(access: ServerAccess, supervisor: SupervisorDep) -> dict
     "",
     response_model=ServerOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Ajouter un serveur",
+    summary="Add a server",
     dependencies=[CsrfProtected],
 )
 async def create_server(
@@ -194,7 +195,7 @@ async def create_server(
 @router.put(
     "/{server_id}",
     response_model=ServerOut,
-    summary="Modifier un serveur",
+    summary="Update a server",
     dependencies=[CsrfProtected],
 )
 async def update_server(
@@ -222,7 +223,7 @@ async def update_server(
 
 @router.delete(
     "/{server_id}",
-    summary="Retirer un serveur du panel",
+    summary="Remove a server from the panel",
     dependencies=[CsrfProtected],
 )
 async def delete_server(
@@ -238,8 +239,10 @@ async def delete_server(
     name = server.name
     await service.delete_server(server, actor=user, ip_address=ip)
     return {
-        "status": "supprimé",
-        "detail": f"« {name} » a été retiré du panel ; ses fichiers sont intacts.",
+        "status": "deleted",
+        "detail": tr(
+            "“{name}” has been removed from the panel; its files are untouched.", name=name
+        ),
     }
 
 
@@ -253,7 +256,7 @@ def _lifecycle(session: DbSession, supervisor: SupervisorDep) -> LifecycleServic
 LifecycleDep = Annotated[LifecycleService, Depends(_lifecycle)]
 
 
-@router.post("/{server_id}/start", summary="Démarrer", dependencies=[CsrfProtected])
+@router.post("/{server_id}/start", summary="Start", dependencies=[CsrfProtected])
 async def start_server(
     access: ServerAccess, lifecycle: LifecycleDep, ip: ClientIp
 ) -> dict[str, Any]:
@@ -264,7 +267,7 @@ async def start_server(
 @router.post(
     "/{server_id}/stop",
     response_model=StopOut,
-    summary="Arrêter",
+    summary="Stop",
     dependencies=[CsrfProtected],
 )
 async def stop_server(access: ServerAccess, lifecycle: LifecycleDep, ip: ClientIp) -> StopOut:
@@ -272,7 +275,7 @@ async def stop_server(access: ServerAccess, lifecycle: LifecycleDep, ip: ClientI
     return StopOut(**await lifecycle.stop(server, context=context, ip_address=ip))
 
 
-@router.post("/{server_id}/restart", summary="Redémarrer", dependencies=[CsrfProtected])
+@router.post("/{server_id}/restart", summary="Restart", dependencies=[CsrfProtected])
 async def restart_server(
     access: ServerAccess, lifecycle: LifecycleDep, ip: ClientIp
 ) -> dict[str, Any]:
@@ -280,7 +283,7 @@ async def restart_server(
     return await lifecycle.restart(server, context=context, ip_address=ip)
 
 
-@router.post("/{server_id}/kill", summary="Arrêt forcé", dependencies=[CsrfProtected])
+@router.post("/{server_id}/kill", summary="Force stop", dependencies=[CsrfProtected])
 async def kill_server(
     access: ServerAccess, lifecycle: LifecycleDep, ip: ClientIp
 ) -> dict[str, Any]:
@@ -289,7 +292,7 @@ async def kill_server(
     return await lifecycle.kill(server, context=context, ip_address=ip)
 
 
-@router.get("/{server_id}/capabilities", summary="Fonctionnalités disponibles")
+@router.get("/{server_id}/capabilities", summary="Available features")
 async def server_capabilities(access: ServerAccess, service: ServerServiceDep) -> list[str]:
     """Onglets à afficher, déduits du contenu réel du dossier du serveur."""
     server, _ = access

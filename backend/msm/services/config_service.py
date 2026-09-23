@@ -29,6 +29,7 @@ from msm.db.models.audit import AuditAction
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.security.rbac import AccessContext
 from msm.security.safe_path import relative_to_root, resolve_within
@@ -103,9 +104,9 @@ class ConfigService:
 
         if not directory.is_dir():
             raise ValidationError(
-                "Ce chemin n'est pas un dossier.",
-                cause=f"« {relative} » désigne un fichier.",
-                remediation="Ouvrir le fichier plutôt que de le parcourir.",
+                tr("This path is not a folder."),
+                cause=tr("“{path}” is a file.", path=relative),
+                remediation=tr("Open the file instead of browsing it."),
             )
 
         entries: list[ConfigEntry] = []
@@ -157,25 +158,30 @@ class ConfigService:
 
         if path.is_dir():
             raise ValidationError(
-                "Ce chemin est un dossier.",
-                cause=f"« {relative} » ne peut pas être ouvert dans l'éditeur.",
-                remediation="Sélectionner un fichier.",
+                tr("This path is a folder."),
+                cause=tr("“{path}” cannot be opened in the editor.", path=relative),
+                remediation=tr("Select a file."),
             )
 
         file_format = detect_format(path)
         if not file_format:
             raise ValidationError(
-                "Type de fichier non éditable.",
-                cause=f"L'extension « {path.suffix or 'aucune'} » n'est pas prise en charge.",
-                remediation=("Formats éditables : " + ", ".join(sorted(EDITABLE_FORMATS)) + "."),
+                tr("File type not editable."),
+                cause=tr(
+                    "The extension “{extension}” is not supported.",
+                    extension=path.suffix or tr("none"),
+                ),
+                remediation=tr(
+                    "Editable formats: {formats}.", formats=", ".join(sorted(EDITABLE_FORMATS))
+                ),
             )
 
         stat = path.stat()
         if stat.st_size > MAX_EDITABLE_BYTES:
             raise ValidationError(
-                "Fichier trop volumineux pour l'éditeur.",
-                cause=f"{stat.st_size / 1024 / 1024:.1f} Mo pour une limite de 2 Mo.",
-                remediation="Modifier ce fichier directement sur le serveur.",
+                tr("File too large for the editor."),
+                cause=tr("{size} MB for a 2 MB limit.", size=f"{stat.st_size / 1024 / 1024:.1f}"),
+                remediation=tr("Edit this file directly on the server."),
             )
 
         content, encoding = read_text_guessing_encoding(path)
@@ -200,7 +206,7 @@ class ConfigService:
         ip_address: str | None = None,
     ) -> dict[str, Any]:
         """Valide puis écrit un fichier, sans en modifier la mise en forme."""
-        context.require(Permission.CONFIG_WRITE, action="modifier une configuration")
+        context.require(Permission.CONFIG_WRITE, action=tr("edit a configuration file"))
 
         root = Path(server.directory)
         path = resolve_within(root, relative, must_exist=True)
@@ -208,16 +214,19 @@ class ConfigService:
         file_format = detect_format(path)
         if not file_format:
             raise ValidationError(
-                "Type de fichier non éditable.",
-                cause=f"L'extension « {path.suffix or 'aucune'} » n'est pas prise en charge.",
-                remediation="Modifier ce fichier directement sur le serveur.",
+                tr("File type not editable."),
+                cause=tr(
+                    "The extension “{extension}” is not supported.",
+                    extension=path.suffix or tr("none"),
+                ),
+                remediation=tr("Edit this file directly on the server."),
             )
 
         if len(content.encode("utf-8")) > MAX_EDITABLE_BYTES:
             raise ValidationError(
-                "Contenu trop volumineux.",
-                cause="Le fichier dépasse la limite de 2 Mo.",
-                remediation="Réduire le contenu ou modifier le fichier sur le serveur.",
+                tr("Content too large."),
+                cause=tr("The file exceeds the 2 MB limit."),
+                remediation=tr("Reduce the content or edit the file on the server."),
             )
 
         validate_syntax(content, file_format)
@@ -225,7 +234,11 @@ class ConfigService:
 
         self._audit.record(
             action=AuditAction.CONFIG_UPDATED,
-            summary=f"Modification de « {relative_to_root(root, path)} » sur « {server.name} ».",
+            summary=tr(
+                "“{file}” edited on “{server}”.",
+                file=relative_to_root(root, path),
+                server=server.name,
+            ),
             actor_id=context.user_id,
             actor_username=context.username,
             actor_role=context.role.value,
@@ -266,25 +279,35 @@ def validate_syntax(content: str, file_format: str) -> None:
             tomllib.loads(content)
     except json.JSONDecodeError as exc:
         raise ValidationError(
-            "Syntaxe JSON invalide.",
-            cause=f"Ligne {exc.lineno}, colonne {exc.colno} : {exc.msg}.",
-            remediation="Corriger la syntaxe avant d'enregistrer.",
+            tr("Invalid JSON syntax."),
+            cause=tr(
+                "Line {line}, column {column}: {problem}.",
+                line=exc.lineno,
+                column=exc.colno,
+                problem=exc.msg,
+            ),
+            remediation=tr("Fix the syntax before saving."),
         ) from exc
     except yaml.YAMLError as exc:
         mark = getattr(exc, "problem_mark", None)
         cause = (
-            f"Ligne {mark.line + 1}, colonne {mark.column + 1} : {getattr(exc, 'problem', exc)}."
+            tr(
+                "Line {line}, column {column}: {problem}.",
+                line=mark.line + 1,
+                column=mark.column + 1,
+                problem=getattr(exc, "problem", exc),
+            )
             if mark is not None
             else str(exc)
         )
         raise ValidationError(
-            "Syntaxe YAML invalide.",
+            tr("Invalid YAML syntax."),
             cause=cause,
-            remediation="Corriger la syntaxe avant d'enregistrer.",
+            remediation=tr("Fix the syntax before saving."),
         ) from exc
     except tomllib.TOMLDecodeError as exc:
         raise ValidationError(
-            "Syntaxe TOML invalide.",
+            tr("Invalid TOML syntax."),
             cause=str(exc),
-            remediation="Corriger la syntaxe avant d'enregistrer.",
+            remediation=tr("Fix the syntax before saving."),
         ) from exc

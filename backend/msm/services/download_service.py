@@ -33,6 +33,7 @@ from msm.downloads.sources import (
     resolve,
 )
 from msm.exceptions import ServerAlreadyRunning, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
@@ -59,7 +60,7 @@ class DownloadService:
         return [{"key": key, "label": source["label"]} for key, source in SOURCES.items()]
 
     async def versions(self, source: str, *, context: AccessContext) -> list[dict[str, Any]]:
-        context.require(Permission.SERVER_EDIT, action="consulter les versions disponibles")
+        context.require(Permission.SERVER_EDIT, action=tr("view available versions"))
         return [version.to_dict() for version in await list_versions(source)]
 
     async def install(
@@ -72,22 +73,22 @@ class DownloadService:
         ip_address: str | None = None,
     ) -> dict[str, Any]:
         """Télécharge un JAR dans le dossier du serveur et le sélectionne."""
-        context.require(Permission.SERVER_EDIT, action="installer une version")
+        context.require(Permission.SERVER_EDIT, action=tr("install a version"))
 
         runtime = self._supervisor.find(server.id)
         if runtime is not None and runtime.state.is_running:
             raise ServerAlreadyRunning(
-                "Le serveur doit être arrêté pour changer de version.",
-                cause="Remplacer le JAR d'un serveur en cours d'exécution le ferait échouer.",
-                remediation="Arrêter le serveur, puis relancer l'installation.",
+                tr("The server must be stopped to change version."),
+                cause=tr("Replacing the JAR of a running server would make it fail."),
+                remediation=tr("Stop the server, then start the installation again."),
             )
 
         directory = Path(server.directory)
         if not directory.is_dir():
             raise ValidationError(
-                "Dossier du serveur introuvable.",
-                cause=f"{directory} n'existe pas ou n'est pas lisible.",
-                remediation="Vérifier le chemin du serveur dans ses réglages.",
+                tr("Server folder not found."),
+                cause=tr("{path} does not exist or cannot be read.", path=directory),
+                remediation=tr("Check the server path in its settings."),
             )
 
         target = await resolve(source, version)
@@ -106,8 +107,11 @@ class DownloadService:
 
         self._audit.record(
             action=AuditAction.SERVER_UPDATED,
-            summary=(
-                f"Installation de {SOURCES[source]['label']} {version} sur « {server.name} »."
+            summary=tr(
+                "{source} {version} installed on “{name}”.",
+                source=SOURCES[source]["label"],
+                version=version,
+                name=server.name,
             ),
             actor_id=context.user_id,
             actor_username=context.username,
@@ -152,20 +156,21 @@ async def _download(
                     written += len(chunk)
                     if written > MAX_JAR_BYTES:
                         raise ValidationError(
-                            "Fichier trop volumineux.",
-                            cause=(
-                                f"Le téléchargement dépasse {MAX_JAR_BYTES // (1024 * 1024)} Mo."
+                            tr("File too large."),
+                            cause=tr(
+                                "The download exceeds {limit} MB.",
+                                limit=MAX_JAR_BYTES // (1024 * 1024),
                             ),
-                            remediation="Signaler l'anomalie : ce n'est pas un JAR de serveur.",
+                            remediation=tr("Report the anomaly: this is not a server JAR."),
                         )
                     digest.update(chunk)
                     await asyncio.to_thread(handle.write, chunk)
     except httpx.HTTPError as exc:
         partial.unlink(missing_ok=True)
         raise ValidationError(
-            "Téléchargement interrompu.",
-            cause=f"La source n'a pas pu être lue jusqu'au bout : {exc}",
-            remediation="Vérifier la connexion réseau de la machine, puis réessayer.",
+            tr("Download interrupted."),
+            cause=tr("The source could not be read to the end: {error}", error=exc),
+            remediation=tr("Check the machine's network connection, then try again."),
         ) from exc
     except BaseException:
         partial.unlink(missing_ok=True)
@@ -178,9 +183,9 @@ async def _download(
     if digest.hexdigest().lower() != target.checksum.lower():
         partial.unlink(missing_ok=True)
         raise ValidationError(
-            "Fichier téléchargé invalide.",
-            cause=("L'empreinte du fichier ne correspond pas à celle publiée par la source."),
-            remediation="Réessayer ; si l'erreur persiste, changer de version ou de source.",
+            tr("Invalid downloaded file."),
+            cause=tr("The file checksum does not match the one published by the source."),
+            remediation=tr("Try again; if the error persists, change version or source."),
         )
 
     partial.replace(destination)

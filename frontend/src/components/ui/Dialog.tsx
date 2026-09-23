@@ -4,6 +4,7 @@ import { useEffect, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 interface DialogProps {
   open: boolean
@@ -73,7 +74,7 @@ export function Dialog({
           <button
             onClick={onClose}
             className="rounded-lg p-1 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <X className="size-4" />
           </button>

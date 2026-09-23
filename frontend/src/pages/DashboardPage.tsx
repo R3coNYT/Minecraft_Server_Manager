@@ -13,6 +13,7 @@ import { ServerStatusBadge } from '@/components/servers/ServerStatusBadge'
 import { ServerActions } from '@/components/servers/ServerActions'
 import { Button } from '@/components/ui/Button'
 import { CreateServerDialog } from '@/components/servers/CreateServerDialog'
+import { t, tn } from '@/i18n'
 
 function ServerCard({ server }: { server: Server }) {
   const { data: me } = useMe()
@@ -33,7 +34,7 @@ function ServerCard({ server }: { server: Server }) {
             {server.name}
           </Link>
           <p className="mt-0.5 truncate text-xs text-slate-500">
-            {server.server_type !== 'UNKNOWN' ? server.server_type : 'Type inconnu'}
+            {server.server_type !== 'UNKNOWN' ? server.server_type : t('dashboard.unknownType')}
             {server.minecraft_version ? ` · Minecraft ${server.minecraft_version}` : ''}
           </p>
         </div>
@@ -42,19 +43,19 @@ function ServerCard({ server }: { server: Server }) {
 
       <div className="grid grid-cols-3 gap-px border-y border-slate-800 bg-slate-800">
         <div className="bg-slate-900/60 px-3 py-2.5">
-          <p className="text-[11px] text-slate-500">Joueurs</p>
+          <p className="text-[11px] text-slate-500">{t('dashboard.players')}</p>
           <p className="text-sm font-medium tabular-nums text-slate-200">
             {status?.players_online ?? 0}
           </p>
         </div>
         <div className="bg-slate-900/60 px-3 py-2.5">
-          <p className="text-[11px] text-slate-500">Mémoire</p>
+          <p className="text-[11px] text-slate-500">{t('dashboard.memory')}</p>
           <p className="text-sm font-medium tabular-nums text-slate-200">
             {stats && stats.memory_mb > 0 ? formatMemory(stats.memory_mb) : '—'}
           </p>
         </div>
         <div className="bg-slate-900/60 px-3 py-2.5">
-          <p className="text-[11px] text-slate-500">Actif depuis</p>
+          <p className="text-[11px] text-slate-500">{t('dashboard.uptime')}</p>
           <p className="text-sm font-medium tabular-nums text-slate-200">
             {status ? formatUptime(status.uptime_s) : '—'}
           </p>
@@ -84,7 +85,7 @@ function ServerCard({ server }: { server: Server }) {
           to={`/servers/${server.id}/console`}
           className="shrink-0 text-xs text-slate-400 hover:text-emerald-400"
         >
-          Console →
+          {t('dashboard.console')}
         </Link>
       </div>
     </Card>
@@ -117,38 +118,37 @@ export function DashboardPage() {
     <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-slate-100">Tableau de bord</h1>
+          <h1 className="text-lg font-semibold text-slate-100">{t('dashboard.title')}</h1>
           <p className="text-sm text-slate-500">
-            {data.summary.servers_total} serveur{data.summary.servers_total > 1 ? 's' : ''} géré
-            {data.summary.servers_total > 1 ? 's' : ''}, {onlineCount} en ligne
+            {tn('dashboard.summary', data.summary.servers_total, { online: onlineCount })}
           </p>
         </div>
         {hasPermission(me, 'server:create') ? (
           <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-            Ajouter un serveur
+            {t('dashboard.addServer')}
           </Button>
         ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatTile
-          label="Serveurs en ligne"
+          label={t('dashboard.serversOnline')}
           value={`${onlineCount} / ${data.summary.servers_total}`}
           icon={<ServerIcon className="size-4" />}
         />
         <StatTile
-          label="Joueurs connectés"
+          label={t('dashboard.playersOnline')}
           value={playersOnline}
           icon={<Users className="size-4" />}
         />
         <StatTile
-          label="Processeur"
+          label={t('dashboard.cpu')}
           value={formatPercent(system.cpu_percent)}
-          detail={`${system.cpu_count} cœurs`}
+          detail={t('dashboard.cores', { count: system.cpu_count })}
           icon={<Cpu className="size-4" />}
         />
         <StatTile
-          label="Mémoire"
+          label={t('dashboard.memory')}
           value={formatPercent(system.memory_percent)}
           detail={`${formatMemory(system.memory_used_mb)} / ${formatMemory(system.memory_total_mb)}`}
           icon={<MemoryStick className="size-4" />}
@@ -160,9 +160,9 @@ export function DashboardPage() {
           <HardDrive className="size-4 shrink-0 text-slate-600" />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Disque</span>
+              <span className="text-slate-400">{t('dashboard.disk')}</span>
               <span className="tabular-nums text-slate-400">
-                {system.disk_used_gb} Go / {system.disk_total_gb} Go
+                {t('dashboard.diskUsage', { used: system.disk_used_gb ?? 0, total: system.disk_total_gb ?? 0 })}
               </span>
             </div>
             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
@@ -179,12 +179,12 @@ export function DashboardPage() {
         <Card>
           <EmptyState
             icon={<ServerIcon className="size-8" />}
-            title="Aucun serveur enregistré"
-            description="Ajouter un serveur en indiquant le dossier qui le contient : MSM analysera son contenu et proposera une configuration de démarrage."
+            title={t('dashboard.emptyTitle')}
+            description={t('dashboard.emptyDescription')}
             action={
               hasPermission(me, 'server:create') ? (
                 <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-                  Ajouter un serveur
+                  {t('dashboard.addServer')}
                 </Button>
               ) : null
             }

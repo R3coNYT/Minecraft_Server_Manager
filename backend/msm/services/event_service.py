@@ -34,6 +34,7 @@ from msm.events import registry
 from msm.events.actions import ExecutionContext
 from msm.events.engine import EventRunner, RunProgress, RunStatus, Step, max_danger, parse_steps
 from msm.exceptions import ConfirmationRequired, NotFoundError, ServerNotRunning, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
@@ -74,9 +75,9 @@ class EventService:
         event = await self._session.get(EventDefinition, event_id)
         if event is None or (event.server_id not in (None, server.id)):
             raise NotFoundError(
-                "Événement introuvable.",
-                cause=f"Aucun événement n'a l'identifiant {event_id} sur ce serveur.",
-                remediation="Rafraîchir la liste des événements.",
+                tr("Event not found."),
+                cause=tr("No event has the identifier {id} on this server.", id=event_id),
+                remediation=tr("Refresh the event list."),
             )
         return event
 
@@ -90,14 +91,14 @@ class EventService:
         context: AccessContext,
         ip_address: str | None = None,
     ) -> EventDefinition:
-        context.require(Permission.EVENT_EDIT, action="créer un événement")
+        context.require(Permission.EVENT_EDIT, action=tr("create an event"))
 
         clean_name = name.strip()
         if not clean_name:
             raise ValidationError(
-                "Nom d'événement manquant.",
-                cause="Le nom ne peut pas être vide.",
-                remediation="Donner un nom à cet événement.",
+                tr("Missing event name."),
+                cause=tr("The name cannot be empty."),
+                remediation=tr("Give this event a name."),
             )
 
         # Les étapes sont validées à l'enregistrement : découvrir une erreur en
@@ -116,7 +117,7 @@ class EventService:
 
         self._record(
             AuditAction.EVENT_RUN,
-            f"Création de l'événement « {clean_name} » sur « {server.name} ».",
+            tr("Event “{event}” created on “{server}”.", event=clean_name, server=server.name),
             server,
             context,
             ip_address,
@@ -134,7 +135,7 @@ class EventService:
         description: str | None = None,
         context: AccessContext,
     ) -> EventDefinition:
-        context.require(Permission.EVENT_EDIT, action="modifier un événement")
+        context.require(Permission.EVENT_EDIT, action=tr("edit an event"))
 
         if name is not None and name.strip():
             event.name = name.strip()
@@ -149,7 +150,7 @@ class EventService:
     async def delete_event(
         self, server: Server, event: EventDefinition, *, context: AccessContext
     ) -> None:
-        context.require(Permission.EVENT_EDIT, action="supprimer un événement")
+        context.require(Permission.EVENT_EDIT, action=tr("delete an event"))
         await self._session.delete(event)
 
     # ------------------------------------------------------------------ #
@@ -169,30 +170,28 @@ class EventService:
         confirmation étant lue avant de cliquer, elle doit décrire ce que
         l'utilisateur s'apprête réellement à faire.
         """
-        context.require(Permission.EVENT_RUN, action="déclencher un événement")
+        context.require(Permission.EVENT_RUN, action=tr("run an event"))
         danger = max_danger(steps)
 
         if danger is DangerLevel.SAFE:
             return danger
 
-        context.require(
-            Permission.EVENT_RUN_DESTRUCTIVE, action="déclencher une action destructrice"
-        )
+        context.require(Permission.EVENT_RUN_DESTRUCTIVE, action=tr("run a destructive action"))
         if not confirm:
             destructive = [
                 step.describe()
                 for step in steps
                 if registry.danger_of(step.action, step.params) is not DangerLevel.SAFE
             ]
-            preamble = (
-                "Cette action est irréversible : "
-                if single
-                else "Cet événement contient des actions irréversibles : "
-            )
+            listed = "; ".join(destructive)
             raise ConfirmationRequired(
-                "Confirmation requise.",
-                cause=preamble + " ; ".join(destructive) + ".",
-                remediation="Renvoyer la requête avec `confirm: true` pour confirmer.",
+                tr("Confirmation required."),
+                cause=(
+                    tr("This action cannot be undone: {actions}.", actions=listed)
+                    if single
+                    else tr("This event contains irreversible actions: {actions}.", actions=listed)
+                ),
+                remediation=tr("Send the request again with `confirm: true` to confirm."),
                 context={"danger": danger.name, "actions": destructive},
             )
         return danger
@@ -201,9 +200,9 @@ class EventService:
         runtime = self._supervisor.find(server.id)
         if runtime is None or not runtime.state.is_running:
             raise ServerNotRunning(
-                "Le serveur n'est pas démarré.",
-                cause="Un événement passe par la console du serveur.",
-                remediation="Démarrer le serveur avant de déclencher un événement.",
+                tr("The server is not running."),
+                cause=tr("An event goes through the server console."),
+                remediation=tr("Start the server before running an event."),
             )
         return runtime
 
@@ -237,7 +236,7 @@ class EventService:
 
         self._record(
             AuditAction.EVENT_RUN,
-            f"Action « {result.summary} » sur « {server.name} ».",
+            tr("Action “{action}” on “{server}”.", action=result.summary, server=server.name),
             server,
             context,
             ip_address,
@@ -280,7 +279,7 @@ class EventService:
 
         self._record(
             AuditAction.EVENT_RUN,
-            f"Lancement de l'événement « {event.name} » sur « {server.name} ».",
+            tr("Event “{event}” started on “{server}”.", event=event.name, server=server.name),
             server,
             context,
             ip_address,
@@ -310,14 +309,14 @@ class EventService:
 
     async def cancel_run(self, server: Server, run_id: int, *, context: AccessContext) -> bool:
         """Interrompt une exécution en cours, y compris pendant une attente."""
-        context.require(Permission.EVENT_RUN, action="annuler un événement")
+        context.require(Permission.EVENT_RUN, action=tr("cancel an event"))
 
         run = await self._session.get(EventRun, run_id)
         if run is None or run.server_id != server.id:
             raise NotFoundError(
-                "Exécution introuvable.",
-                cause=f"Aucune exécution n'a l'identifiant {run_id} sur ce serveur.",
-                remediation="Rafraîchir l'historique des événements.",
+                tr("Run not found."),
+                cause=tr("No run has the identifier {id} on this server.", id=run_id),
+                remediation=tr("Refresh the event history."),
             )
 
         task = _ACTIVE_RUNS.get(run_id)
@@ -348,7 +347,7 @@ class EventService:
         for run in interrupted:
             run.status = EventRunStatus.FAILED
             run.finished_at = datetime.now(UTC)
-            run.error = "Exécution interrompue par un redémarrage de MSM."
+            run.error = tr("Run interrupted by an MSM restart.")
         if interrupted:
             logger.info("event_runs_marked_interrupted", count=len(interrupted))
         return len(interrupted)
@@ -416,13 +415,15 @@ async def _execute_run(
 
     runtime = supervisor.find(server_id)
     if runtime is None:  # pragma: no cover - serveur retiré entre-temps
-        await report(RunProgress(RunStatus.FAILED, 0, len(steps), "Serveur introuvable."))
+        await report(RunProgress(RunStatus.FAILED, 0, len(steps), tr("Server not found.")))
         return
 
     context = ExecutionContext(
         server_name=server_name,
         actor=actor,
-        send=lambda command: runtime.send_command(command, actor=f"événement ({actor})"),
+        send=lambda command: runtime.send_command(
+            command, actor=tr("event ({actor})", actor=actor)
+        ),
     )
 
     try:

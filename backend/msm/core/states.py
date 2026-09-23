@@ -25,6 +25,7 @@ from __future__ import annotations
 from enum import Enum
 
 from msm.exceptions import InvalidStateTransition
+from msm.i18n import tr
 
 
 class ServerState(str, Enum):
@@ -110,13 +111,27 @@ def assert_transition(current: ServerState, target: ServerState, *, server: str 
     """Valide une transition, ou lève :class:`InvalidStateTransition`."""
     if can_transition(current, target):
         return
-    label = f" du serveur « {server} »" if server else ""
+    message = (
+        tr(
+            "Impossible state change for server “{server}”: {current} → {target}.",
+            server=server,
+            current=current.value,
+            target=target.value,
+        )
+        if server
+        else tr(
+            "Impossible state change: {current} → {target}.",
+            current=current.value,
+            target=target.value,
+        )
+    )
     raise InvalidStateTransition(
-        f"Transition d'état impossible{label} : {current.value} → {target.value}.",
-        cause=(
-            f"Depuis l'état {current.value}, seuls "
-            f"{', '.join(sorted(s.value for s in ALLOWED_TRANSITIONS[current]))} sont atteignables."
+        message,
+        cause=tr(
+            "From the {current} state, only {allowed} can be reached.",
+            current=current.value,
+            allowed=", ".join(sorted(s.value for s in ALLOWED_TRANSITIONS[current])),
         ),
-        remediation="Attendre la fin de l'opération en cours avant de relancer l'action.",
+        remediation=tr("Wait for the current operation to finish before trying again."),
         context={"current": current.value, "target": target.value},
     )

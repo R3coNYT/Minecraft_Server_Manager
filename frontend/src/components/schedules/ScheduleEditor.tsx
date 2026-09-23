@@ -16,23 +16,32 @@ import { Button } from '@/components/ui/Button'
 import { Field, Input, Select } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { cn } from '@/lib/cn'
+import { t, type MessageKey } from '@/i18n'
 
-const ACTION_LABELS: Record<ScheduleAction, string> = {
-  BACKUP: 'Sauvegarder',
-  RESTART: 'Redémarrer',
-  START: 'Démarrer',
-  STOP: 'Arrêter',
-  EVENT: 'Déclencher un événement',
-  COMMAND: 'Envoyer une commande',
+const ACTION_LABELS: Record<ScheduleAction, MessageKey> = {
+  BACKUP: 'scheduleEditor.action.BACKUP',
+  RESTART: 'scheduleEditor.action.RESTART',
+  START: 'scheduleEditor.action.START',
+  STOP: 'scheduleEditor.action.STOP',
+  EVENT: 'scheduleEditor.action.EVENT',
+  COMMAND: 'scheduleEditor.action.COMMAND',
 }
 
-const TRIGGER_LABELS: Record<TriggerKind, string> = {
-  INTERVAL: 'À intervalle régulier',
-  DAILY: 'Chaque jour',
-  WEEKLY: 'Certains jours',
+const TRIGGER_LABELS: Record<TriggerKind, MessageKey> = {
+  INTERVAL: 'scheduleEditor.trigger.INTERVAL',
+  DAILY: 'scheduleEditor.trigger.DAILY',
+  WEEKLY: 'scheduleEditor.trigger.WEEKLY',
 }
 
-const DAYS = ['lun', 'mar', 'mer', 'jeu', 'ven', 'sam', 'dim']
+const DAYS: MessageKey[] = [
+  'scheduleEditor.day0',
+  'scheduleEditor.day1',
+  'scheduleEditor.day2',
+  'scheduleEditor.day3',
+  'scheduleEditor.day4',
+  'scheduleEditor.day5',
+  'scheduleEditor.day6',
+]
 
 /** Fuseau du navigateur, ou UTC si l'environnement ne le dit pas. */
 function browserTimezone(): string {
@@ -102,13 +111,13 @@ export function ScheduleEditor({
     <Dialog
       open={open}
       onClose={onClose}
-      title={initial ? `Modifier « ${initial.name} »` : 'Nouvelle tâche programmée'}
-      description="La tâche s'exécutera avec vos droits, réévalués à chaque déclenchement."
+      title={initial ? t('scheduleEditor.editTitle', { name: initial.name }) : t('scheduleEditor.newTitle')}
+      description={t('scheduleEditor.description')}
       size="md"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -116,22 +125,22 @@ export function ScheduleEditor({
             disabled={incomplete}
             onClick={() => onSave(draft)}
           >
-            Enregistrer
+            {t('common.save')}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Nom">
+          <Field label={t('scheduleEditor.name')}>
             <Input
               value={draft.name}
               onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-              placeholder="Sauvegarde nocturne"
+              placeholder={t('scheduleEditor.namePlaceholder')}
               autoFocus
             />
           </Field>
-          <Field label="Action">
+          <Field label={t('scheduleEditor.action')}>
             <Select
               value={draft.action}
               disabled={locked}
@@ -145,7 +154,7 @@ export function ScheduleEditor({
             >
               {(Object.keys(ACTION_LABELS) as ScheduleAction[]).map((action) => (
                 <option key={action} value={action}>
-                  {ACTION_LABELS[action]}
+                  {t(ACTION_LABELS[action])}
                 </option>
               ))}
             </Select>
@@ -154,8 +163,8 @@ export function ScheduleEditor({
 
         {draft.action === 'EVENT' ? (
           <Field
-            label="Événement"
-            hint={events.length === 0 ? "Aucun événement enregistré sur ce serveur." : undefined}
+            label={t('scheduleEditor.event')}
+            hint={events.length === 0 ? t('scheduleEditor.noEvents') : undefined}
           >
             <Select
               value={String(draft.payload.event_id ?? '')}
@@ -163,7 +172,7 @@ export function ScheduleEditor({
                 setDraft({ ...draft, payload: { event_id: Number(event.target.value) } })
               }
             >
-              <option value="">— Choisir —</option>
+              <option value="">{t('scheduleEditor.choose')}</option>
               {events.map((event) => (
                 <option key={event.id} value={event.id}>
                   {event.name}
@@ -174,18 +183,18 @@ export function ScheduleEditor({
         ) : null}
 
         {draft.action === 'COMMAND' ? (
-          <Field label="Commande" hint="Sans le « / » initial.">
+          <Field label={t('scheduleEditor.command')} hint={t('scheduleEditor.commandHint')}>
             <Input
               value={String(draft.payload.command ?? '')}
               onChange={(event) =>
                 setDraft({ ...draft, payload: { command: event.target.value } })
               }
-              placeholder="say Redémarrage dans 5 minutes"
+              placeholder={t('scheduleEditor.commandPlaceholder')}
             />
           </Field>
         ) : null}
 
-        <Field label="Quand">
+        <Field label={t('scheduleEditor.when')}>
           <Select
             value={rule.trigger}
             onChange={(event) => {
@@ -200,14 +209,14 @@ export function ScheduleEditor({
           >
             {(Object.keys(TRIGGER_LABELS) as TriggerKind[]).map((trigger) => (
               <option key={trigger} value={trigger}>
-                {TRIGGER_LABELS[trigger]}
+                {t(TRIGGER_LABELS[trigger])}
               </option>
             ))}
           </Select>
         </Field>
 
         {rule.trigger === 'INTERVAL' ? (
-          <Field label="Intervalle (minutes)" hint="5 minutes au minimum.">
+          <Field label={t('scheduleEditor.interval')} hint={t('scheduleEditor.intervalHint')}>
             <Input
               type="number"
               min={5}
@@ -217,7 +226,7 @@ export function ScheduleEditor({
           </Field>
         ) : (
           <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Heure">
+            <Field label={t('scheduleEditor.hour')}>
               <Input
                 type="number"
                 min={0}
@@ -226,7 +235,7 @@ export function ScheduleEditor({
                 onChange={(event) => setRule({ hour: Number(event.target.value) })}
               />
             </Field>
-            <Field label="Minute">
+            <Field label={t('scheduleEditor.minute')}>
               <Input
                 type="number"
                 min={0}
@@ -235,7 +244,7 @@ export function ScheduleEditor({
                 onChange={(event) => setRule({ minute: Number(event.target.value) })}
               />
             </Field>
-            <Field label="Fuseau">
+            <Field label={t('scheduleEditor.timezone')}>
               <Input
                 value={rule.timezone}
                 onChange={(event) => setRule({ timezone: event.target.value })}
@@ -246,7 +255,7 @@ export function ScheduleEditor({
 
         {rule.trigger === 'WEEKLY' ? (
           <div>
-            <p className="mb-1.5 text-xs font-medium text-slate-400">Jours</p>
+            <p className="mb-1.5 text-xs font-medium text-slate-400">{t('scheduleEditor.days')}</p>
             <div className="flex flex-wrap gap-1.5">
               {DAYS.map((label, index) => (
                 <button
@@ -259,7 +268,7 @@ export function ScheduleEditor({
                       : 'bg-slate-800 text-slate-400 hover:text-slate-200',
                   )}
                 >
-                  {label}
+                  {t(label)}
                 </button>
               ))}
             </div>

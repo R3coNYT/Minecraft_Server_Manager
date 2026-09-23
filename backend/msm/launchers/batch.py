@@ -11,11 +11,12 @@ import sys
 from typing import ClassVar
 
 from msm.exceptions import LaunchError
+from msm.i18n import tr
 from msm.launchers.base import LaunchContext, Launcher, ProcessSpec
 
 _UNAVAILABLE = (
-    "Les scripts batch (.bat) ne peuvent être exécutés que sous Windows. "
-    "Sur cette machine Linux, utiliser le lancement par JAR ou par script shell."
+    "Batch scripts (.bat) can only run on Windows. On this Linux machine, use the "
+    "JAR or shell script start method."
 )
 
 
@@ -23,40 +24,40 @@ class BatchLauncher(Launcher):
     """Démarre le serveur via ``cmd.exe /c script.bat``."""
 
     key: ClassVar[str] = "batch"
-    label: ClassVar[str] = "Script batch (run.bat)"
-    description: ClassVar[str] = "Exécute un script `.bat`. Windows uniquement."
+    label: ClassVar[str] = "Batch script (run.bat)"
+    description: ClassVar[str] = "Runs a `.bat` script. Windows only."
 
     def is_available(self) -> str | None:
-        return None if sys.platform == "win32" else _UNAVAILABLE
+        return None if sys.platform == "win32" else tr(_UNAVAILABLE)
 
     def build_spec(self, ctx: LaunchContext) -> ProcessSpec:
         if (reason := self.is_available()) is not None:
             raise LaunchError(
-                "Mode de démarrage indisponible sur cette machine.",
+                tr("Start method unavailable on this machine."),
                 cause=reason,
-                remediation="Choisir « Fichier JAR » ou « Script shell » dans les réglages.",
+                remediation=tr("Choose “JAR file” or “Shell script” in the settings."),
             )
 
         directory = self._require_directory(ctx)
 
         if not ctx.script_path:
             raise LaunchError(
-                "Aucun script configuré.",
-                cause="Le serveur est en mode « Script batch » mais aucun script n'est renseigné.",
-                remediation="Sélectionner le script de démarrage (par exemple `run.bat`).",
+                tr("No script configured."),
+                cause=tr("The server is in “Batch script” mode but no script is set."),
+                remediation=tr("Select the start script (for example `run.bat`)."),
             )
 
-        script = ctx.resolve_in_directory(ctx.script_path, label="Script de démarrage")
+        script = ctx.resolve_in_directory(ctx.script_path, label=tr("Start script"))
         self._require_file(
             script,
-            label="Script de démarrage",
-            remediation=f"Placer le script dans {directory} puis vérifier son nom.",
+            label=tr("Start script"),
+            remediation=tr("Put the script in {folder}, then check its name.", folder=directory),
         )
 
         comspec = self._resolve_executable(
             "cmd.exe",
-            label="Interpréteur de commandes Windows",
-            remediation="Vérifier que %SystemRoot%\\System32 figure dans le PATH.",
+            label=tr("Windows command interpreter"),
+            remediation=tr("Check that %SystemRoot%\\System32 is on the PATH."),
         )
         # `/c` exécute puis rend la main ; le script est passé en argument distinct,
         # donc jamais interprété comme une ligne de commande composite.

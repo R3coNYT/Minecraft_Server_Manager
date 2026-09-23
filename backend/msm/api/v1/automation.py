@@ -19,6 +19,8 @@ from msm.api.schemas import (
     DownloadSourceOut,
     InstallOut,
     InstallRequest,
+    LanguageOut,
+    LanguageRequest,
     NotificationEventOut,
     NotificationSettingsOut,
     NotificationSettingsRequest,
@@ -29,13 +31,14 @@ from msm.api.schemas import (
 )
 from msm.db.models.schedule import Schedule, ScheduleAction
 from msm.exceptions import ValidationError
+from msm.i18n import SUPPORTED_LANGUAGES, tr
 from msm.schedule.rules import describe, parse_rule
 from msm.services.download_service import DownloadService
 from msm.services.notifier import LABELS, NotificationEvent, send_to_discord
 from msm.services.schedule_service import ScheduleService
 from msm.services.settings_service import SettingsService
 
-router = APIRouter(tags=["automatisation"])
+router = APIRouter(tags=["automation"])
 
 
 def _schedules(
@@ -79,9 +82,12 @@ def _action(value: str) -> ScheduleAction:
         return ScheduleAction(value.upper())
     except ValueError as exc:
         raise ValidationError(
-            "Action inconnue.",
-            cause=f"« {value} » n'est pas une action programmable.",
-            remediation=f"Choisir parmi : {', '.join(item.value for item in ScheduleAction)}.",
+            tr("Unknown action."),
+            cause=tr("“{value}” is not a schedulable action.", value=value),
+            remediation=tr(
+                "Choose one of: {choices}.",
+                choices=", ".join(item.value for item in ScheduleAction),
+            ),
         ) from exc
 
 
@@ -91,7 +97,7 @@ def _action(value: str) -> ScheduleAction:
 @router.get(
     "/servers/{server_id}/schedules",
     response_model=list[ScheduleOut],
-    summary="Lister les tâches programmées",
+    summary="List scheduled tasks",
 )
 async def list_schedules(access: ServerAccess, service: SchedulesDep) -> list[ScheduleOut]:
     server, _ = access
@@ -102,7 +108,7 @@ async def list_schedules(access: ServerAccess, service: SchedulesDep) -> list[Sc
     "/servers/{server_id}/schedules",
     response_model=ScheduleOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Programmer une tâche",
+    summary="Schedule a task",
     dependencies=[CsrfProtected],
 )
 async def create_schedule(
@@ -133,7 +139,7 @@ async def create_schedule(
 @router.put(
     "/servers/{server_id}/schedules/{schedule_id}",
     response_model=ScheduleOut,
-    summary="Modifier une tâche programmée",
+    summary="Update a scheduled task",
     dependencies=[CsrfProtected],
 )
 async def update_schedule(
@@ -160,7 +166,7 @@ async def update_schedule(
 
 @router.delete(
     "/servers/{server_id}/schedules/{schedule_id}",
-    summary="Supprimer une tâche programmée",
+    summary="Delete a scheduled task",
     dependencies=[CsrfProtected],
 )
 async def delete_schedule(
@@ -175,7 +181,7 @@ async def delete_schedule(
 @router.post(
     "/servers/{server_id}/schedules/{schedule_id}/run",
     response_model=ScheduleOut,
-    summary="Déclencher une tâche maintenant",
+    summary="Run a task now",
     dependencies=[CsrfProtected],
 )
 async def run_schedule_now(
@@ -193,18 +199,19 @@ async def run_schedule_now(
 @router.get(
     "/notifications/events",
     response_model=list[NotificationEventOut],
-    summary="Événements notifiables",
+    summary="Notifiable events",
 )
 async def notification_events(_: GlobalContext) -> list[NotificationEventOut]:
     return [
-        NotificationEventOut(key=event.value, label=LABELS[event]) for event in NotificationEvent
+        NotificationEventOut(key=event.value, label=tr(LABELS[event]))
+        for event in NotificationEvent
     ]
 
 
 @router.get(
     "/notifications",
     response_model=NotificationSettingsOut,
-    summary="Réglages des notifications",
+    summary="Notification settings",
 )
 async def get_notifications(
     context: GlobalContext, service: SettingsDep
@@ -215,7 +222,7 @@ async def get_notifications(
 @router.put(
     "/notifications",
     response_model=NotificationSettingsOut,
-    summary="Modifier les notifications",
+    summary="Update notifications",
     dependencies=[CsrfProtected],
 )
 async def update_notifications(
@@ -236,17 +243,29 @@ async def update_notifications(
     return NotificationSettingsOut.model_validate(result)
 
 
+@router.put(
+    "/settings/language",
+    response_model=LanguageOut,
+    summary="Change the interface language",
+    dependencies=[CsrfProtected],
+)
+async def update_language(
+    payload: LanguageRequest, context: GlobalContext, service: SettingsDep, ip: ClientIp
+) -> LanguageOut:
+    """Réglage global : il s'applique à tous les comptes et aux textes produits par MSM."""
+    language = await service.update_language(payload.language, context=context, ip_address=ip)
+    return LanguageOut(language=language, languages=list(SUPPORTED_LANGUAGES))
+
+
 @router.post(
     "/notifications/test",
-    summary="Envoyer un message de test",
+    summary="Send a test message",
     dependencies=[CsrfProtected],
 )
 async def test_notification(context: GlobalContext, service: SettingsDep) -> dict[str, bool]:
     """Vérifie la configuration en publiant réellement dans le salon."""
     url = await service.webhook_url(context=context)
-    content = (
-        "✅ **Minecraft Server Manager** · message de test — les notifications arriveront ici."
-    )
+    content = tr("✅ **Minecraft Server Manager** · test message — notifications will arrive here.")
     return {"sent": await send_to_discord(url, content)}
 
 
@@ -256,7 +275,7 @@ async def test_notification(context: GlobalContext, service: SettingsDep) -> dic
 @router.get(
     "/downloads/sources",
     response_model=list[DownloadSourceOut],
-    summary="Sources de téléchargement",
+    summary="Download sources",
 )
 async def download_sources(_: GlobalContext) -> list[DownloadSourceOut]:
     """Sources officielles reconnues. Aucune adresse arbitraire n'est acceptée."""
@@ -266,7 +285,7 @@ async def download_sources(_: GlobalContext) -> list[DownloadSourceOut]:
 @router.get(
     "/downloads/{source}/versions",
     response_model=list[VersionOut],
-    summary="Versions disponibles",
+    summary="Available versions",
 )
 async def download_versions(
     source: str, context: GlobalContext, service: DownloadsDep
@@ -277,7 +296,7 @@ async def download_versions(
 @router.post(
     "/servers/{server_id}/install",
     response_model=InstallOut,
-    summary="Installer une version",
+    summary="Install a version",
     dependencies=[CsrfProtected],
 )
 async def install_version(

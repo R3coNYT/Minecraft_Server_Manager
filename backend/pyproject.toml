@@ -69,6 +69,10 @@ markers = [
 line-length = 100
 target-version = "py311"
 
+[tool.ruff.format]
+# Les catalogues de traduction gardent une entrée par ligne.
+exclude = ["msm/i18n/fr/*.py"]
+
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "PTH", "RUF", "S"]
 ignore = [
@@ -84,6 +88,8 @@ ignore = [
 "tests/*" = ["S", "N802", "E501"]
 # Les valeurs de l'énumération d'audit ressemblent à des secrets pour le linter.
 "msm/db/models/audit.py" = ["S105"]
+# Catalogues de traduction : une entrée par ligne, quelle que soit sa longueur.
+"msm/i18n/fr/*.py" = ["E501", "RUF001"]
 
 # --------------------------------------------------------------------------
 [tool.mypy]

@@ -25,6 +25,7 @@ from msm.db.models.audit import AuditAction
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
 from msm.exceptions import ConflictError, NotFoundError, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.security.rbac import AccessContext
 from msm.security.safe_path import resolve_within
@@ -76,9 +77,9 @@ def get_area(key: str) -> FileArea:
         return AREAS[key]
     except KeyError:
         raise NotFoundError(
-            "Dossier inconnu.",
-            cause=f"« {key} » ne correspond à aucun dossier géré.",
-            remediation=f"Dossiers disponibles : {', '.join(sorted(AREAS))}.",
+            tr("Unknown folder."),
+            cause=tr("“{key}” matches no managed folder.", key=key),
+            remediation=tr("Available folders: {folders}.", folders=", ".join(sorted(AREAS))),
         ) from None
 
 
@@ -95,11 +96,15 @@ class FileService:
         if not directory.is_dir():
             if not create:
                 raise NotFoundError(
-                    f"Dossier {area.label.lower()} absent.",
-                    cause=f"Le dossier « {area.directory} » n'existe pas dans ce serveur.",
-                    remediation=(
-                        f"Ce serveur ne gère pas de {area.label.lower()}. "
-                        "Le dossier sera créé au premier téléversement."
+                    tr("Folder “{folder}” missing.", folder=area.directory),
+                    cause=tr(
+                        "The folder “{folder}” does not exist in this server.",
+                        folder=area.directory,
+                    ),
+                    remediation=tr(
+                        "This server has no {folder} yet. The folder will be created on the "
+                        "first upload.",
+                        folder=area.directory,
                     ),
                 )
             directory.mkdir(parents=True, exist_ok=True)
@@ -153,9 +158,13 @@ class FileService:
             return disabled_path, False
 
         raise NotFoundError(
-            "Fichier introuvable.",
-            cause=f"« {safe_name} » n'existe pas dans le dossier {area.directory}.",
-            remediation="Rafraîchir la liste des fichiers.",
+            tr("File not found."),
+            cause=tr(
+                "“{name}” does not exist in the {folder} folder.",
+                name=safe_name,
+                folder=area.directory,
+            ),
+            remediation=tr("Refresh the file list."),
         )
 
     # ------------------------------------------------------------------ #
@@ -173,7 +182,7 @@ class FileService:
         ip_address: str | None = None,
     ) -> ManagedFile:
         """Dépose un fichier dans le dossier, sans jamais l'exécuter."""
-        context.require(Permission.FILE_UPLOAD, action="téléverser un fichier")
+        context.require(Permission.FILE_UPLOAD, action=tr("upload a file"))
         area = get_area(area_key)
 
         safe_name = sanitize_filename(filename, allowed_suffixes=area.allowed_suffixes)
@@ -184,9 +193,13 @@ class FileService:
 
         if target.exists() and not overwrite:
             raise ConflictError(
-                "Un fichier de ce nom existe déjà.",
-                cause=f"« {safe_name} » est déjà présent dans {area.directory}.",
-                remediation="Confirmer le remplacement, ou renommer le fichier avant l'envoi.",
+                tr("A file with this name already exists."),
+                cause=tr(
+                    "“{name}” is already present in {folder}.",
+                    name=safe_name,
+                    folder=area.directory,
+                ),
+                remediation=tr("Confirm the replacement, or rename the file before uploading."),
             )
 
         atomic_write_bytes(target, content)
@@ -194,7 +207,12 @@ class FileService:
 
         self._record(
             AuditAction.FILE_UPLOADED,
-            f"Téléversement de « {safe_name} » dans {area.directory} de « {server.name} ».",
+            tr(
+                "“{file}” uploaded to {folder} of “{server}”.",
+                file=safe_name,
+                folder=area.directory,
+                server=server.name,
+            ),
             server,
             context,
             ip_address,
@@ -226,7 +244,7 @@ class FileService:
         context: AccessContext,
         ip_address: str | None = None,
     ) -> None:
-        context.require(Permission.FILE_DELETE, action="supprimer un fichier")
+        context.require(Permission.FILE_DELETE, action=tr("delete a file"))
         area = get_area(area_key)
         path, _ = self._locate(server, area, name)
 
@@ -234,7 +252,12 @@ class FileService:
 
         self._record(
             AuditAction.FILE_DELETED,
-            f"Suppression de « {path.name} » dans {area.directory} de « {server.name} ».",
+            tr(
+                "“{file}” deleted from {folder} of “{server}”.",
+                file=path.name,
+                folder=area.directory,
+                server=server.name,
+            ),
             server,
             context,
             ip_address,
@@ -259,15 +282,19 @@ class FileService:
         ip_address: str | None = None,
     ) -> ManagedFile:
         """Active ou désactive un fichier par simple renommage."""
-        context.require(Permission.FILE_TOGGLE, action="activer ou désactiver un fichier")
+        context.require(Permission.FILE_TOGGLE, action=tr("enable or disable a file"))
         area = get_area(area_key)
         path, currently_enabled = self._locate(server, area, name)
 
         if currently_enabled == enabled:
             raise ConflictError(
-                "Aucun changement à appliquer.",
-                cause=f"« {name} » est déjà {'actif' if enabled else 'désactivé'}.",
-                remediation="Rafraîchir la liste des fichiers.",
+                tr("Nothing to change."),
+                cause=(
+                    tr("“{name}” is already enabled.", name=name)
+                    if enabled
+                    else tr("“{name}” is already disabled.", name=name)
+                ),
+                remediation=tr("Refresh the file list."),
             )
 
         directory = path.parent
@@ -277,18 +304,24 @@ class FileService:
 
         if target.exists():
             raise ConflictError(
-                "Renommage impossible.",
-                cause=f"« {target.name} » existe déjà dans {area.directory}.",
-                remediation="Supprimer le doublon avant de réessayer.",
+                tr("Cannot rename."),
+                cause=tr(
+                    "“{name}” already exists in {folder}.", name=target.name, folder=area.directory
+                ),
+                remediation=tr("Delete the duplicate before trying again."),
             )
 
         path.rename(target)
 
         action = AuditAction.FILE_ENABLED if enabled else AuditAction.FILE_DISABLED
-        verb = "Activation" if enabled else "Désactivation"
+        template = (
+            "“{file}” enabled in {folder} of “{server}”."
+            if enabled
+            else "“{file}” disabled in {folder} of “{server}”."
+        )
         self._record(
             action,
-            f"{verb} de « {name} » dans {area.directory} de « {server.name} ».",
+            tr(template, file=name, folder=area.directory, server=server.name),
             server,
             context,
             ip_address,
@@ -332,8 +365,8 @@ def validate_area_name(name: str) -> str:
     """Vérifie qu'un nom de fichier est exploitable avant toute résolution."""
     if not name or "/" in name or "\\" in name:
         raise ValidationError(
-            "Nom de fichier invalide.",
-            cause="Le nom ne doit désigner qu'un fichier, sans chemin.",
-            remediation="Sélectionner le fichier depuis la liste.",
+            tr("Invalid file name."),
+            cause=tr("The name must designate a single file, without a path."),
+            remediation=tr("Select the file from the list."),
         )
     return name

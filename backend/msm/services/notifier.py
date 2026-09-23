@@ -29,6 +29,7 @@ from typing import Any
 import httpx
 
 from msm.bus import EventBus, topics
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 
 logger = get_logger(__name__)
@@ -64,13 +65,13 @@ DEFAULT_EVENTS: tuple[NotificationEvent, ...] = (
 )
 
 LABELS: dict[NotificationEvent, str] = {
-    NotificationEvent.SERVER_CRASHED: "Plantage d'un serveur",
-    NotificationEvent.SERVER_RESTARTED: "Redémarrage automatique",
-    NotificationEvent.SERVER_STARTED: "Démarrage d'un serveur",
-    NotificationEvent.SERVER_STOPPED: "Arrêt d'un serveur",
-    NotificationEvent.BACKUP_FAILED: "Échec d'une sauvegarde",
-    NotificationEvent.BACKUP_COMPLETED: "Sauvegarde terminée",
-    NotificationEvent.SCHEDULE_FAILED: "Échec d'une tâche programmée",
+    NotificationEvent.SERVER_CRASHED: "Server crash",
+    NotificationEvent.SERVER_RESTARTED: "Automatic restart",
+    NotificationEvent.SERVER_STARTED: "Server started",
+    NotificationEvent.SERVER_STOPPED: "Server stopped",
+    NotificationEvent.BACKUP_FAILED: "Backup failed",
+    NotificationEvent.BACKUP_COMPLETED: "Backup completed",
+    NotificationEvent.SCHEDULE_FAILED: "Scheduled task failed",
 }
 
 #: Emoji ouvrant la ligne : dans un salon, la couleur se lit avant le texte.
@@ -98,7 +99,7 @@ class Notification:
         icon = _ICONS.get(self.event, "•")
         moment = self.ts.strftime("%H:%M")
         suffix = f" — {self.detail}" if self.detail else ""
-        return f"{icon} `{moment}` **{self.server_name}** · {LABELS[self.event]}{suffix}"
+        return f"{icon} `{moment}` **{self.server_name}** · {tr(LABELS[self.event])}{suffix}"
 
 
 def render_batch(items: list[Notification]) -> str:
@@ -106,7 +107,11 @@ def render_batch(items: list[Notification]) -> str:
     lines = [item.render() for item in items[:MAX_LINES_PER_MESSAGE]]
     extra = len(items) - len(lines)
     if extra > 0:
-        lines.append(f"… et {extra} autre{'s' if extra > 1 else ''} événement(s).")
+        lines.append(
+            tr("… and {count} more events.", count=extra)
+            if extra > 1
+            else tr("… and 1 more event.")
+        )
     return "\n".join(lines)
 
 
@@ -223,7 +228,7 @@ class Notifier:
 
         # Les événements du runtime nomment le serveur « server » ; le statut
         # complet, publié ailleurs, dit « name ». Les deux sont acceptés.
-        name = payload.get("server") or payload.get("name") or "serveur"
+        name = payload.get("server") or payload.get("name") or tr("server")
 
         if suffix == topics.CRASH:
             self.notify(
@@ -239,7 +244,7 @@ class Notifier:
                 Notification(
                     NotificationEvent.SERVER_RESTARTED,
                     str(name),
-                    f"redémarrage dans {delay} s" if delay else "",
+                    tr("restarting in {delay} s", delay=delay) if delay else "",
                 )
             )
         elif suffix == topics.BACKUP:

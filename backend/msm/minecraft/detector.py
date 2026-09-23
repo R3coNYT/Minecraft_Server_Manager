@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from msm.i18n import tr
 from msm.minecraft.capabilities import detect_capabilities
 from msm.minecraft.types import Capability, ServerType
 
@@ -89,7 +90,7 @@ def detect(directory: Path) -> DetectionResult:
         return DetectionResult(
             directory=directory,
             exists=False,
-            notes=("Le dossier indiqué n'existe pas ou n'est pas accessible.",),
+            notes=(tr("The folder does not exist or is not accessible."),),
         )
 
     directory = directory.resolve()
@@ -114,20 +115,26 @@ def detect(directory: Path) -> DetectionResult:
         and server_type in (ServerType.FORGE, ServerType.UNKNOWN)
     ):
         notes.append(
-            "Ce serveur possède à la fois `mods/` et `plugins/` : il s'agit "
-            "probablement d'un serveur hybride de type Mohist."
+            tr(
+                "This server has both `mods/` and `plugins/`: it is probably a "
+                "Mohist-style hybrid server."
+            )
         )
 
     if not jars and not scripts:
         notes.append(
-            "Aucun fichier .jar ni script de démarrage trouvé. "
-            "Le mode de démarrage devra être saisi manuellement."
+            tr(
+                "No .jar file or start script found. The start method will have to be "
+                "entered by hand."
+            )
         )
     elif launcher_key is None:
-        notes.append("Aucun mode de démarrage n'a pu être déduit automatiquement.")
+        notes.append(tr("No start method could be inferred automatically."))
 
     if len(jars) > 1:
-        notes.append(f"{len(jars)} fichiers .jar trouvés : vérifier que celui proposé est le bon.")
+        notes.append(
+            tr("{count} .jar files found: check that the suggested one is right.", count=len(jars))
+        )
 
     return DetectionResult(
         directory=directory,

@@ -26,6 +26,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { ActionForm, ActionSelect, defaultParams } from '@/components/events/ActionForm'
 import { EventEditor, type DraftStep } from '@/components/events/EventEditor'
 import { cn } from '@/lib/cn'
+import { t, tn, type MessageKey } from '@/i18n'
 
 const RUN_STYLES: Record<string, string> = {
   RUNNING: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
@@ -97,7 +98,7 @@ export function EventsPage() {
     },
     onError: (error) => {
       if (error instanceof ApiError && error.needsConfirmation) {
-        setPendingQuick(error.cause ?? 'Cette action est irréversible.')
+        setPendingQuick(error.cause ?? t('events.irreversibleAction'))
         return
       }
       pushError(error)
@@ -111,7 +112,7 @@ export function EventsPage() {
         ? api.events.update(server.id, editing.id, payload)
         : api.events.create(server.id, payload),
     onSuccess: (event) => {
-      push({ kind: 'success', title: `Événement « ${event.name} » enregistré` })
+      push({ kind: 'success', title: t('events.saved', { name: event.name }) })
       setEditing(null)
       void queryClient.invalidateQueries({ queryKey: ['events', server.id] })
     },
@@ -121,7 +122,7 @@ export function EventsPage() {
     mutationFn: ({ event, confirm }: { event: GameEvent; confirm: boolean }) =>
       api.events.run(server.id, event.id, confirm),
     onSuccess: () => {
-      push({ kind: 'success', title: 'Événement lancé' })
+      push({ kind: 'success', title: t('events.started') })
       setToConfirmRun(null)
       void queryClient.invalidateQueries({ queryKey: ['event-runs', server.id] })
     },
@@ -129,7 +130,7 @@ export function EventsPage() {
       if (error instanceof ApiError && error.needsConfirmation) {
         setToConfirmRun({
           event: variables.event,
-          cause: error.cause ?? 'Cet événement contient des actions irréversibles.',
+          cause: error.cause ?? t('events.irreversibleEvent'),
         })
         return
       }
@@ -141,7 +142,7 @@ export function EventsPage() {
   const remove = useMutation({
     mutationFn: (event: GameEvent) => api.events.remove(server.id, event.id),
     onSuccess: () => {
-      push({ kind: 'success', title: 'Événement supprimé' })
+      push({ kind: 'success', title: t('events.deleted') })
       setToDelete(null)
       void queryClient.invalidateQueries({ queryKey: ['events', server.id] })
     },
@@ -153,7 +154,7 @@ export function EventsPage() {
     onSuccess: (result) => {
       push({
         kind: result.cancelled ? 'success' : 'info',
-        title: result.cancelled ? 'Exécution annulée' : 'Cette exécution était déjà terminée',
+        title: result.cancelled ? t('events.cancelled') : t('events.alreadyDone'),
       })
       void queryClient.invalidateQueries({ queryKey: ['event-runs', server.id] })
     },
@@ -168,16 +169,15 @@ export function EventsPage() {
 
         {!running ? (
           <div className="rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-            Le serveur est arrêté. Les événements passent par sa console : les déclencher exige
-            qu'il soit démarré.
+            {t('events.stopped')}
           </div>
         ) : null}
 
         {/* --- Action immédiate --- */}
         <Card>
           <CardHeader
-            title="Action immédiate"
-            subtitle="Déclenchée en un clic, sans être enregistrée."
+            title={t('events.quickTitle')}
+            subtitle={t('events.quickSubtitle')}
           />
           <div className="space-y-4 px-5 py-4">
             <ActionSelect actions={actions} value={quickKey} onChange={(key) => {
@@ -204,7 +204,7 @@ export function EventsPage() {
               loading={quick.isPending && pendingQuick === null}
               onClick={() => quick.mutate({ confirm: false })}
             >
-              Déclencher
+              {t('events.trigger')}
             </Button>
           </div>
         </Card>
@@ -212,8 +212,8 @@ export function EventsPage() {
         {/* --- Événements enregistrés --- */}
         <Card>
           <CardHeader
-            title={`Événements enregistrés (${events.data?.length ?? 0})`}
-            subtitle="Suites d'actions réutilisables, avec pauses possibles."
+            title={t('events.savedTitle', { count: events.data?.length ?? 0 })}
+            subtitle={t('events.savedSubtitle')}
             action={
               canEdit ? (
                 <Button
@@ -222,7 +222,7 @@ export function EventsPage() {
                   icon={<Plus className="size-3.5" />}
                   onClick={() => setEditing('new')}
                 >
-                  Nouvel événement
+                  {t('events.new')}
                 </Button>
               ) : undefined
             }
@@ -231,8 +231,8 @@ export function EventsPage() {
           {!events.data || events.data.length === 0 ? (
             <EmptyState
               icon={<CalendarClock className="size-8" />}
-              title="Aucun événement enregistré"
-              description="Créer une séquence — annoncer, attendre, distribuer — pour la rejouer d'un clic."
+              title={t('events.empty')}
+              description={t('events.emptyHint')}
             />
           ) : (
             <ul className="divide-y divide-slate-800/60">
@@ -241,10 +241,10 @@ export function EventsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm text-slate-100">{event.name}</span>
-                      <Badge>{event.steps.length} étape{event.steps.length > 1 ? 's' : ''}</Badge>
+                      <Badge>{tn('events.steps', event.steps.length)}</Badge>
                       {event.danger !== 'SAFE' ? (
                         <Badge className="bg-red-500/10 text-red-300 ring-red-500/30">
-                          irréversible
+                          {t('events.irreversible')}
                         </Badge>
                       ) : null}
                     </div>
@@ -269,7 +269,7 @@ export function EventsPage() {
                       loading={run.isPending && run.variables?.event.id === event.id}
                       onClick={() => run.mutate({ event, confirm: false })}
                     >
-                      Lancer
+                      {t('events.start')}
                     </Button>
                     {canEdit ? (
                       <>
@@ -279,7 +279,7 @@ export function EventsPage() {
                           icon={<Pencil className="size-3.5" />}
                           onClick={() => setEditing(event)}
                         >
-                          <span className="sr-only">Modifier {event.name}</span>
+                          <span className="sr-only">{t('events.editNamed', { name: event.name })}</span>
                         </Button>
                         <Button
                           size="sm"
@@ -287,7 +287,7 @@ export function EventsPage() {
                           icon={<Trash2 className="size-3.5" />}
                           onClick={() => setToDelete(event)}
                         >
-                          <span className="sr-only">Supprimer {event.name}</span>
+                          <span className="sr-only">{t('events.deleteNamed', { name: event.name })}</span>
                         </Button>
                       </>
                     ) : null}
@@ -301,7 +301,7 @@ export function EventsPage() {
         {/* --- Historique --- */}
         {runs.data && runs.data.length > 0 ? (
           <Card>
-            <CardHeader title="Exécutions récentes" />
+            <CardHeader title={t('events.recentRuns')} />
             <table className="w-full text-sm">
               <tbody className="divide-y divide-slate-800/60">
                 {runs.data.map((item) => {
@@ -315,10 +315,10 @@ export function EventsPage() {
                         {formatRelative(item.started_at)}
                       </td>
                       <td className="px-5 py-2.5">
-                        <Badge className={cn(RUN_STYLES[state])}>{state}</Badge>
+                        <Badge className={cn(RUN_STYLES[state])}>{t(`events.run.${state}` as MessageKey)}</Badge>
                       </td>
                       <td className="px-5 py-2.5 text-xs tabular-nums text-slate-400">
-                        étape {step} / {total}
+                        {t('events.step', { step, total })}
                         {live?.summary ? (
                           <span className="ml-2 text-slate-500">{live.summary}</span>
                         ) : null}
@@ -335,7 +335,7 @@ export function EventsPage() {
                             loading={cancel.isPending}
                             onClick={() => cancel.mutate(item.id)}
                           >
-                            Annuler
+                            {t('common.cancel')}
                           </Button>
                         ) : null}
                       </td>
@@ -371,9 +371,9 @@ export function EventsPage() {
 
       <ConfirmDialog
         open={pendingQuick !== null}
-        title="Action irréversible"
+        title={t('events.irreversibleTitle')}
         consequence={pendingQuick ?? undefined}
-        confirmLabel="Exécuter"
+        confirmLabel={t('events.run')}
         danger
         requireTyping={server.name}
         loading={quick.isPending}
@@ -383,9 +383,9 @@ export function EventsPage() {
 
       <ConfirmDialog
         open={toConfirmRun !== null}
-        title={`Lancer « ${toConfirmRun?.event.name} » ?`}
+        title={t('events.startTitle', { name: toConfirmRun?.event.name ?? '' })}
         consequence={toConfirmRun?.cause}
-        confirmLabel="Lancer"
+        confirmLabel={t('events.start')}
         danger
         requireTyping={server.name}
         loading={run.isPending}
@@ -397,9 +397,9 @@ export function EventsPage() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title={`Supprimer « ${toDelete?.name} » ?`}
-        consequence="L'événement sera définitivement retiré. L'historique de ses exécutions est conservé."
-        confirmLabel="Supprimer"
+        title={t('events.deleteTitle', { name: toDelete?.name ?? '' })}
+        consequence={t('events.deleteConsequence')}
+        confirmLabel={t('common.delete')}
         danger
         loading={remove.isPending}
         onConfirm={() => toDelete && remove.mutate(toDelete)}

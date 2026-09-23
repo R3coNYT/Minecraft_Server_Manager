@@ -29,9 +29,9 @@ def _cipher() -> Fernet:
     secret = get_settings().secret_key
     if not secret:  # pragma: no cover - déjà validé par la configuration
         raise ConfigurationError(
-            "Clé secrète absente.",
-            cause="MSM_SECRET_KEY est vide ; impossible de chiffrer les secrets.",
-            remediation="Renseigner MSM_SECRET_KEY dans le fichier .env.",
+            "Missing secret key.",
+            cause="MSM_SECRET_KEY is empty: secrets cannot be encrypted.",
+            remediation="Set MSM_SECRET_KEY in the .env file.",
         )
     derived = hashlib.pbkdf2_hmac("sha256", secret.encode("utf-8"), _SALT, 200_000, dklen=32)
     return Fernet(base64.urlsafe_b64encode(derived))

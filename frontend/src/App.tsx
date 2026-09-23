@@ -71,8 +71,8 @@ export function App() {
           <Route index element={<OverviewPage />} />
           <Route path="console" element={<ConsolePage />} />
           <Route path="players" element={<PlayersPage />} />
-          <Route path="mods" element={<FilesPage area="mods" label="Mods" />} />
-          <Route path="plugins" element={<FilesPage area="plugins" label="Plugins" />} />
+          <Route path="mods" element={<FilesPage area="mods" />} />
+          <Route path="plugins" element={<FilesPage area="plugins" />} />
           <Route path="properties" element={<PropertiesPage />} />
           <Route path="configs" element={<ConfigsPage />} />
           <Route path="events" element={<EventsPage />} />

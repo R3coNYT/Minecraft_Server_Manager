@@ -24,6 +24,7 @@ import {
   type ScheduleDraft,
 } from '@/components/schedules/ScheduleEditor'
 import { cn } from '@/lib/cn'
+import { t, type MessageKey } from '@/i18n'
 
 const STATUS_STYLES: Record<string, string> = {
   SUCCESS: 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
@@ -33,12 +34,8 @@ const STATUS_STYLES: Record<string, string> = {
   NEVER: 'bg-slate-700/40 text-slate-400 ring-slate-700',
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  SUCCESS: 'réussie',
-  FAILED: 'échec',
-  MISSED: 'manquée',
-  SKIPPED: 'sans objet',
-  NEVER: 'jamais exécutée',
+function statusLabel(status: string): string {
+  return t(`schedules.status.${status}` as MessageKey)
 }
 
 function toDraft(schedule: Schedule): ScheduleDraft {
@@ -92,10 +89,10 @@ export function SchedulesPage() {
     onSuccess: (schedule) => {
       push({
         kind: 'success',
-        title: `Tâche « ${schedule.name} » enregistrée`,
+        title: t('schedules.saved', { name: schedule.name }),
         detail: schedule.next_run_at
-          ? `Prochaine exécution ${formatRelative(schedule.next_run_at)}.`
-          : 'Tâche désactivée.',
+          ? t('schedules.nextRun', { when: formatRelative(schedule.next_run_at) })
+          : t('schedules.disabledTask'),
       })
       setEditing(null)
       void invalidate()
@@ -114,7 +111,7 @@ export function SchedulesPage() {
     onSuccess: (schedule) => {
       push({
         kind: schedule.last_status === 'FAILED' ? 'error' : 'success',
-        title: `Tâche « ${schedule.name} » : ${STATUS_LABELS[schedule.last_status]}`,
+        title: t('schedules.ran', { name: schedule.name, status: statusLabel(schedule.last_status) }),
         detail: schedule.last_error ?? undefined,
       })
       void invalidate()
@@ -125,7 +122,7 @@ export function SchedulesPage() {
   const remove = useMutation({
     mutationFn: (schedule: Schedule) => api.schedules.remove(server.id, schedule.id),
     onSuccess: () => {
-      push({ kind: 'success', title: 'Tâche supprimée' })
+      push({ kind: 'success', title: t('schedules.deleted') })
       setToDelete(null)
       void invalidate()
     },
@@ -143,8 +140,8 @@ export function SchedulesPage() {
 
         <Card>
           <CardHeader
-            title={`Tâches programmées (${items.length})`}
-            subtitle="Sauvegardes, redémarrages et événements automatiques."
+            title={t('schedules.title', { count: items.length })}
+            subtitle={t('schedules.subtitle')}
             action={
               <Button
                 size="sm"
@@ -152,7 +149,7 @@ export function SchedulesPage() {
                 icon={<Plus className="size-3.5" />}
                 onClick={() => setEditing('new')}
               >
-                Nouvelle tâche
+                {t('schedules.new')}
               </Button>
             }
           />
@@ -160,8 +157,8 @@ export function SchedulesPage() {
           {items.length === 0 ? (
             <EmptyState
               icon={<CalendarClock className="size-8" />}
-              title="Aucune tâche programmée"
-              description="Une sauvegarde nocturne est ce qui sauve un serveur le jour où plus rien ne va."
+              title={t('schedules.empty')}
+              description={t('schedules.emptyHint')}
             />
           ) : (
             <ul className="divide-y divide-slate-800/60">
@@ -177,9 +174,9 @@ export function SchedulesPage() {
                       >
                         {schedule.name}
                       </span>
-                      <Badge>{ACTION_LABELS[schedule.action]}</Badge>
+                      <Badge>{t(ACTION_LABELS[schedule.action])}</Badge>
                       <Badge className={cn(STATUS_STYLES[schedule.last_status])}>
-                        {STATUS_LABELS[schedule.last_status]}
+                        {statusLabel(schedule.last_status)}
                       </Badge>
                     </div>
 
@@ -187,13 +184,13 @@ export function SchedulesPage() {
                       {schedule.summary}
                       {schedule.enabled && schedule.next_run_at ? (
                         <>
-                          {' · prochaine '}
+                          {t('schedules.next')}
                           <span className="text-slate-400">
                             {formatRelative(schedule.next_run_at)}
                           </span>
                         </>
                       ) : (
-                        ' · suspendue'
+                        t('schedules.paused')
                       )}
                     </p>
 
@@ -210,7 +207,7 @@ export function SchedulesPage() {
                       loading={run.isPending && run.variables?.id === schedule.id}
                       onClick={() => run.mutate(schedule)}
                     >
-                      Exécuter
+                      {t('schedules.run')}
                     </Button>
                     <Button
                       size="sm"
@@ -225,7 +222,7 @@ export function SchedulesPage() {
                       onClick={() => toggle.mutate(schedule)}
                     >
                       <span className="sr-only">
-                        {schedule.enabled ? 'Suspendre' : 'Reprendre'}
+                        {schedule.enabled ? t('schedules.pause') : t('schedules.resume')}
                       </span>
                     </Button>
                     <Button
@@ -234,7 +231,7 @@ export function SchedulesPage() {
                       icon={<Pencil className="size-3.5" />}
                       onClick={() => setEditing(schedule)}
                     >
-                      <span className="sr-only">Modifier</span>
+                      <span className="sr-only">{t('common.edit')}</span>
                     </Button>
                     <Button
                       size="sm"
@@ -242,7 +239,7 @@ export function SchedulesPage() {
                       icon={<Trash2 className="size-3.5" />}
                       onClick={() => setToDelete(schedule)}
                     >
-                      <span className="sr-only">Supprimer</span>
+                      <span className="sr-only">{t('common.delete')}</span>
                     </Button>
                   </div>
                 </li>
@@ -268,9 +265,9 @@ export function SchedulesPage() {
 
       <ConfirmDialog
         open={toDelete !== null}
-        title={`Supprimer « ${toDelete?.name} » ?`}
-        consequence="La tâche ne se déclenchera plus. Les exécutions passées restent dans le journal d'audit."
-        confirmLabel="Supprimer"
+        title={t('schedules.deleteTitle', { name: toDelete?.name ?? '' })}
+        consequence={t('schedules.deleteConsequence')}
+        confirmLabel={t('common.delete')}
         danger
         loading={remove.isPending}
         onConfirm={() => toDelete && remove.mutate(toDelete)}

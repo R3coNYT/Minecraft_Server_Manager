@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from msm.exceptions import MsmError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 
 logger = get_logger(__name__)
@@ -73,14 +74,18 @@ async def http_exception_handler(request: Request, exc: Exception) -> Response:
 async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     first = exc.errors()[0] if exc.errors() else {}
-    field = " → ".join(str(part) for part in first.get("loc", ())[1:]) or "requête"
+    field = " → ".join(str(part) for part in first.get("loc", ())[1:]) or tr("request")
     return JSONResponse(
         status_code=422,
         content={
             "code": "VALIDATION_ERROR",
-            "message": "Les données envoyées sont invalides.",
-            "cause": f"Champ « {field} » : {first.get('msg', 'valeur incorrecte')}.",
-            "remediation": "Corriger le champ indiqué puis réessayer.",
+            "message": tr("The submitted data is invalid."),
+            "cause": tr(
+                "Field “{field}”: {detail}.",
+                field=field,
+                detail=first.get("msg", tr("incorrect value")),
+            ),
+            "remediation": tr("Fix the field shown, then try again."),
         },
     )
 
@@ -92,9 +97,9 @@ async def unhandled_error_handler(request: Request, exc: Exception) -> JSONRespo
         status_code=500,
         content={
             "code": "INTERNAL_ERROR",
-            "message": "Une erreur interne est survenue.",
-            "remediation": (
-                f"Consulter logs/msm.log en recherchant l'identifiant de trace « {trace_id} »."
+            "message": tr("An internal error occurred."),
+            "remediation": tr(
+                "Look in logs/msm.log for the trace identifier “{trace_id}”.", trace_id=trace_id
             ),
             "trace_id": trace_id,
         },

@@ -25,6 +25,7 @@ from msm.db.models.server import Server, ServerSettings
 from msm.db.models.user import User
 from msm.db.repositories import AuditRepository, ServerRepository, build_settings
 from msm.exceptions import ConflictError, NotFoundError, ValidationError
+from msm.i18n import tr
 from msm.launchers import LaunchContext
 from msm.launchers import registry as launcher_registry
 from msm.logging_conf import get_logger
@@ -72,9 +73,9 @@ class ServerService:
         server = await self._servers.get(server_id)
         if server is None:
             raise NotFoundError(
-                "Serveur introuvable.",
-                cause=f"Aucun serveur ne porte l'identifiant {server_id}.",
-                remediation="Rafraîchir la liste des serveurs.",
+                tr("Server not found."),
+                cause=tr("No server has the identifier {server_id}.", server_id=server_id),
+                remediation=tr("Refresh the server list."),
             )
         return server
 
@@ -108,23 +109,23 @@ class ServerService:
         clean_name = name.strip()
         if not clean_name:
             raise ValidationError(
-                "Nom de serveur manquant.",
-                cause="Le nom ne peut pas être vide.",
-                remediation="Saisir un nom pour ce serveur.",
+                tr("Missing server name."),
+                cause=tr("The name cannot be empty."),
+                remediation=tr("Enter a name for this server."),
             )
         if await self._servers.get_by_name(clean_name) is not None:
             raise ConflictError(
-                "Ce nom de serveur est déjà utilisé.",
-                cause=f"Un serveur nommé « {clean_name} » existe déjà.",
-                remediation="Choisir un autre nom.",
+                tr("This server name is already in use."),
+                cause=tr("A server named “{name}” already exists.", name=clean_name),
+                remediation=tr("Choose another name."),
             )
 
         resolved = self._validate_directory(directory)
         if await self._servers.get_by_directory(str(resolved)) is not None:
             raise ConflictError(
-                "Ce dossier est déjà géré.",
-                cause=f"Un serveur pointe déjà vers {resolved}.",
-                remediation="Choisir un autre dossier, ou modifier le serveur existant.",
+                tr("This folder is already managed."),
+                cause=tr("A server already points to {path}.", path=resolved),
+                remediation=tr("Choose another folder, or edit the existing server."),
             )
 
         launcher_registry.get(launcher_key)  # lève si la clé est inconnue
@@ -151,7 +152,9 @@ class ServerService:
 
         self._audit.record(
             action=AuditAction.SERVER_CREATED,
-            summary=f"Création du serveur « {server.name} » ({launcher_key}).",
+            summary=tr(
+                "Server “{name}” created ({launcher}).", name=server.name, launcher=launcher_key
+            ),
             actor_id=actor.id,
             actor_username=actor.username,
             actor_role=actor.role.value,
@@ -176,9 +179,13 @@ class ServerService:
             runtime = self._supervisor.get(server.id)
             if runtime.state.is_running:
                 raise ConflictError(
-                    "Modification impossible pendant l'exécution.",
-                    cause=f"Le serveur « {server.name} » est actuellement {runtime.state.value}.",
-                    remediation="Arrêter le serveur avant de modifier sa configuration.",
+                    tr("Cannot edit while running."),
+                    cause=tr(
+                        "Server “{name}” is currently {state}.",
+                        name=server.name,
+                        state=runtime.state.value,
+                    ),
+                    remediation=tr("Stop the server before changing its configuration."),
                 )
 
         if changes.get("name"):
@@ -187,9 +194,9 @@ class ServerService:
                 existing = await self._servers.get_by_name(new_name)
                 if existing is not None and existing.id != server.id:
                     raise ConflictError(
-                        "Ce nom de serveur est déjà utilisé.",
-                        cause=f"Un serveur nommé « {new_name} » existe déjà.",
-                        remediation="Choisir un autre nom.",
+                        tr("This server name is already in use."),
+                        cause=tr("A server named “{name}” already exists.", name=new_name),
+                        remediation=tr("Choose another name."),
                     )
                 server.slug = await self._unique_slug(new_name, exclude_id=server.id)
             server.name = new_name
@@ -215,7 +222,7 @@ class ServerService:
 
         self._audit.record(
             action=AuditAction.SERVER_UPDATED,
-            summary=f"Modification du serveur « {server.name} ».",
+            summary=tr("Server “{name}” updated.", name=server.name),
             actor_id=actor.id,
             actor_username=actor.username,
             actor_role=actor.role.value,
@@ -232,9 +239,13 @@ class ServerService:
         runtime = self._supervisor.find(server.id)
         if runtime is not None and runtime.state.is_running:
             raise ConflictError(
-                "Suppression impossible pendant l'exécution.",
-                cause=f"Le serveur « {server.name} » est actuellement {runtime.state.value}.",
-                remediation="Arrêter le serveur avant de le retirer du panel.",
+                tr("Cannot delete while running."),
+                cause=tr(
+                    "Server “{name}” is currently {state}.",
+                    name=server.name,
+                    state=runtime.state.value,
+                ),
+                remediation=tr("Stop the server before removing it from the panel."),
             )
 
         name, server_id, directory = server.name, server.id, server.directory
@@ -243,7 +254,7 @@ class ServerService:
 
         self._audit.record(
             action=AuditAction.SERVER_DELETED,
-            summary=f"Suppression du serveur « {name} » du panel (fichiers conservés).",
+            summary=tr("Server “{name}” removed from the panel (files kept).", name=name),
             actor_id=actor.id,
             actor_username=actor.username,
             actor_role=actor.role.value,
@@ -387,7 +398,7 @@ class ServerService:
                 continue
 
             try:
-                await runtime.start(actor="démarrage automatique")
+                await runtime.start(actor=tr("autostart"))
             except Exception as exc:  # un serveur en panne ne bloque pas les autres
                 logger.error(
                     "server_autostart_failed",
@@ -412,33 +423,33 @@ class ServerService:
         value = (raw or "").strip()
         if not value:
             raise ValidationError(
-                "Dossier du serveur manquant.",
-                cause="Aucun chemin n'a été fourni.",
-                remediation="Indiquer le dossier contenant le serveur Minecraft.",
+                tr("Missing server folder."),
+                cause=tr("No path was provided."),
+                remediation=tr("Enter the folder containing the Minecraft server."),
             )
 
         path = Path(value).expanduser()
         if not path.is_absolute():
             raise ValidationError(
-                "Chemin non absolu.",
-                cause=f"« {value} » est un chemin relatif.",
-                remediation="Indiquer le chemin complet du dossier du serveur.",
+                tr("Path is not absolute."),
+                cause=tr("“{path}” is a relative path.", path=value),
+                remediation=tr("Enter the full path of the server folder."),
             )
 
         try:
             resolved = path.resolve()
         except OSError as exc:
             raise ValidationError(
-                "Dossier inaccessible.",
+                tr("Folder not accessible."),
                 cause=str(exc),
-                remediation="Vérifier le chemin et les droits d'accès.",
+                remediation=tr("Check the path and the access rights."),
             ) from exc
 
         if must_exist and not resolved.is_dir():
             raise ValidationError(
-                "Dossier introuvable.",
-                cause=f"{resolved} n'existe pas ou n'est pas un dossier.",
-                remediation="Créer le dossier ou corriger le chemin saisi.",
+                tr("Folder not found."),
+                cause=tr("{path} does not exist or is not a folder.", path=resolved),
+                remediation=tr("Create the folder or correct the path."),
             )
 
         self._check_within_roots(resolved)
@@ -463,9 +474,9 @@ class ServerService:
 
         allowed = ", ".join(str(Path(root)) for root in roots)
         raise ValidationError(
-            "Dossier hors des emplacements autorisés.",
-            cause=f"{resolved} n'est pas situé sous une racine autorisée.",
-            remediation=f"Choisir un dossier situé sous : {allowed}.",
+            tr("Folder outside the allowed locations."),
+            cause=tr("{path} is not under an allowed root.", path=resolved),
+            remediation=tr("Choose a folder under: {roots}.", roots=allowed),
         )
 
     def _validate_launch(self, server: Server) -> None:
@@ -484,15 +495,15 @@ class ServerService:
             timeouts = ("stop_timeout_s", "kill_timeout_s", "start_timeout_s")
             if key in timeouts and value is not None and float(value) <= 0:
                 raise ValidationError(
-                    "Délai invalide.",
-                    cause=f"« {key} » doit être strictement positif.",
-                    remediation="Saisir une durée en secondes supérieure à zéro.",
+                    tr("Invalid timeout."),
+                    cause=tr("“{key}” must be strictly positive.", key=key),
+                    remediation=tr("Enter a duration in seconds greater than zero."),
                 )
             if key == "log_history_lines" and value is not None and int(value) < 100:
                 raise ValidationError(
-                    "Historique de console trop court.",
-                    cause="Un minimum de 100 lignes est nécessaire pour un diagnostic utile.",
-                    remediation="Saisir au moins 100 lignes.",
+                    tr("Console history too short."),
+                    cause=tr("At least 100 lines are needed for a useful diagnosis."),
+                    remediation=tr("Enter at least 100 lines."),
                 )
             setattr(settings, key, value)
 

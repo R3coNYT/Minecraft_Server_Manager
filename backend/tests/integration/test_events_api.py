@@ -119,7 +119,7 @@ class TestQuickActions:
         assert refused.json()["code"] == "CONFIRMATION_REQUIRED"
         # Une action immédiate n'est pas « un événement » : la confirmation doit
         # décrire ce que l'utilisateur s'apprête réellement à déclencher.
-        assert refused.json()["cause"] == "Cette action est irréversible : Tuer @a."
+        assert refused.json()["cause"] == "This action cannot be undone: Kill @a."
 
         confirmed = await admin.post(
             f"/api/v1/servers/{server['id']}/events/quick",
@@ -210,7 +210,7 @@ class TestEventDefinitions:
         )
 
         assert response.status_code == 422
-        assert "Étape 2" in response.json()["message"]
+        assert "Step 2" in response.json()["message"]
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 
@@ -352,7 +352,7 @@ class TestRuns:
 
         refused = await admin.post(f"/api/v1/servers/{server['id']}/events/{event_id}/run", json={})
         assert refused.status_code == 428
-        assert "Cet événement contient" in refused.json()["cause"]
+        assert "This event contains" in refused.json()["cause"]
 
         confirmed = await admin.post(
             f"/api/v1/servers/{server['id']}/events/{event_id}/run", json={"confirm": True}

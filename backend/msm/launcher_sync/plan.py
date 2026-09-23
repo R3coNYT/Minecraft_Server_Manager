@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from msm.i18n import tr
 from msm.launcher_sync.manifest import ManifestEntry
 
 #: En deçà, une suppression n'a rien de suspect, quel que soit le pourcentage.
@@ -123,7 +124,7 @@ def compute_plan(
         if current is not None and entry.path not in tracked:
             # Une autre version posée à la main : le serveur de fichiers fait
             # autorité sur les dossiers synchronisés, mais on le dit.
-            notes.append(f"{entry.path} remplacé par la version du serveur de fichiers.")
+            notes.append(tr("{path} replaced by the file server version.", path=entry.path))
 
         # Présent localement : on garde l'état choisi dans MSM. Absent : on
         # reprend l'état publié, pour qu'un serveur neuf reflète le modpack.

@@ -20,6 +20,7 @@ from msm.api.schemas import (
     LogsOut,
 )
 from msm.core.permissions import Permission
+from msm.i18n import tr
 from msm.services.console_service import ConsoleService
 
 router = APIRouter(prefix="/servers/{server_id}", tags=["console"])
@@ -32,13 +33,13 @@ def _console(session: DbSession, supervisor: SupervisorDep) -> ConsoleService:
 ConsoleDep = Annotated[ConsoleService, Depends(_console)]
 
 
-@router.get("/logs", response_model=LogsOut, summary="Historique de console")
+@router.get("/logs", response_model=LogsOut, summary="Console history")
 async def get_logs(
     access: ServerAccess,
     supervisor: SupervisorDep,
     limit: Annotated[int, Query(ge=1, le=5000)] = 500,
-    since: Annotated[int | None, Query(description="Reprendre après ce numéro de ligne")] = None,
-    before: Annotated[int | None, Query(description="Lignes précédant ce numéro")] = None,
+    since: Annotated[int | None, Query(description="Resume after this line number")] = None,
+    before: Annotated[int | None, Query(description="Lines before this number")] = None,
     search: Annotated[str | None, Query(min_length=1, max_length=200)] = None,
     regex: bool = False,
 ) -> LogsOut:
@@ -49,7 +50,7 @@ async def get_logs(
     * ``search`` — recherche dans l'historique conservé.
     """
     server, context = access
-    context.require(Permission.CONSOLE_READ, action="lire la console")
+    context.require(Permission.CONSOLE_READ, action=tr("read the console"))
 
     runtime = supervisor.find(server.id)
     if runtime is None:
@@ -76,7 +77,7 @@ async def get_logs(
 @router.post(
     "/command",
     response_model=CommandOut,
-    summary="Envoyer une commande",
+    summary="Send a command",
     dependencies=[CsrfProtected],
 )
 async def send_command(
@@ -104,7 +105,7 @@ async def send_command(
 @router.post(
     "/command/inspect",
     response_model=CommandInspectOut,
-    summary="Analyser une commande sans l'exécuter",
+    summary="Inspect a command without running it",
     dependencies=[CsrfProtected],
 )
 async def inspect_command(
@@ -114,5 +115,5 @@ async def inspect_command(
 ) -> CommandInspectOut:
     """Renseigne la boîte de confirmation avant l'envoi."""
     _, context = access
-    context.require(Permission.CONSOLE_READ, action="analyser une commande")
+    context.require(Permission.CONSOLE_READ, action=tr("inspect a command"))
     return CommandInspectOut(**console.inspect(payload.command))

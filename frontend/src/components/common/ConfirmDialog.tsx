@@ -14,6 +14,7 @@ import { Dialog } from '@/components/ui/Dialog'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/primitives'
 import { ErrorPanel } from './ErrorPanel'
+import { t } from '@/i18n'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -36,7 +37,7 @@ export function ConfirmDialog({
   title,
   description,
   consequence,
-  confirmLabel = 'Confirmer',
+  confirmLabel,
   danger = false,
   requireTyping = null,
   loading = false,
@@ -62,7 +63,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={loading}>
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button
             variant={danger ? 'danger' : 'primary'}
@@ -70,7 +71,7 @@ export function ConfirmDialog({
             loading={loading}
             disabled={!canConfirm}
           >
-            {confirmLabel}
+            {confirmLabel ?? t('common.confirm')}
           </Button>
         </>
       }
@@ -86,7 +87,7 @@ export function ConfirmDialog({
         {requireTyping !== null ? (
           <div>
             <p className="mb-2 text-sm text-slate-300">
-              Pour confirmer, saisir{' '}
+              {t('shell.confirmTyping')}{' '}
               <code className="rounded bg-slate-800 px-1.5 py-0.5 font-mono text-xs text-slate-100">
                 {requireTyping}
               </code>

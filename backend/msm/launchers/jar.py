@@ -13,14 +13,15 @@ from __future__ import annotations
 from typing import ClassVar
 
 from msm.exceptions import LaunchError
+from msm.i18n import tr
 from msm.launchers.base import LaunchContext, Launcher, ProcessSpec
 
 #: Arguments par défaut passés au serveur lui-même (après `-jar`).
 DEFAULT_SERVER_ARGS: tuple[str, ...] = ("nogui",)
 
 JAVA_REMEDIATION = (
-    "Installer Java (par exemple `apt install openjdk-21-jre-headless` sous Debian/Ubuntu) "
-    "ou renseigner le chemin complet de l'exécutable Java dans les réglages du serveur."
+    "Install Java (for example `apt install openjdk-21-jre-headless` on Debian/Ubuntu) "
+    "or enter the full path of the Java executable in the server settings."
 )
 
 
@@ -28,28 +29,28 @@ class JarLauncher(Launcher):
     """Démarre le serveur via ``java -jar``."""
 
     key: ClassVar[str] = "jar"
-    label: ClassVar[str] = "Fichier JAR"
-    description: ClassVar[str] = "Lance `java -jar <fichier>` avec les options mémoire choisies."
+    label: ClassVar[str] = "JAR file"
+    description: ClassVar[str] = "Runs `java -jar <file>` with the chosen memory options."
 
     def build_spec(self, ctx: LaunchContext) -> ProcessSpec:
         directory = self._require_directory(ctx)
 
         if not ctx.jar_path:
             raise LaunchError(
-                "Aucun fichier JAR configuré.",
-                cause="Le serveur est en mode « Fichier JAR » mais aucun JAR n'est renseigné.",
-                remediation="Sélectionner le fichier .jar du serveur dans ses réglages.",
+                tr("No JAR file configured."),
+                cause=tr("The server is in “JAR file” mode but no JAR is set."),
+                remediation=tr("Select the server's .jar file in its settings."),
             )
 
-        jar = ctx.resolve_in_directory(ctx.jar_path, label="Fichier JAR")
+        jar = ctx.resolve_in_directory(ctx.jar_path, label=tr("JAR file"))
         self._require_file(
             jar,
-            label="Fichier JAR",
-            remediation=f"Placer le fichier .jar dans {directory} puis vérifier son nom.",
+            label=tr("JAR file"),
+            remediation=tr("Put the .jar file in {folder}, then check its name.", folder=directory),
         )
 
         java = self._resolve_executable(
-            ctx.java_path or "java", label="Java", remediation=JAVA_REMEDIATION
+            ctx.java_path or "java", label="Java", remediation=tr(JAVA_REMEDIATION)
         )
 
         argv: list[str] = [java]
@@ -68,9 +69,13 @@ class JarLauncher(Launcher):
 
         if minimum is not None and maximum is not None and minimum > maximum:
             raise LaunchError(
-                "Réglages mémoire incohérents.",
-                cause=f"La mémoire minimale ({minimum} Mo) dépasse la maximale ({maximum} Mo).",
-                remediation="Corriger les valeurs de mémoire dans les réglages du serveur.",
+                tr("Inconsistent memory settings."),
+                cause=tr(
+                    "The minimum memory ({minimum} MB) exceeds the maximum ({maximum} MB).",
+                    minimum=minimum,
+                    maximum=maximum,
+                ),
+                remediation=tr("Fix the memory values in the server settings."),
             )
 
         # Les options mémoire explicites priment sur celles déduites des réglages.

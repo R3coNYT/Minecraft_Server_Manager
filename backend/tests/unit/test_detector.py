@@ -154,7 +154,7 @@ class TestCapabilities:
 
         result = detect(server_dir)
 
-        assert any("hybride" in note for note in result.notes)
+        assert any("hybrid" in note for note in result.notes)
 
 
 class TestProperties:

@@ -18,6 +18,7 @@ from typing import Any
 
 from msm.bus import EventBus, get_event_bus
 from msm.exceptions import ConflictError, NotFoundError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.backends import ProcessBackend
 from msm.runtime.server_runtime import PreStartHook, ServerRuntime, ServerRuntimeConfig
@@ -64,9 +65,9 @@ class Supervisor:
         """Prend en charge un serveur. Son identifiant doit être unique."""
         if config.id in self._runtimes:
             raise ConflictError(
-                f"Le serveur « {config.name} » est déjà pris en charge.",
-                cause=f"Un runtime existe déjà pour l'identifiant {config.id}.",
-                remediation="Recharger la configuration du serveur au lieu de l'enregistrer.",
+                tr("Server “{name}” is already managed.", name=config.name),
+                cause=tr("A runtime already exists for the identifier {id}.", id=config.id),
+                remediation=tr("Reload the server configuration instead of registering it."),
             )
         runtime = ServerRuntime(
             config,
@@ -84,9 +85,9 @@ class Supervisor:
             return self._runtimes[server_id]
         except KeyError:
             raise NotFoundError(
-                "Serveur introuvable.",
-                cause=f"Aucun serveur ne porte l'identifiant {server_id}.",
-                remediation="Rafraîchir la liste des serveurs.",
+                tr("Server not found."),
+                cause=tr("No server has the identifier {server_id}.", server_id=server_id),
+                remediation=tr("Refresh the server list."),
             ) from None
 
     def find(self, server_id: int) -> ServerRuntime | None:
@@ -170,7 +171,7 @@ class Supervisor:
 
         if stop_servers:
             results = await asyncio.gather(
-                *(runtime.stop(actor="arrêt de MSM") for runtime in runtimes),
+                *(runtime.stop(actor=tr("MSM shutdown")) for runtime in runtimes),
                 return_exceptions=True,
             )
             for runtime, result in zip(runtimes, results, strict=True):

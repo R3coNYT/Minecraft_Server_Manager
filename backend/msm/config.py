@@ -44,17 +44,15 @@ def _load_yaml_config() -> dict[str, Any]:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
         raise ConfigurationError(
-            "Le fichier de configuration est illisible.",
-            cause=f"{path} n'est pas un YAML valide : {exc}",
-            remediation=(
-                "Corriger la syntaxe YAML, ou supprimer le fichier pour revenir aux défauts."
-            ),
+            "The configuration file cannot be read.",
+            cause=f"{path} is not valid YAML: {exc}",
+            remediation=("Fix the YAML syntax, or delete the file to go back to the defaults."),
         ) from exc
     if not isinstance(data, dict):
         raise ConfigurationError(
-            "Le fichier de configuration est invalide.",
-            cause=f"{path} doit contenir un dictionnaire à la racine.",
-            remediation="Utiliser des paires `clé: valeur` au premier niveau du fichier.",
+            "The configuration file is invalid.",
+            cause=f"{path} must contain a mapping at its root.",
+            remediation="Use `key: value` pairs at the top level of the file.",
         )
     return {str(k).lower(): v for k, v in data.items()}
 
@@ -207,20 +205,23 @@ class Settings(BaseSettings):
         if not self.secret_key:
             if self.environment == "production":
                 raise ConfigurationError(
-                    "Clé secrète absente.",
-                    cause="MSM_SECRET_KEY est vide alors que l'environnement est `production`.",
+                    "Missing secret key.",
+                    cause="MSM_SECRET_KEY is empty while the environment is `production`.",
                     remediation=(
-                        'Générer une clé avec `python -c "import secrets; '
-                        'print(secrets.token_urlsafe(64))"` puis la placer dans .env'
+                        'Generate a key with `python -c "import secrets; '
+                        'print(secrets.token_urlsafe(64))"` and put it in .env'
                     ),
                 )
             # Développement et tests : clé éphémère, régénérée à chaque démarrage.
             object.__setattr__(self, "secret_key", secrets.token_urlsafe(64))
         elif len(self.secret_key) < 32:
             raise ConfigurationError(
-                "Clé secrète trop courte.",
-                cause=f"MSM_SECRET_KEY fait {len(self.secret_key)} caractères, 32 minimum requis.",
-                remediation="Régénérer une clé d'au moins 64 caractères aléatoires.",
+                "Secret key too short.",
+                cause=(
+                    f"MSM_SECRET_KEY is {len(self.secret_key)} characters long, "
+                    "32 minimum required."
+                ),
+                remediation="Generate a key of at least 64 random characters.",
             )
         return self
 

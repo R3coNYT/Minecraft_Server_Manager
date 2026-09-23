@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
 import { useToasts, type ToastKind } from '@/stores/toasts'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 const STYLES: Record<ToastKind, { box: string; icon: JSX.Element }> = {
   success: {
@@ -48,7 +49,7 @@ export function Toaster() {
           <button
             onClick={() => dismiss(toast.id)}
             className="rounded p-0.5 text-slate-500 transition-colors hover:text-slate-200"
-            aria-label="Fermer la notification"
+            aria-label={t('shell.closeNotification')}
           >
             <X className="size-3.5" />
           </button>

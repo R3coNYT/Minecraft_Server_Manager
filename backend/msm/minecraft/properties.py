@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 from msm.utils.files import atomic_write_text, read_text_guessing_encoding
 
 PROPERTIES_FILE = "server.properties"
@@ -43,43 +44,43 @@ class PropertyMeta:
 
 #: Clés mises en avant dans l'interface. Le reste reste éditable en liste brute.
 KNOWN_PROPERTIES: tuple[PropertyMeta, ...] = (
-    PropertyMeta("motd", "Message d'accueil", "string", help="Affiché dans la liste des serveurs."),
+    PropertyMeta("motd", "Message of the day", "string", help="Shown in the server list."),
     PropertyMeta("server-port", "Port", "integer", minimum=1, maximum=65535),
-    PropertyMeta("max-players", "Joueurs maximum", "integer", minimum=1, maximum=10000),
+    PropertyMeta("max-players", "Maximum players", "integer", minimum=1, maximum=10000),
     PropertyMeta(
         "gamemode",
-        "Mode de jeu",
+        "Game mode",
         "enum",
         choices=("survival", "creative", "adventure", "spectator"),
         requires_restart=False,
     ),
     PropertyMeta(
         "difficulty",
-        "Difficulté",
+        "Difficulty",
         "enum",
         choices=("peaceful", "easy", "normal", "hard"),
         requires_restart=False,
     ),
-    PropertyMeta("pvp", "Combat entre joueurs", "boolean", requires_restart=False),
-    PropertyMeta("hardcore", "Mode extrême", "boolean"),
-    PropertyMeta("white-list", "Liste blanche", "boolean", requires_restart=False),
+    PropertyMeta("pvp", "Player versus player", "boolean", requires_restart=False),
+    PropertyMeta("hardcore", "Hardcore", "boolean"),
+    PropertyMeta("white-list", "Whitelist", "boolean", requires_restart=False),
     PropertyMeta(
         "online-mode",
-        "Authentification Mojang",
+        "Mojang authentication",
         "boolean",
-        help="Désactiver autorise les comptes non authentifiés : à réserver aux réseaux privés.",
+        help="Disabling allows unauthenticated accounts: keep it for private networks.",
     ),
-    PropertyMeta("allow-flight", "Autoriser le vol", "boolean"),
-    PropertyMeta("allow-nether", "Autoriser le Nether", "boolean"),
-    PropertyMeta("view-distance", "Distance de vue", "integer", minimum=2, maximum=32),
-    PropertyMeta("simulation-distance", "Distance de simulation", "integer", minimum=3, maximum=32),
-    PropertyMeta("spawn-protection", "Protection du point d'apparition", "integer", minimum=0),
-    PropertyMeta("enable-command-block", "Blocs de commande", "boolean"),
-    PropertyMeta("level-name", "Nom du monde", "string"),
-    PropertyMeta("level-seed", "Graine du monde", "string"),
-    PropertyMeta("enforce-whitelist", "Appliquer la liste blanche", "boolean"),
-    PropertyMeta("enable-rcon", "Activer RCON", "boolean"),
-    PropertyMeta("rcon.port", "Port RCON", "integer", minimum=1, maximum=65535),
+    PropertyMeta("allow-flight", "Allow flight", "boolean"),
+    PropertyMeta("allow-nether", "Allow the Nether", "boolean"),
+    PropertyMeta("view-distance", "View distance", "integer", minimum=2, maximum=32),
+    PropertyMeta("simulation-distance", "Simulation distance", "integer", minimum=3, maximum=32),
+    PropertyMeta("spawn-protection", "Spawn protection", "integer", minimum=0),
+    PropertyMeta("enable-command-block", "Command blocks", "boolean"),
+    PropertyMeta("level-name", "World name", "string"),
+    PropertyMeta("level-seed", "World seed", "string"),
+    PropertyMeta("enforce-whitelist", "Enforce the whitelist", "boolean"),
+    PropertyMeta("enable-rcon", "Enable RCON", "boolean"),
+    PropertyMeta("rcon.port", "RCON port", "integer", minimum=1, maximum=65535),
 )
 
 _META_BY_KEY = {meta.key: meta for meta in KNOWN_PROPERTIES}
@@ -99,13 +100,13 @@ class PropertyEntry:
             "key": self.key,
             "value": self.value,
             "known": self.meta is not None,
-            "label": self.meta.label if self.meta else self.key,
+            "label": tr(self.meta.label) if self.meta else self.key,
             "type": self.meta.type if self.meta else "string",
             "choices": list(self.meta.choices) if self.meta else [],
             "minimum": self.meta.minimum if self.meta else None,
             "maximum": self.meta.maximum if self.meta else None,
             "requires_restart": self.meta.requires_restart if self.meta else True,
-            "help": self.meta.help if self.meta else "",
+            "help": tr(self.meta.help) if self.meta and self.meta.help else "",
         }
 
 
@@ -140,9 +141,9 @@ def read(directory: Path) -> PropertiesFile:
         content, encoding = read_text_guessing_encoding(path)
     except OSError as exc:
         raise ValidationError(
-            "Fichier de configuration illisible.",
+            tr("Unreadable configuration file."),
             cause=str(exc),
-            remediation="Vérifier les droits d'accès sur server.properties.",
+            remediation=tr("Check the access rights on server.properties."),
         ) from exc
 
     lines = content.splitlines()
@@ -180,9 +181,9 @@ def validate_value(key: str, value: str) -> str:
     if meta.type == "boolean":
         if clean.lower() not in ("true", "false"):
             raise ValidationError(
-                f"Valeur invalide pour « {meta.label} ».",
-                cause=f"« {value} » n'est ni `true` ni `false`.",
-                remediation="Utiliser la case à cocher pour choisir la valeur.",
+                tr("Invalid value for “{label}”.", label=tr(meta.label)),
+                cause=tr("“{value}” is neither `true` nor `false`.", value=value),
+                remediation=tr("Use the checkbox to choose the value."),
             )
         return clean.lower()
 
@@ -191,29 +192,35 @@ def validate_value(key: str, value: str) -> str:
             number = int(clean)
         except ValueError:
             raise ValidationError(
-                f"Valeur invalide pour « {meta.label} ».",
-                cause=f"« {value} » n'est pas un nombre entier.",
-                remediation="Saisir un nombre entier.",
+                tr("Invalid value for “{label}”.", label=tr(meta.label)),
+                cause=tr("“{value}” is not a whole number.", value=value),
+                remediation=tr("Enter a whole number."),
             ) from None
         if meta.minimum is not None and number < meta.minimum:
             raise ValidationError(
-                f"Valeur trop basse pour « {meta.label} ».",
-                cause=f"{number} est inférieur au minimum ({meta.minimum}).",
-                remediation=f"Saisir une valeur d'au moins {meta.minimum}.",
+                tr("Value too low for “{label}”.", label=tr(meta.label)),
+                cause=tr(
+                    "{number} is below the minimum ({minimum}).",
+                    number=number,
+                    minimum=meta.minimum,
+                ),
+                remediation=tr("Enter a value of at least {minimum}.", minimum=meta.minimum),
             )
         if meta.maximum is not None and number > meta.maximum:
             raise ValidationError(
-                f"Valeur trop élevée pour « {meta.label} ».",
-                cause=f"{number} dépasse le maximum ({meta.maximum}).",
-                remediation=f"Saisir une valeur d'au plus {meta.maximum}.",
+                tr("Value too high for “{label}”.", label=tr(meta.label)),
+                cause=tr(
+                    "{number} exceeds the maximum ({maximum}).", number=number, maximum=meta.maximum
+                ),
+                remediation=tr("Enter a value of at most {maximum}.", maximum=meta.maximum),
             )
         return str(number)
 
     if meta.type == "enum" and clean not in meta.choices:
         raise ValidationError(
-            f"Valeur invalide pour « {meta.label} ».",
-            cause=f"« {value} » ne fait pas partie des valeurs acceptées.",
-            remediation=f"Choisir parmi : {', '.join(meta.choices)}.",
+            tr("Invalid value for “{label}”.", label=tr(meta.label)),
+            cause=tr("“{value}” is not one of the accepted values.", value=value),
+            remediation=tr("Choose one of: {choices}.", choices=", ".join(meta.choices)),
         )
 
     return clean
@@ -222,9 +229,9 @@ def validate_value(key: str, value: str) -> str:
 def _reject_line_breaks(key: str, value: str) -> str:
     if "\n" in value or "\r" in value:
         raise ValidationError(
-            f"Valeur invalide pour « {key} ».",
-            cause="La valeur contient un saut de ligne, ce que le format n'admet pas.",
-            remediation="Saisir la valeur sur une seule ligne.",
+            tr("Invalid value for “{label}”.", label=key),
+            cause=tr("The value contains a line break, which the format does not allow."),
+            remediation=tr("Enter the value on a single line."),
         )
     return value.strip()
 
@@ -242,9 +249,9 @@ def apply_changes(directory: Path, changes: dict[str, str]) -> tuple[list[str], 
     parsed = read(directory)
     if not parsed.exists:
         raise ValidationError(
-            "Fichier server.properties introuvable.",
-            cause="Le serveur ne l'a pas encore généré.",
-            remediation="Démarrer le serveur une première fois pour qu'il crée ses fichiers.",
+            tr("server.properties not found."),
+            cause=tr("The server has not generated it yet."),
+            remediation=tr("Start the server once so that it creates its files."),
         )
 
     lines = list(parsed.lines)
@@ -256,9 +263,9 @@ def apply_changes(directory: Path, changes: dict[str, str]) -> tuple[list[str], 
         clean_key = key.strip()
         if not clean_key or "=" in clean_key or clean_key.startswith("#"):
             raise ValidationError(
-                "Clé de configuration invalide.",
-                cause=f"« {key} » n'est pas un nom de propriété valide.",
-                remediation="Utiliser les champs proposés par l'interface.",
+                tr("Invalid configuration key."),
+                cause=tr("“{key}” is not a valid property name.", key=key),
+                remediation=tr("Use the fields offered by the interface."),
             )
 
         value = validate_value(clean_key, str(raw_value))

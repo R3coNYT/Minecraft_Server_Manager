@@ -1,0 +1,36 @@
+import { section } from '../section'
+
+export const properties = section({
+  en: {
+    "properties.saved_one": "{count} setting saved",
+    "properties.saved_other": "{count} settings saved",
+    "properties.restartNeeded": "A server restart is needed to apply these changes.",
+    "properties.missing": "server.properties missing",
+    "properties.missingHint": "The server has not generated it yet. Starting it once will create its configuration files.",
+    "properties.onRestart": "on restart",
+    "properties.immediate": "immediate",
+    "properties.title": "Server settings",
+    "properties.subtitle": "The file's comments and order are kept when saving.",
+    "properties.save": "Save",
+    "properties.pendingRestart": "Some changed settings will only take effect after a server restart.",
+    "properties.common": "Common settings",
+    "properties.others": "Other settings ({count})",
+    "properties.othersHint": "Keys not listed by MSM: editable as free text.",
+  },
+  fr: {
+    "properties.saved_one": "{count} réglage enregistré",
+    "properties.saved_other": "{count} réglages enregistrés",
+    "properties.restartNeeded": "Un redémarrage du serveur est nécessaire pour appliquer ces changements.",
+    "properties.missing": "server.properties absent",
+    "properties.missingHint": "Le serveur ne l'a pas encore généré. Le démarrer une première fois créera ses fichiers de configuration.",
+    "properties.onRestart": "au redémarrage",
+    "properties.immediate": "immédiat",
+    "properties.title": "Réglages du serveur",
+    "properties.subtitle": "Les commentaires et l'ordre du fichier sont préservés à l'enregistrement.",
+    "properties.save": "Enregistrer",
+    "properties.pendingRestart": "Certains réglages modifiés ne prendront effet qu'après un redémarrage du serveur.",
+    "properties.common": "Réglages courants",
+    "properties.others": "Autres réglages ({count})",
+    "properties.othersHint": "Clés non répertoriées par MSM : modifiables en texte libre.",
+  },
+})

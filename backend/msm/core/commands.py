@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 
 from msm.exceptions import UnsafeCommandError, ValidationError
+from msm.i18n import tr
 
 #: Limite large, alignée sur celle du client Minecraft.
 MAX_COMMAND_LENGTH = 32_500
@@ -35,9 +36,9 @@ def sanitize_command(raw: str) -> str:
     """
     if not isinstance(raw, str):
         raise UnsafeCommandError(
-            "Commande invalide.",
-            cause="La commande reçue n'est pas une chaîne de caractères.",
-            remediation="Envoyer la commande sous forme de texte.",
+            tr("Invalid command."),
+            cause=tr("The command received is not a string."),
+            remediation=tr("Send the command as text."),
         )
 
     # `\r` seul est toléré (fin de ligne Windows) mais retiré ; `\n` ne l'est pas.
@@ -45,26 +46,31 @@ def sanitize_command(raw: str) -> str:
 
     if not candidate:
         raise UnsafeCommandError(
-            "Commande vide.",
-            cause="Aucun contenu à envoyer au serveur.",
-            remediation="Saisir une commande avant de valider.",
+            tr("Empty command."),
+            cause=tr("Nothing to send to the server."),
+            remediation=tr("Enter a command before submitting."),
         )
 
     if (bad := _FORBIDDEN_RE.search(candidate)) is not None:
         raise UnsafeCommandError(
-            "Commande refusée : caractère interdit.",
-            cause=(
-                f"La commande contient le caractère de contrôle 0x{ord(bad.group()):02x}, "
-                "qui permettrait d'exécuter plusieurs commandes en une seule requête."
+            tr("Command refused: forbidden character."),
+            cause=tr(
+                "The command contains the control character 0x{code}, which would allow "
+                "several commands to run in a single request.",
+                code=f"{ord(bad.group()):02x}",
             ),
-            remediation="Envoyer une seule commande, sans saut de ligne.",
+            remediation=tr("Send a single command, without line breaks."),
         )
 
     if len(candidate) > MAX_COMMAND_LENGTH:
         raise UnsafeCommandError(
-            "Commande trop longue.",
-            cause=f"{len(candidate)} caractères pour un maximum de {MAX_COMMAND_LENGTH}.",
-            remediation="Raccourcir la commande.",
+            tr("Command too long."),
+            cause=tr(
+                "{length} characters for a maximum of {maximum}.",
+                length=len(candidate),
+                maximum=MAX_COMMAND_LENGTH,
+            ),
+            remediation=tr("Shorten the command."),
         )
 
     return candidate.removeprefix("/").strip() or _empty()
@@ -72,9 +78,9 @@ def sanitize_command(raw: str) -> str:
 
 def _empty() -> str:
     raise UnsafeCommandError(
-        "Commande vide.",
-        cause="La commande ne contenait qu'un `/`.",
-        remediation="Saisir une commande complète, par exemple `say Bonjour`.",
+        tr("Empty command."),
+        cause=tr("The command only contained a `/`."),
+        remediation=tr("Enter a full command, for example `say Hello`."),
     )
 
 
@@ -102,24 +108,30 @@ def validate_target(target: str, *, allow_selector: bool = True) -> str:
     if allow_selector and _SELECTOR_RE.match(value):
         return value
     raise ValidationError(
-        "Cible invalide.",
-        cause=f"« {target} » n'est ni un pseudo Minecraft ni un sélecteur valide.",
+        tr("Invalid target."),
+        cause=tr("“{target}” is neither a Minecraft username nor a valid selector.", target=target),
         remediation=(
-            "Utiliser un pseudo (1 à 16 caractères, lettres, chiffres et `_`)"
-            + (" ou un sélecteur tel que `@a`." if allow_selector else ".")
+            tr(
+                "Use a username (1 to 16 characters: letters, digits and `_`) "
+                "or a selector such as `@a`."
+            )
+            if allow_selector
+            else tr("Use a username (1 to 16 characters: letters, digits and `_`).")
         ),
     )
 
 
-def validate_resource(resource: str, *, kind: str = "identifiant") -> str:
+def validate_resource(resource: str, *, kind: str = "identifier") -> str:
     """Valide un identifiant de ressource Minecraft (objet, effet, dimension…)."""
     value = resource.strip().casefold()
     if _RESOURCE_RE.match(value):
         return value
     raise ValidationError(
-        f"{kind.capitalize()} invalide.",
-        cause=f"« {resource} » ne respecte pas le format des identifiants Minecraft.",
-        remediation="Utiliser un identifiant du type `diamond` ou `minecraft:diamond_sword`.",
+        tr("Invalid {kind}.", kind=tr(kind)),
+        cause=tr(
+            "“{resource}” does not follow the Minecraft identifier format.", resource=resource
+        ),
+        remediation=tr("Use an identifier such as `diamond` or `minecraft:diamond_sword`."),
     )
 
 
@@ -127,15 +139,28 @@ def validate_count(count: int, *, minimum: int = 1, maximum: int = 6400) -> int:
     """Valide une quantité d'objets."""
     if not isinstance(count, int) or isinstance(count, bool):
         raise ValidationError(
-            "Quantité invalide.",
-            cause="La quantité doit être un nombre entier.",
-            remediation=f"Saisir un entier entre {minimum} et {maximum}.",
+            tr("Invalid quantity."),
+            cause=tr("The quantity must be a whole number."),
+            remediation=tr(
+                "Enter a whole number between {minimum} and {maximum}.",
+                minimum=minimum,
+                maximum=maximum,
+            ),
         )
     if not minimum <= count <= maximum:
         raise ValidationError(
-            "Quantité hors limites.",
-            cause=f"{count} n'est pas compris entre {minimum} et {maximum}.",
-            remediation=f"Saisir une quantité entre {minimum} et {maximum}.",
+            tr("Quantity out of range."),
+            cause=tr(
+                "{count} is not between {minimum} and {maximum}.",
+                count=count,
+                minimum=minimum,
+                maximum=maximum,
+            ),
+            remediation=tr(
+                "Enter a quantity between {minimum} and {maximum}.",
+                minimum=minimum,
+                maximum=maximum,
+            ),
         )
     return count
 
@@ -148,9 +173,9 @@ def build_say(message: str) -> str:
     text = message.strip()
     if not text:
         raise ValidationError(
-            "Message vide.",
-            cause="Aucun texte à diffuser.",
-            remediation="Saisir le message à afficher aux joueurs.",
+            tr("Empty message."),
+            cause=tr("No text to broadcast."),
+            remediation=tr("Enter the message to show to players."),
         )
     return sanitize_command(f"say {text}")
 
@@ -158,7 +183,7 @@ def build_say(message: str) -> str:
 def build_give(target: str, item: str, count: int = 1) -> str:
     """``give <cible> <objet> <quantité>``."""
     return sanitize_command(
-        f"give {validate_target(target)} {validate_resource(item, kind='objet')} "
+        f"give {validate_target(target)} {validate_resource(item, kind='item')} "
         f"{validate_count(count)}"
     )
 
@@ -202,8 +227,8 @@ def build_teleport_coords(target: str, x: float, y: float, z: float) -> str:
     for axis, value in (("x", x), ("y", y), ("z", z)):
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             raise ValidationError(
-                "Coordonnée invalide.",
-                cause=f"La coordonnée {axis} doit être numérique.",
-                remediation="Saisir des coordonnées numériques.",
+                tr("Invalid coordinate."),
+                cause=tr("The {axis} coordinate must be numeric.", axis=axis),
+                remediation=tr("Enter numeric coordinates."),
             )
     return sanitize_command(f"tp {validate_target(target)} {x:g} {y:g} {z:g}")

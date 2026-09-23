@@ -139,7 +139,7 @@ class TestManifest:
         text = files[INVENTORY_NAME].decode("utf-8")
 
         assert "jei-1.20.1.jar" in text
-        assert "[désactivé]" in text
+        assert "[disabled]" in text
 
 
 class TestArchive:

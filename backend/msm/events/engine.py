@@ -24,6 +24,7 @@ from typing import Any
 from msm.events import registry
 from msm.events.actions import ActionResult, ExecutionContext
 from msm.exceptions import MsmError, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 
 logger = get_logger(__name__)
@@ -87,25 +88,27 @@ def parse_steps(raw_steps: Any) -> list[Step]:
     """
     if not isinstance(raw_steps, list) or not raw_steps:
         raise ValidationError(
-            "Événement vide.",
-            cause="Aucune étape n'a été définie.",
-            remediation="Ajouter au moins une action à l'événement.",
+            tr("Empty event."),
+            cause=tr("No step has been defined."),
+            remediation=tr("Add at least one action to the event."),
         )
 
     if len(raw_steps) > MAX_STEPS:
         raise ValidationError(
-            "Événement trop long.",
-            cause=f"{len(raw_steps)} étapes pour un maximum de {MAX_STEPS}.",
-            remediation="Découper l'événement en plusieurs séquences.",
+            tr("Event too long."),
+            cause=tr(
+                "{count} steps for a maximum of {maximum}.", count=len(raw_steps), maximum=MAX_STEPS
+            ),
+            remediation=tr("Split the event into several sequences."),
         )
 
     steps: list[Step] = []
     for index, raw in enumerate(raw_steps, start=1):
         if not isinstance(raw, dict):
             raise ValidationError(
-                f"Étape {index} invalide.",
-                cause="Chaque étape doit être un objet décrivant une action.",
-                remediation="Reconstruire l'étape depuis l'interface.",
+                tr("Step {index} invalid.", index=index),
+                cause=tr("Each step must be an object describing an action."),
+                remediation=tr("Rebuild the step from the interface."),
             )
 
         key = str(raw.get("action", ""))
@@ -113,9 +116,9 @@ def parse_steps(raw_steps: Any) -> list[Step]:
         params = raw.get("params") or {}
         if not isinstance(params, dict):
             raise ValidationError(
-                f"Étape {index} invalide.",
-                cause="Les paramètres de l'étape ne forment pas un objet.",
-                remediation="Reconstruire l'étape depuis l'interface.",
+                tr("Step {index} invalid.", index=index),
+                cause=tr("The step parameters are not an object."),
+                remediation=tr("Rebuild the step from the interface."),
             )
 
         try:
@@ -124,7 +127,7 @@ def parse_steps(raw_steps: Any) -> list[Step]:
             # Le numéro d'étape est ajouté à la cause : sans lui, l'utilisateur
             # ne saurait pas laquelle corriger dans une séquence de dix.
             raise ValidationError(
-                f"Étape {index} — {exc.message}",
+                tr("Step {index} — {message}", index=index, message=exc.message),
                 cause=exc.cause,
                 remediation=exc.remediation,
             ) from exc
@@ -163,9 +166,7 @@ class EventRunner:
         index = 0
 
         try:
-            await self._report(
-                RunProgress(RunStatus.RUNNING, 0, total, "Démarrage de l'événement.")
-            )
+            await self._report(RunProgress(RunStatus.RUNNING, 0, total, tr("Event starting.")))
 
             for index, step in enumerate(self.steps, start=1):
                 action = registry.get(step.action)
@@ -179,7 +180,7 @@ class EventRunner:
                         RunStatus.FAILED,
                         index,
                         total,
-                        f"Échec à l'étape {index} : {step.describe()}",
+                        tr("Failed at step {index}: {step}", index=index, step=step.describe()),
                         error=str(exc),
                     )
                     await self._report(progress)
@@ -190,7 +191,7 @@ class EventRunner:
                         RunStatus.FAILED,
                         index,
                         total,
-                        f"Erreur inattendue à l'étape {index}.",
+                        tr("Unexpected error at step {index}.", index=index),
                         error=str(exc),
                     )
                     await self._report(progress)
@@ -202,11 +203,11 @@ class EventRunner:
             # Rendre compte avant de propager : la tâche est déjà condamnée, mais
             # l'historique doit dire à quelle étape elle s'est arrêtée.
             await asyncio.shield(
-                self._report(RunProgress(RunStatus.CANCELLED, index, total, "Événement annulé."))
+                self._report(RunProgress(RunStatus.CANCELLED, index, total, tr("Event cancelled.")))
             )
             raise
 
-        progress = RunProgress(RunStatus.COMPLETED, total, total, "Événement terminé.")
+        progress = RunProgress(RunStatus.COMPLETED, total, total, tr("Event completed."))
         await self._report(progress)
         return progress
 

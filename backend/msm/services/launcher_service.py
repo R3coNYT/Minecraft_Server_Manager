@@ -35,6 +35,7 @@ from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
 from msm.db.session import session_scope
 from msm.exceptions import MsmError, NotFoundError, ValidationError
+from msm.i18n import tr
 from msm.launcher_sync import disk
 from msm.launcher_sync.manifest import (
     SIDE_ALIASES,
@@ -112,9 +113,9 @@ def normalize_sync_paths(raw: list[str] | None) -> list[str]:
         result.append(cleaned + "/")
     if not result:
         raise ValidationError(
-            "Aucun dossier à synchroniser.",
-            cause="La liste des dossiers synchronisés est vide.",
-            remediation="Indiquer au moins un dossier, par exemple mods/.",
+            tr("No folder to synchronise."),
+            cause=tr("The list of synchronised folders is empty."),
+            remediation=tr("Enter at least one folder, for example mods/."),
         )
     return sorted(set(result))
 
@@ -159,16 +160,18 @@ class LauncherService:
         context: AccessContext,
         ip_address: str | None = None,
     ) -> LauncherIntegration:
-        context.require(Permission.SERVER_EDIT, action="configurer l'intégration launcher")
+        context.require(Permission.SERVER_EDIT, action=tr("configure the launcher integration"))
 
         # Valide l'adresse avant tout enregistrement.
         base = FileServerClient(file_server_url, transport=self._transport).base_url
         paths = normalize_sync_paths(sync_paths)
         if not MIN_INTERVAL_MINUTES <= interval_minutes <= MAX_INTERVAL_MINUTES:
             raise ValidationError(
-                "Intervalle hors limites.",
-                cause=f"{interval_minutes} minutes demandées.",
-                remediation=(f"Choisir entre {MIN_INTERVAL_MINUTES} minutes et une semaine."),
+                tr("Interval out of range."),
+                cause=tr("{minutes} minutes requested.", minutes=interval_minutes),
+                remediation=tr(
+                    "Choose between {minimum} minutes and one week.", minimum=MIN_INTERVAL_MINUTES
+                ),
             )
 
         integration = await self.get(server)
@@ -205,7 +208,7 @@ class LauncherService:
         await self._session.flush()
         self._audit.record(
             action=AuditAction.LAUNCHER_UPDATED,
-            summary=f"Intégration launcher de « {server.name} » : {base}.",
+            summary=tr("Launcher integration of “{name}”: {url}.", name=server.name, url=base),
             actor_id=context.user_id,
             actor_username=context.username,
             actor_role=context.role.value,
@@ -221,13 +224,13 @@ class LauncherService:
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> None:
         """Retire l'intégration. Les mods installés restent en place."""
-        context.require(Permission.SERVER_EDIT, action="retirer l'intégration launcher")
+        context.require(Permission.SERVER_EDIT, action=tr("remove the launcher integration"))
         integration = await self._require(server)
         await self._session.delete(integration)
         await self._session.execute(delete(LauncherFile).where(LauncherFile.server_id == server.id))
         self._audit.record(
             action=AuditAction.LAUNCHER_UPDATED,
-            summary=f"Intégration launcher de « {server.name} » retirée.",
+            summary=tr("Launcher integration of “{name}” removed.", name=server.name),
             actor_id=context.user_id,
             actor_username=context.username,
             actor_role=context.role.value,
@@ -246,7 +249,7 @@ class LauncherService:
         context: AccessContext,
     ) -> LauncherIntegration:
         """Force le côté d'un mod, ou revient à la détection automatique."""
-        context.require(Permission.SERVER_EDIT, action="modifier le côté d'un mod")
+        context.require(Permission.SERVER_EDIT, action=tr("change a mod's side"))
         integration = await self._require(server)
         clean = validate_path(path)
         overrides = dict(integration.side_overrides or {})
@@ -256,9 +259,9 @@ class LauncherService:
             resolved = SIDE_ALIASES.get(side.lower())
             if resolved is None:
                 raise ValidationError(
-                    "Côté inconnu.",
-                    cause=f"« {side} » n'est ni client, ni server, ni both.",
-                    remediation="Choisir client, server ou both.",
+                    tr("Unknown side."),
+                    cause=tr("“{side}” is neither client, server nor both.", side=side),
+                    remediation=tr("Choose client, server or both."),
                 )
             overrides[clean] = resolved
         integration.side_overrides = overrides
@@ -274,11 +277,11 @@ class LauncherService:
         context: AccessContext,
         ip_address: str | None = None,
     ) -> LauncherIntegration:
-        context.require(Permission.SERVER_EDIT, action="synchroniser avec le launcher")
+        context.require(Permission.SERVER_EDIT, action=tr("synchronise with the launcher"))
         await self._require(server)
         self._audit.record(
             action=AuditAction.LAUNCHER_SYNCED,
-            summary=f"Synchronisation launcher de « {server.name} » lancée à la main.",
+            summary=tr("Launcher synchronisation of “{name}” started by hand.", name=server.name),
             actor_id=context.user_id,
             actor_username=context.username,
             actor_role=context.role.value,
@@ -303,7 +306,7 @@ class LauncherService:
         return await self._refreshed(server)
 
     async def publish_now(self, server: Server, *, context: AccessContext) -> LauncherIntegration:
-        context.require(Permission.SERVER_EDIT, action="publier l'état des mods")
+        context.require(Permission.SERVER_EDIT, action=tr("publish the mod state"))
         await self._require(server)
         await self._session.commit()
         _PUSH_NOT_BEFORE.pop(server.id, None)
@@ -321,9 +324,9 @@ class LauncherService:
         integration = await self.get(server)
         if integration is None:
             raise NotFoundError(
-                "Aucune intégration launcher.",
-                cause=f"« {server.name} » n'est relié à aucun serveur de fichiers.",
-                remediation="Renseigner l'adresse du serveur de fichiers du launcher.",
+                tr("No launcher integration."),
+                cause=tr("“{name}” is not linked to any file server.", name=server.name),
+                remediation=tr("Enter the address of the launcher's file server."),
             )
         return integration
 
@@ -607,10 +610,12 @@ async def _synchronize(
 
     if is_mass_deletion(plan, len(tracked)) and not allow_mass_delete:
         integration.last_sync_status = SyncStatus.BLOCKED
-        integration.last_sync_error = (
-            f"Le manifest ferait retirer {len(plan.removes)} des {len(tracked)} fichiers "
-            "installés : suppression massive bloquée par précaution. Vérifier le serveur "
-            "de fichiers, puis confirmer depuis MSM si c'est voulu."
+        integration.last_sync_error = tr(
+            "The manifest would remove {removed} of the {tracked} installed files: mass "
+            "deletion blocked as a precaution. Check the file server, then confirm from MSM "
+            "if this is intended.",
+            removed=len(plan.removes),
+            tracked=len(tracked),
         )
         integration.pending_plan = None
         return
@@ -701,13 +706,18 @@ async def apply_pending(
             # pas un plan incomplet, la synchronisation suivante le refera.
             applied: Plan | None = None
             messages = [
-                "Synchronisation launcher : fichiers préparés introuvables, "
-                "ils seront retéléchargés à la prochaine synchronisation."
+                tr(
+                    "Launcher synchronisation: prepared files not found, they will be "
+                    "downloaded again at the next synchronisation."
+                )
             ]
         else:
             applied = plan
             changes = await asyncio.to_thread(disk.apply_plan, server_dir, staging, plan)
-            messages = [f"Synchronisation launcher appliquée : {change}" for change in changes]
+            messages = [
+                tr("Launcher synchronisation applied: {change}", change=change)
+                for change in changes
+            ]
             logger.info("launcher_pending_applied", server_id=server_id, trigger=trigger)
 
     bookkeeping = _record_applied(server_id, server_dir, applied, settings=settings)
@@ -843,7 +853,7 @@ def make_pre_start_hook(settings: Settings) -> PreStartHook:
 
     async def hook(server_id: int) -> list[str]:
         return await apply_pending(
-            server_id, settings=settings, trigger="démarrage", defer_bookkeeping=True
+            server_id, settings=settings, trigger="start", defer_bookkeeping=True
         )
 
     return hook
@@ -934,6 +944,6 @@ class LauncherSyncer:
                     # Serveur arrêté entre-temps : autant appliquer maintenant
                     # que d'attendre qu'on le redémarre.
                     await apply_pending(
-                        server_id, settings=self._settings, trigger="serveur arrêté"
+                        server_id, settings=self._settings, trigger="server stopped"
                     )
             await publish_state(server_id, settings=self._settings, transport=self.transport)

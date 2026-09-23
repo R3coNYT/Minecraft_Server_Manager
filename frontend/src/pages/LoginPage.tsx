@@ -5,6 +5,7 @@ import { useLogin, useMe } from '@/hooks/useApi'
 import { Button } from '@/components/ui/Button'
 import { Card, Field, Input, LoadingBlock } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { t } from '@/i18n'
 
 export function LoginPage() {
   const { data: me, isLoading } = useMe()
@@ -26,12 +27,12 @@ export function LoginPage() {
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
           <Boxes className="size-8 text-emerald-500" />
           <h1 className="text-lg font-semibold text-slate-100">Minecraft Server Manager</h1>
-          <p className="text-sm text-slate-500">Connexion au panneau d'administration</p>
+          <p className="text-sm text-slate-500">{t('login.subtitle')}</p>
         </div>
 
         <Card className="p-5">
           <form onSubmit={onSubmit} className="space-y-4">
-            <Field label="Nom d'utilisateur">
+            <Field label={t('login.username')}>
               <Input
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
@@ -41,7 +42,7 @@ export function LoginPage() {
               />
             </Field>
 
-            <Field label="Mot de passe">
+            <Field label={t('login.password')}>
               <Input
                 type="password"
                 value={password}
@@ -61,13 +62,13 @@ export function LoginPage() {
               loading={login.isPending}
               disabled={!username || !password}
             >
-              Se connecter
+              {t('login.submit')}
             </Button>
           </form>
         </Card>
 
         <p className="mt-4 text-center text-xs text-slate-600">
-          Premier démarrage ? Créer un compte avec{' '}
+          {t('login.firstRun')}{' '}
           <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono">
             msm createadmin
           </code>

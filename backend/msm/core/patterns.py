@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from msm.core.log_line import LogLine
+from msm.i18n import tr
 
 # --------------------------------------------------------------------------- #
 #  Démarrage terminé
@@ -72,24 +73,24 @@ FATAL_PATTERNS: tuple[re.Pattern[str], ...] = (
 FATAL_DIAGNOSTICS: tuple[tuple[re.Pattern[str], str, str], ...] = (
     (
         re.compile(r"FAILED TO BIND TO PORT|Failed to bind to port", re.IGNORECASE),
-        "Le port du serveur est déjà utilisé par un autre processus.",
-        "Changer `server-port` dans server.properties, ou arrêter le processus qui occupe ce port.",
+        "The server port is already used by another process.",
+        "Change `server-port` in server.properties, or stop the process using that port.",
     ),
     (
         re.compile(r"You need to agree to the EULA", re.IGNORECASE),
-        "Le CLUF (EULA) de Minecraft n'a pas été accepté.",
-        "Activer « Accepter l'EULA automatiquement » dans les réglages du serveur, "
-        "ou passer `eula=true` dans eula.txt.",
+        "The Minecraft EULA has not been accepted.",
+        "Enable “Accept the EULA automatically” in the server settings, or set "
+        "`eula=true` in eula.txt.",
     ),
     (
         re.compile(r"Could not reserve enough space for .* object heap", re.IGNORECASE),
-        "La mémoire maximale demandée dépasse la RAM disponible sur la machine.",
-        "Réduire la mémoire maximale dans les réglages du serveur.",
+        "The requested maximum memory exceeds the RAM available on the machine.",
+        "Lower the maximum memory in the server settings.",
     ),
     (
         re.compile(r"Error: Unable to access jarfile", re.IGNORECASE),
-        "Le fichier JAR indiqué est introuvable ou illisible.",
-        "Vérifier le chemin du JAR dans les réglages du serveur.",
+        "The JAR file given cannot be found or read.",
+        "Check the JAR path in the server settings.",
     ),
     (
         re.compile(
@@ -97,8 +98,8 @@ FATAL_DIAGNOSTICS: tuple[tuple[re.Pattern[str], str, str], ...] = (
             r"|has been compiled by a more recent version of the Java Runtime",
             re.IGNORECASE,
         ),
-        "La version de Java installée est incompatible avec ce serveur.",
-        "Installer la version de Java requise et renseigner son chemin dans les réglages.",
+        "The installed Java version is not compatible with this server.",
+        "Install the required Java version and enter its path in the settings.",
     ),
 )
 
@@ -197,11 +198,11 @@ def diagnose_fatal(text: str) -> tuple[str, str] | None:
     """Renvoie ``(cause, action)`` si la ligne dénote une erreur fatale connue."""
     for pattern, cause, remediation in FATAL_DIAGNOSTICS:
         if pattern.search(text):
-            return cause, remediation
+            return tr(cause), tr(remediation)
     for pattern in FATAL_PATTERNS:
         if pattern.search(text):
             return (
-                "Le serveur a signalé une erreur fatale.",
-                "Consulter les dernières lignes de la console pour le détail.",
+                tr("The server reported a fatal error."),
+                tr("Read the last lines of the console for details."),
             )
     return None

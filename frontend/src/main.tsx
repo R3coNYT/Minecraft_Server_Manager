@@ -3,8 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api'
+import { t } from '@/i18n'
 import { App } from './App'
 import { Toaster } from '@/components/common/Toaster'
+import { LanguageBoundary } from '@/components/common/LanguageBoundary'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -25,14 +27,16 @@ const queryClient = new QueryClient({
 })
 
 const container = document.getElementById('root')
-if (!container) throw new Error('Élément racine introuvable')
+if (!container) throw new Error(t('api.rootMissing'))
 
 createRoot(container).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
-        <Toaster />
+        <LanguageBoundary>
+          <App />
+          <Toaster />
+        </LanguageBoundary>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

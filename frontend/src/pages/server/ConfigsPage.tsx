@@ -20,6 +20,7 @@ import { EmptyState, LoadingBlock } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 function Breadcrumb({
   path,
@@ -33,7 +34,7 @@ function Breadcrumb({
   return (
     <div className="flex flex-wrap items-center gap-0.5 text-xs text-slate-500">
       <button className="hover:text-slate-200" onClick={() => onNavigate('')}>
-        serveur
+        {t('configs.root')}
       </button>
       {segments.map((segment, index) => (
         <span key={`${segment}-${index}`} className="flex items-center gap-0.5">
@@ -82,7 +83,7 @@ export function ConfigsPage() {
   const save = useMutation({
     mutationFn: () => api.configs.write(server.id, selected as string, draft),
     onSuccess: () => {
-      push({ kind: 'success', title: 'Fichier enregistré' })
+      push({ kind: 'success', title: t('configs.saved') })
       void queryClient.invalidateQueries({ queryKey: ['config-file', server.id, selected] })
       void queryClient.invalidateQueries({ queryKey: ['configs', server.id, directory] })
     },
@@ -132,7 +133,7 @@ export function ConfigsPage() {
                   )}
                   title={
                     !entry.is_directory && !entry.editable
-                      ? 'Fichier trop volumineux pour l’éditeur'
+                      ? t('configs.tooLarge')
                       : undefined
                   }
                 >
@@ -147,7 +148,7 @@ export function ConfigsPage() {
 
               {tree.data?.length === 0 ? (
                 <p className="px-2.5 py-3 text-xs text-slate-600">
-                  Aucun fichier de configuration ici.
+                  {t('configs.empty')}
                 </p>
               ) : null}
             </>
@@ -159,8 +160,8 @@ export function ConfigsPage() {
         {selected === null ? (
           <EmptyState
             icon={<FileCode className="size-8" />}
-            title="Aucun fichier sélectionné"
-            description="Choisir un fichier dans l'arborescence pour l'ouvrir. Les formats JSON, YAML, TOML et properties sont validés avant enregistrement."
+            title={t('configs.noneSelected')}
+            description={t('configs.noneSelectedHint')}
           />
         ) : file.isLoading ? (
           <LoadingBlock />
@@ -175,13 +176,13 @@ export function ConfigsPage() {
                 <p className="truncate font-mono text-xs text-slate-200">{file.data.path}</p>
                 <p className="text-[11px] text-slate-600">
                   {file.data.format.toUpperCase()} · {formatBytes(file.data.size_bytes)} ·
-                  modifié {formatRelative(file.data.modified_at)}
+                  {t('configs.modified', { when: formatRelative(file.data.modified_at) })}
                   {file.data.encoding !== 'utf-8' ? ` · ${file.data.encoding}` : ''}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {dirty ? (
-                  <span className="text-xs text-amber-400">Modifications non enregistrées</span>
+                  <span className="text-xs text-amber-400">{t('configs.unsaved')}</span>
                 ) : null}
                 <Button
                   size="sm"
@@ -191,7 +192,7 @@ export function ConfigsPage() {
                   loading={save.isPending}
                   onClick={() => save.mutate()}
                 >
-                  Enregistrer
+                  {t('configs.save')}
                 </Button>
               </div>
             </div>

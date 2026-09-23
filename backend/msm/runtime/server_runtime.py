@@ -31,6 +31,7 @@ from msm.exceptions import (
     ServerNotRunning,
     ServerStartFailed,
 )
+from msm.i18n import tr
 from msm.launchers import LaunchContext
 from msm.launchers import registry as launcher_registry
 from msm.logging_conf import get_logger
@@ -260,27 +261,33 @@ class ServerRuntime:
             self._adopted.pid, self._adopted.create_time
         ):
             raise ServerAlreadyRunning(
-                f"Le serveur « {self._config.name} » tourne déjà.",
-                cause=(
-                    f"Un processus (PID {self._adopted.pid}) survivant à un redémarrage "
-                    "de MSM est toujours actif."
+                tr("Server “{name}” is already running.", name=self._config.name),
+                cause=tr(
+                    "A process (PID {pid}) that survived an MSM restart is still alive.",
+                    pid=self._adopted.pid,
                 ),
-                remediation="Arrêter ce serveur avant de le relancer.",
+                remediation=tr("Stop this server before starting it again."),
             )
 
         if self._state.is_running:
             raise ServerAlreadyRunning(
-                f"Le serveur « {self._config.name} » est déjà en cours d'exécution.",
-                cause=f"Son état actuel est {self._state.value}.",
-                remediation="Utiliser « Redémarrer » pour le relancer.",
+                tr("Server “{name}” is already running.", name=self._config.name),
+                cause=tr("Its current state is {state}.", state=self._state.value),
+                remediation=tr("Use “Restart” to start it again."),
             )
 
         self._cancel_pending_restart()
         self._stop_requested = False
         self._last_error = None
-        self._set_state(ServerState.STARTING, reason=f"Démarrage demandé par {actor or 'MSM'}")
+        self._set_state(
+            ServerState.STARTING, reason=tr("Start requested by {actor}", actor=actor or "MSM")
+        )
         self._pipeline.emit_system(
-            f"Démarrage du serveur « {self._config.name} » demandé par {actor or 'MSM'}."
+            tr(
+                "Start of server “{name}” requested by {actor}.",
+                name=self._config.name,
+                actor=actor or "MSM",
+            )
         )
         await self._run_pre_start()
 
@@ -291,7 +298,7 @@ class ServerRuntime:
             self._fail_start(exc)
             raise
 
-        self._pipeline.emit_system(f"Commande : {spec.display()}")
+        self._pipeline.emit_system(tr("Command: {command}", command=spec.display()))
 
         handle = ProcessHandle(self._backend)
         try:
@@ -299,29 +306,29 @@ class ServerRuntime:
         except FileNotFoundError as exc:
             self._fail_start(
                 ServerStartFailed(
-                    "Impossible de démarrer le serveur.",
-                    cause=f"Le programme « {spec.argv[0]} » est introuvable.",
-                    remediation="Vérifier le chemin de Java ou du script dans les réglages.",
+                    tr("Cannot start the server."),
+                    cause=tr("Program “{program}” not found.", program=spec.argv[0]),
+                    remediation=tr("Check the Java or script path in the settings."),
                 )
             )
             raise ServerStartFailed(
-                "Impossible de démarrer le serveur.",
-                cause=f"Le programme « {spec.argv[0]} » est introuvable.",
-                remediation="Vérifier le chemin de Java ou du script dans les réglages.",
+                tr("Cannot start the server."),
+                cause=tr("Program “{program}” not found.", program=spec.argv[0]),
+                remediation=tr("Check the Java or script path in the settings."),
             ) from exc
         except PermissionError as exc:
             error = ServerStartFailed(
-                "Impossible de démarrer le serveur.",
-                cause=f"Droits insuffisants pour exécuter « {spec.argv[0]} ».",
-                remediation=f"Sous Linux : chmod +x {spec.argv[0]}",
+                tr("Cannot start the server."),
+                cause=tr("Not allowed to execute “{program}”.", program=spec.argv[0]),
+                remediation=tr("On Linux: chmod +x {program}", program=spec.argv[0]),
             )
             self._fail_start(error)
             raise error from exc
         except OSError as exc:
             error = ServerStartFailed(
-                "Impossible de démarrer le serveur.",
+                tr("Cannot start the server."),
                 cause=str(exc),
-                remediation="Vérifier la configuration de démarrage du serveur.",
+                remediation=tr("Check the server's start-up configuration."),
             )
             self._fail_start(error)
             raise error from exc
@@ -368,8 +375,10 @@ class ServerRuntime:
         except Exception as exc:
             logger.warning("pre_start_failed", server_id=self.id, error=str(exc))
             self._pipeline.emit_system(
-                f"Préparation avant démarrage échouée : {getattr(exc, 'message', exc)} "
-                "— démarrage avec les fichiers actuels.",
+                tr(
+                    "Pre-start preparation failed: {error} — starting with the current files.",
+                    error=getattr(exc, "message", exc),
+                ),
                 level=LogLevel.WARN,
             )
             return
@@ -388,16 +397,18 @@ class ServerRuntime:
 
         if not self._config.auto_accept_eula:
             self._pipeline.emit_system(
-                "Le CLUF Minecraft (eula.txt) n'est pas accepté : le serveur s'arrêtera "
-                "immédiatement. Activer l'acceptation automatique dans les réglages, "
-                "ou passer eula=true manuellement.",
+                tr(
+                    "The Minecraft EULA (eula.txt) is not accepted: the server will stop "
+                    "immediately. Enable automatic acceptance in the settings, or set "
+                    "eula=true by hand."
+                ),
                 level=LogLevel.WARN,
             )
             return
 
         if eula_module.accept(self._config.directory):
             self._pipeline.emit_system(
-                "CLUF Minecraft accepté automatiquement (eula.txt : eula=true)."
+                tr("Minecraft EULA accepted automatically (eula.txt: eula=true).")
             )
 
     def _fail_start(self, exc: Exception) -> None:
@@ -410,9 +421,11 @@ class ServerRuntime:
             "cause": cause or "",
             "remediation": remediation or "",
         }
-        self._pipeline.emit_system(f"Échec du démarrage : {cause}", level=LogLevel.ERROR)
+        self._pipeline.emit_system(tr("Start failed: {cause}", cause=cause), level=LogLevel.ERROR)
         if remediation:
-            self._pipeline.emit_system(f"Action corrective : {remediation}", level=LogLevel.ERROR)
+            self._pipeline.emit_system(
+                tr("Suggested fix: {remediation}", remediation=remediation), level=LogLevel.ERROR
+            )
         self._set_state(ServerState.OFFLINE, reason=cause)
         logger.warning("server_start_failed", server_id=self.id, cause=cause)
 
@@ -445,13 +458,15 @@ class ServerRuntime:
         self._stats_collector = StatsCollector(pid)
 
         self._pipeline.emit_system(
-            f"Serveur réadopté après un redémarrage de MSM (PID {pid}). "
-            "La console est en lecture seule : les commandes ne peuvent plus être "
-            "transmises, mais l'arrêt reste possible.",
+            tr(
+                "Server re-adopted after an MSM restart (PID {pid}). The console is "
+                "read-only: commands can no longer be sent, but it can still be stopped.",
+                pid=pid,
+            ),
             level=LogLevel.WARN,
         )
 
-        self._set_state(ServerState.UNKNOWN, reason="Réadopté après un redémarrage de MSM.")
+        self._set_state(ServerState.UNKNOWN, reason=tr("Re-adopted after an MSM restart."))
 
         self._start_log_tailing()
         self._stats_task = asyncio.create_task(self._pump_stats(), name=f"msm-stats-{self.id}")
@@ -467,8 +482,11 @@ class ServerRuntime:
         path = default_log_path(self._config.directory)
         if not path.parent.is_dir():
             self._pipeline.emit_system(
-                f"Aucun dossier de logs trouvé ({path.parent}) : la console restera "
-                "vide tant que le serveur n'en écrira pas.",
+                tr(
+                    "No logs folder found ({path}): the console will stay empty until the "
+                    "server writes one.",
+                    path=path.parent,
+                ),
                 level=LogLevel.WARN,
             )
         self._tailer = LogTailer(path, self._pipeline.ingest)
@@ -484,9 +502,9 @@ class ServerRuntime:
             if self._backend_ref.is_alive(adopted.pid, adopted.create_time):
                 continue
 
-            self._pipeline.emit_system("Le serveur réadopté s'est arrêté.")
+            self._pipeline.emit_system(tr("The re-adopted server has stopped."))
             await self._release_adopted()
-            self._set_state(ServerState.OFFLINE, reason="Le processus réadopté a disparu.")
+            self._set_state(ServerState.OFFLINE, reason=tr("The re-adopted process is gone."))
             return
 
     async def _release_adopted(self) -> None:
@@ -514,8 +532,10 @@ class ServerRuntime:
 
         if self._backend_ref.supports_graceful_signal and not force:
             self._pipeline.emit_system(
-                "Signal d'arrêt envoyé au groupe de processus du serveur réadopté : "
-                "le monde sera sauvegardé."
+                tr(
+                    "Stop signal sent to the re-adopted server's process group: the world "
+                    "will be saved."
+                )
             )
             self._backend_ref.terminate_external(
                 adopted.pid, adopted.group_id, adopted.create_time, force=False
@@ -526,7 +546,7 @@ class ServerRuntime:
                 )
 
         self._pipeline.emit_system(
-            "Terminaison forcée du serveur réadopté : le monde n'est pas sauvegardé.",
+            tr("Forced termination of the re-adopted server: the world is not saved."),
             level=LogLevel.WARN,
         )
         self._backend_ref.terminate_external(
@@ -549,7 +569,7 @@ class ServerRuntime:
     ) -> StopOutcome:
         self._cancel_task("_liveness_task")
         await self._release_adopted()
-        self._set_state(ServerState.OFFLINE, reason="Serveur arrêté.")
+        self._set_state(ServerState.OFFLINE, reason=tr("Server stopped."))
         return StopOutcome(
             stage=stage,
             exit_code=None,
@@ -566,24 +586,36 @@ class ServerRuntime:
             self._cancel_pending_restart()
 
             if self._adopted is not None:
-                self._set_state(ServerState.STOPPING, reason=f"Arrêt demandé par {actor or 'MSM'}")
+                self._set_state(
+                    ServerState.STOPPING,
+                    reason=tr("Stop requested by {actor}", actor=actor or "MSM"),
+                )
                 self._pipeline.emit_system(
-                    f"Arrêt du serveur réadopté « {self._config.name} » demandé par "
-                    f"{actor or 'MSM'}."
+                    tr(
+                        "Stop of re-adopted server “{name}” requested by {actor}.",
+                        name=self._config.name,
+                        actor=actor or "MSM",
+                    )
                 )
                 return await self._stop_adopted(force=False)
 
             if self._handle is None or not self._handle.running:
                 raise ServerNotRunning(
-                    f"Le serveur « {self._config.name} » n'est pas en cours d'exécution.",
-                    cause=f"Son état actuel est {self._state.value}.",
-                    remediation="Démarrer le serveur avant de tenter de l'arrêter.",
+                    tr("Server “{name}” is not running.", name=self._config.name),
+                    cause=tr("Its current state is {state}.", state=self._state.value),
+                    remediation=tr("Start the server before trying to stop it."),
                 )
 
             self._stop_requested = True
-            self._set_state(ServerState.STOPPING, reason=f"Arrêt demandé par {actor or 'MSM'}")
+            self._set_state(
+                ServerState.STOPPING, reason=tr("Stop requested by {actor}", actor=actor or "MSM")
+            )
             self._pipeline.emit_system(
-                f"Arrêt du serveur « {self._config.name} » demandé par {actor or 'MSM'}."
+                tr(
+                    "Stop of server “{name}” requested by {actor}.",
+                    name=self._config.name,
+                    actor=actor or "MSM",
+                )
             )
             handle = self._handle
 
@@ -615,20 +647,27 @@ class ServerRuntime:
             self._cancel_pending_restart()
 
             if self._adopted is not None:
-                self._set_state(ServerState.STOPPING, reason=f"Arrêt forcé par {actor or 'MSM'}")
+                self._set_state(
+                    ServerState.STOPPING, reason=tr("Forced stop by {actor}", actor=actor or "MSM")
+                )
                 await self._stop_adopted(force=True)
                 return
 
             if self._handle is None or not self._handle.running:
                 raise ServerNotRunning(
-                    f"Le serveur « {self._config.name} » n'est pas en cours d'exécution.",
-                    cause=f"Son état actuel est {self._state.value}.",
-                    remediation="Aucune action nécessaire.",
+                    tr("Server “{name}” is not running.", name=self._config.name),
+                    cause=tr("Its current state is {state}.", state=self._state.value),
+                    remediation=tr("Nothing to do."),
                 )
             self._stop_requested = True
-            self._set_state(ServerState.STOPPING, reason=f"Arrêt forcé par {actor or 'MSM'}")
+            self._set_state(
+                ServerState.STOPPING, reason=tr("Forced stop by {actor}", actor=actor or "MSM")
+            )
             self._pipeline.emit_system(
-                f"Arrêt FORCÉ demandé par {actor or 'MSM'} : le monde ne sera pas sauvegardé.",
+                tr(
+                    "FORCED stop requested by {actor}: the world will not be saved.",
+                    actor=actor or "MSM",
+                ),
                 level=LogLevel.WARN,
             )
             handle = self._handle
@@ -662,9 +701,9 @@ class ServerRuntime:
 
         if self._handle is None or not self._handle.running:
             raise ServerNotRunning(
-                f"Le serveur « {self._config.name} » n'est pas en cours d'exécution.",
-                cause="Aucune console active.",
-                remediation="Démarrer le serveur avant d'envoyer une commande.",
+                tr("Server “{name}” is not running.", name=self._config.name),
+                cause=tr("No active console."),
+                remediation=tr("Start the server before sending a command."),
             )
 
         await self._handle.write_line(clean)
@@ -723,12 +762,14 @@ class ServerRuntime:
             return
 
         self._pipeline.emit_system(
-            f"Aucun message de fin de démarrage détecté après "
-            f"{self._config.start_timeout_s:.0f} s, mais le processus fonctionne. "
-            "Le serveur est considéré comme en ligne.",
+            tr(
+                "No start-up completion message seen after {seconds} s, but the process "
+                "is running. The server is considered online.",
+                seconds=f"{self._config.start_timeout_s:.0f}",
+            ),
             level=LogLevel.WARN,
         )
-        self._set_state(ServerState.ONLINE, reason="Démarrage supposé terminé (délai dépassé)")
+        self._set_state(ServerState.ONLINE, reason=tr("Start-up assumed complete (timeout)"))
 
     async def _supervise(self, handle: ProcessHandle) -> None:
         """Attend la fin du processus et applique la politique de redémarrage."""
@@ -749,7 +790,7 @@ class ServerRuntime:
 
         if crashed:
             self._consecutive_crashes += 1
-            reason = f"Le serveur s'est arrêté de façon inattendue (code {exit_code})."
+            reason = tr("The server stopped unexpectedly (code {code}).", code=exit_code)
             self._pipeline.emit_system(reason, level=LogLevel.ERROR)
             self._set_state(ServerState.CRASHED, reason=reason)
             self._bus.publish(
@@ -768,9 +809,9 @@ class ServerRuntime:
             )
         else:
             reason = (
-                "Serveur arrêté."
+                tr("Server stopped.")
                 if self._stop_requested
-                else "Le serveur s'est arrêté de lui-même (code 0)."
+                else tr("The server stopped on its own (code 0).")
             )
             self._pipeline.emit_system(reason)
             self._set_state(ServerState.OFFLINE, reason=reason)
@@ -802,7 +843,8 @@ class ServerRuntime:
     # ------------------------------------------------------------------ #
     def _schedule_restart(self, delay_s: float, reason: str) -> None:
         self._pipeline.emit_system(
-            f"{reason} Nouvelle tentative dans {delay_s:.0f} s.", level=LogLevel.WARN
+            tr("{reason} Retrying in {delay} s.", reason=reason, delay=f"{delay_s:.0f}"),
+            level=LogLevel.WARN,
         )
         self._bus.publish(
             topics.server_topic(self.id, topics.RESTART_SCHEDULED),
@@ -821,7 +863,7 @@ class ServerRuntime:
         try:
             await asyncio.sleep(delay_s)
         except asyncio.CancelledError:
-            self._pipeline.emit_system("Redémarrage automatique annulé.")
+            self._pipeline.emit_system(tr("Automatic restart cancelled."))
             raise
 
         # Le délai est écoulé : cette tâche n'est plus « en attente ». Sans cette
@@ -831,7 +873,7 @@ class ServerRuntime:
         self._restart_task = None
 
         try:
-            await self.start(actor="redémarrage automatique")
+            await self.start(actor=tr("automatic restart"))
         except Exception as exc:  # pragma: no cover - déjà tracé par _fail_start
             logger.warning("auto_restart_failed", server_id=self.id, error=str(exc))
 
@@ -854,11 +896,11 @@ class ServerRuntime:
             case MinecraftEventKind.SERVER_READY:
                 if self._state is ServerState.STARTING:
                     self._cancel_task("_readiness_task")
-                    self._set_state(ServerState.ONLINE, reason="Démarrage terminé.")
+                    self._set_state(ServerState.ONLINE, reason=tr("Start-up complete."))
 
             case MinecraftEventKind.SERVER_STOPPING:
                 if self._state is ServerState.ONLINE:
-                    self._set_state(ServerState.STOPPING, reason="Arrêt en cours.")
+                    self._set_state(ServerState.STOPPING, reason=tr("Stopping."))
 
             case MinecraftEventKind.PLAYER_JOIN if event.username:
                 # L'UUID a été annoncé quelques lignes plus tôt : on le récupère
@@ -895,13 +937,14 @@ class ServerRuntime:
             case MinecraftEventKind.FATAL:
                 self._last_error = {
                     "code": "SERVER_FATAL",
-                    "message": "Le serveur a signalé une erreur fatale.",
+                    "message": tr("The server reported a fatal error."),
                     "cause": event.cause or "",
                     "remediation": event.remediation or "",
                 }
                 if event.remediation:
                     self._pipeline.emit_system(
-                        f"Action corrective : {event.remediation}", level=LogLevel.ERROR
+                        tr("Suggested fix: {remediation}", remediation=event.remediation),
+                        level=LogLevel.ERROR,
                     )
 
             case _:
@@ -991,4 +1034,4 @@ class ServerRuntime:
 
         running = (self._handle is not None and self._handle.running) or self._adopted is not None
         if running and self._state is not ServerState.UNKNOWN:
-            self._set_state(ServerState.UNKNOWN, reason="MSM s'est arrêté ; serveur détaché.")
+            self._set_state(ServerState.UNKNOWN, reason=tr("MSM stopped; server detached."))

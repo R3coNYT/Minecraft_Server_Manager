@@ -388,7 +388,7 @@ class TestPublication:
         assert response.status_code == 200, response.text
         publish = response.json()["publish"]
         assert publish["up_to_date"] is False
-        assert "Jeton refusé" in publish["last_push_error"]
+        assert "Token refused" in publish["last_push_error"]
 
     async def test_without_token_nothing_is_sent(
         self, admin: ApiClient, fake_server_dir: Path, file_server: FakeFileServer

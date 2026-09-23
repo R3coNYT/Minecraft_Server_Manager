@@ -19,14 +19,15 @@ from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction
 from msm.db.repositories import AuditRepository, ServerPermissionRepository
 from msm.exceptions import ConflictError, NotFoundError, ValidationError
+from msm.i18n import tr
 from msm.security.rbac import AccessContext
 
-router = APIRouter(prefix="/users", tags=["utilisateurs"])
+router = APIRouter(prefix="/users", tags=["users"])
 
 AdminOnly = Annotated[AccessContext, Depends(require_permission(Permission.USER_MANAGE))]
 
 
-@router.get("", response_model=list[UserOut], summary="Lister les comptes")
+@router.get("", response_model=list[UserOut], summary="List accounts")
 async def list_users(auth: AuthServiceDep, _: AdminOnly) -> list[UserOut]:
     return [UserOut.model_validate(user) for user in await auth.list_users()]
 
@@ -35,7 +36,7 @@ async def list_users(auth: AuthServiceDep, _: AdminOnly) -> list[UserOut]:
     "",
     response_model=UserOut,
     status_code=status.HTTP_201_CREATED,
-    summary="Créer un compte",
+    summary="Create an account",
     dependencies=[CsrfProtected],
 )
 async def create_user(
@@ -60,7 +61,7 @@ async def create_user(
 @router.put(
     "/{user_id}",
     response_model=UserOut,
-    summary="Modifier un compte",
+    summary="Update an account",
     dependencies=[CsrfProtected],
 )
 async def update_user(
@@ -76,9 +77,9 @@ async def update_user(
     user = await auth.get_user(user_id)
     if user is None:
         raise NotFoundError(
-            "Compte introuvable.",
-            cause=f"Aucun utilisateur ne porte l'identifiant {user_id}.",
-            remediation="Rafraîchir la liste des comptes.",
+            tr("Account not found."),
+            cause=tr("No user has the identifier {user_id}.", user_id=user_id),
+            remediation=tr("Refresh the account list."),
         )
 
     changes = payload.model_dump(exclude_unset=True)
@@ -88,15 +89,15 @@ async def update_user(
     if user.id == actor.id:
         if changes.get("is_active") is False:
             raise ValidationError(
-                "Impossible de désactiver son propre compte.",
-                cause="Cette action vous priverait immédiatement de tout accès.",
-                remediation="Demander à un autre administrateur d'effectuer cette opération.",
+                tr("You cannot disable your own account."),
+                cause=tr("You would immediately lose all access."),
+                remediation=tr("Ask another administrator to do this."),
             )
         if "role" in changes and changes["role"] != user.role:
             raise ValidationError(
-                "Impossible de modifier son propre rôle.",
-                cause="Cette action pourrait laisser le panel sans administrateur.",
-                remediation="Demander à un autre administrateur d'effectuer cette opération.",
+                tr("You cannot change your own role."),
+                cause=tr("The panel could be left without an administrator."),
+                remediation=tr("Ask another administrator to do this."),
             )
 
     for field, value in changes.items():
@@ -109,7 +110,7 @@ async def update_user(
 
     AuditRepository(session).record(
         action=AuditAction.USER_UPDATED,
-        summary=f"Modification du compte {user.username}.",
+        summary=tr("Account {username} updated.", username=user.username),
         actor_id=actor.id,
         actor_username=actor.username,
         actor_role=actor.role.value,
@@ -121,7 +122,7 @@ async def update_user(
     return UserOut.model_validate(user)
 
 
-@router.delete("/{user_id}", summary="Supprimer un compte", dependencies=[CsrfProtected])
+@router.delete("/{user_id}", summary="Delete an account", dependencies=[CsrfProtected])
 async def delete_user(
     user_id: int,
     auth: AuthServiceDep,
@@ -133,15 +134,15 @@ async def delete_user(
     user = await auth.get_user(user_id)
     if user is None:
         raise NotFoundError(
-            "Compte introuvable.",
-            cause=f"Aucun utilisateur ne porte l'identifiant {user_id}.",
-            remediation="Rafraîchir la liste des comptes.",
+            tr("Account not found."),
+            cause=tr("No user has the identifier {user_id}.", user_id=user_id),
+            remediation=tr("Refresh the account list."),
         )
     if user.id == actor.id:
         raise ConflictError(
-            "Impossible de supprimer son propre compte.",
-            cause="Vous êtes connecté avec ce compte.",
-            remediation="Demander à un autre administrateur d'effectuer cette opération.",
+            tr("You cannot delete your own account."),
+            cause=tr("You are signed in with this account."),
+            remediation=tr("Ask another administrator to do this."),
         )
 
     username = user.username
@@ -149,7 +150,7 @@ async def delete_user(
 
     AuditRepository(session).record(
         action=AuditAction.USER_DELETED,
-        summary=f"Suppression du compte {username}.",
+        summary=tr("Account {username} deleted.", username=username),
         actor_id=actor.id,
         actor_username=actor.username,
         actor_role=actor.role.value,
@@ -157,12 +158,12 @@ async def delete_user(
         target_type="user",
         target_id=str(user_id),
     )
-    return {"status": "supprimé"}
+    return {"status": "deleted"}
 
 
 @router.put(
     "/{user_id}/servers/{server_id}/permissions",
-    summary="Droits d'un utilisateur sur un serveur",
+    summary="A user's permissions on a server",
     dependencies=[CsrfProtected],
 )
 async def set_server_permissions(
@@ -184,9 +185,9 @@ async def set_server_permissions(
     unknown = sorted((set(granted) | set(revoked)) - valid)
     if unknown:
         raise ValidationError(
-            "Permission inconnue.",
-            cause=f"Valeurs non reconnues : {', '.join(unknown)}.",
-            remediation="Utiliser les identifiants de permission listés par l'API.",
+            tr("Unknown permission."),
+            cause=tr("Unrecognised values: {values}.", values=", ".join(unknown)),
+            remediation=tr("Use the permission identifiers listed by the API."),
         )
 
     record = await ServerPermissionRepository(session).upsert(
@@ -195,7 +196,11 @@ async def set_server_permissions(
 
     AuditRepository(session).record(
         action=AuditAction.PERMISSIONS_UPDATED,
-        summary=f"Droits du compte #{user_id} modifiés sur le serveur #{server_id}.",
+        summary=tr(
+            "Permissions of account #{user_id} changed on server #{server_id}.",
+            user_id=user_id,
+            server_id=server_id,
+        ),
         actor_id=actor.id,
         actor_username=actor.username,
         actor_role=actor.role.value,

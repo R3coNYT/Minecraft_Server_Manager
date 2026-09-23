@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 
 from msm.exceptions import MsmError, NotFoundError, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.minecraft.types import ServerType
 
@@ -87,9 +88,11 @@ def _check_host(url: str) -> None:
     host = httpx.URL(url).host
     if host not in ALLOWED_HOSTS:
         raise ValidationError(
-            "Téléchargement refusé.",
-            cause=f"L'adresse proposée pointe vers {host}, qui n'est pas une source officielle.",
-            remediation="Signaler l'anomalie ; MSM ne télécharge que depuis les sources connues.",
+            tr("Download refused."),
+            cause=tr(
+                "The address given points to {host}, which is not an official source.", host=host
+            ),
+            remediation=tr("Report the anomaly; MSM only downloads from known sources."),
         )
 
 
@@ -101,9 +104,9 @@ async def _get_json(client: httpx.AsyncClient, url: str) -> Any:
         return response.json()
     except (httpx.HTTPError, ValueError) as exc:
         raise DownloadUnavailable(
-            "Source de téléchargement injoignable.",
-            cause=f"{url} n'a pas répondu correctement : {exc}",
-            remediation="Vérifier la connexion réseau de la machine, puis réessayer.",
+            tr("Download source unreachable."),
+            cause=tr("{url} did not answer correctly: {error}", url=url, error=exc),
+            remediation=tr("Check the machine's network connection, then try again."),
         ) from exc
 
 
@@ -124,18 +127,18 @@ async def _vanilla_target(client: httpx.AsyncClient, version: str) -> DownloadTa
     entry = next((item for item in manifest.get("versions", []) if item.get("id") == version), None)
     if entry is None:
         raise NotFoundError(
-            "Version inconnue.",
-            cause=f"Mojang ne publie pas de version « {version} ».",
-            remediation="Choisir une version dans la liste proposée.",
+            tr("Unknown version."),
+            cause=tr("Mojang publishes no version “{version}”.", version=version),
+            remediation=tr("Choose a version from the list offered."),
         )
 
     detail = await _get_json(client, str(entry["url"]))
     server = (detail.get("downloads") or {}).get("server")
     if not server or not server.get("sha1"):
         raise NotFoundError(
-            "Version sans serveur téléchargeable.",
-            cause=f"Mojang ne publie pas de JAR de serveur pour « {version} ».",
-            remediation="Choisir une version 1.2.5 ou plus récente.",
+            tr("Version without a downloadable server."),
+            cause=tr("Mojang publishes no server JAR for “{version}”.", version=version),
+            remediation=tr("Choose version 1.2.5 or newer."),
         )
 
     return DownloadTarget(
@@ -166,18 +169,18 @@ async def _paper_target(client: httpx.AsyncClient, version: str) -> DownloadTarg
     chosen = (stable or builds.get("builds") or [None])[-1]
     if not chosen:
         raise NotFoundError(
-            "Aucun build disponible.",
-            cause=f"PaperMC ne publie aucun build pour « {version} ».",
-            remediation="Choisir une autre version.",
+            tr("No build available."),
+            cause=tr("PaperMC publishes no build for “{version}”.", version=version),
+            remediation=tr("Choose another version."),
         )
 
     application = (chosen.get("downloads") or {}).get("application") or {}
     name = application.get("name")
     if not name or not application.get("sha256"):
         raise DownloadUnavailable(
-            "Build sans fichier téléchargeable.",
-            cause="PaperMC n'a pas publié d'empreinte pour ce build.",
-            remediation="Réessayer plus tard, ou choisir une autre version.",
+            tr("Build without a downloadable file."),
+            cause=tr("PaperMC has published no checksum for this build."),
+            remediation=tr("Try again later, or choose another version."),
         )
 
     number = chosen["build"]
@@ -203,9 +206,9 @@ async def _purpur_target(client: httpx.AsyncClient, version: str) -> DownloadTar
     build = latest.get("build")
     if not build or not checksum:
         raise DownloadUnavailable(
-            "Build sans empreinte publiée.",
-            cause="PurpurMC n'a pas publié d'empreinte pour ce build.",
-            remediation="Réessayer plus tard, ou choisir une autre version.",
+            tr("Build without a published checksum."),
+            cause=tr("PurpurMC has published no checksum for this build."),
+            remediation=tr("Try again later, or choose another version."),
         )
     return DownloadTarget(
         url=f"{PURPUR_API}/{version}/{build}/download",
@@ -244,9 +247,9 @@ def _source(key: str) -> dict[str, Any]:
     source = SOURCES.get(key)
     if source is None:
         raise ValidationError(
-            "Source inconnue.",
-            cause=f"« {key} » n'est pas une source de téléchargement reconnue.",
-            remediation=f"Choisir parmi : {', '.join(SOURCES)}.",
+            tr("Unknown source."),
+            cause=tr("“{key}” is not a recognised download source.", key=key),
+            remediation=tr("Choose one of: {choices}.", choices=", ".join(SOURCES)),
         )
     return source
 

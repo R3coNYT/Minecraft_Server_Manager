@@ -22,6 +22,7 @@ import { useServerContext } from './context'
 import { Card, CardHeader, EmptyState, Input, LoadingBlock, Select } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { t, tn } from '@/i18n'
 
 function PropertyField({
   property,
@@ -95,9 +96,9 @@ export function PropertiesPage() {
     onSuccess: (result) => {
       push({
         kind: result.requires_restart ? 'warning' : 'success',
-        title: `${result.updated.length} réglage(s) enregistré(s)`,
+        title: tn('properties.saved', result.updated.length),
         detail: result.requires_restart
-          ? 'Un redémarrage du serveur est nécessaire pour appliquer ces changements.'
+          ? t('properties.restartNeeded')
           : undefined,
       })
       setChanges({})
@@ -129,8 +130,8 @@ export function PropertiesPage() {
         <Card>
           <EmptyState
             icon={<Settings2 className="size-8" />}
-            title="server.properties absent"
-            description="Le serveur ne l'a pas encore généré. Le démarrer une première fois créera ses fichiers de configuration."
+            title={t('properties.missing')}
+            description={t('properties.missingHint')}
           />
         </Card>
       </div>
@@ -162,10 +163,10 @@ export function PropertiesPage() {
             {entry.requires_restart ? (
               <span className="inline-flex items-center gap-1">
                 <RotateCw className="size-3" />
-                au redémarrage
+                {t('properties.onRestart')}
               </span>
             ) : (
-              'immédiat'
+              t('properties.immediate')
             )}
           </td>
         </tr>
@@ -180,9 +181,9 @@ export function PropertiesPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-100">Réglages du serveur</h2>
+            <h2 className="text-sm font-semibold text-slate-100">{t('properties.title')}</h2>
             <p className="text-xs text-slate-500">
-              Les commentaires et l'ordre du fichier sont préservés à l'enregistrement.
+              {t('properties.subtitle')}
             </p>
           </div>
           <Button
@@ -192,18 +193,18 @@ export function PropertiesPage() {
             loading={save.isPending}
             onClick={() => save.mutate()}
           >
-            Enregistrer {Object.keys(changes).length > 0 ? `(${Object.keys(changes).length})` : ''}
+            {t('properties.save')} {Object.keys(changes).length > 0 ? `(${Object.keys(changes).length})` : ''}
           </Button>
         </div>
 
         {pendingRestart && status?.state === 'ONLINE' ? (
           <div className="rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-            Certains réglages modifiés ne prendront effet qu'après un redémarrage du serveur.
+            {t('properties.pendingRestart')}
           </div>
         ) : null}
 
         <Card>
-          <CardHeader title="Réglages courants" />
+          <CardHeader title={t('properties.common')} />
           <table className="w-full text-sm">
             <tbody className="divide-y divide-slate-800/60">{rows(known)}</tbody>
           </table>
@@ -212,8 +213,8 @@ export function PropertiesPage() {
         {unknown.length > 0 ? (
           <Card>
             <CardHeader
-              title={`Autres réglages (${unknown.length})`}
-              subtitle="Clés non répertoriées par MSM : modifiables en texte libre."
+              title={t('properties.others', { count: unknown.length })}
+              subtitle={t('properties.othersHint')}
             />
             <table className="w-full text-sm">
               <tbody className="divide-y divide-slate-800/60">{rows(unknown)}</tbody>

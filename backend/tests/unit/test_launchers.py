@@ -100,7 +100,7 @@ class TestJarLauncher:
 
     def test_incoherent_memory_settings(self, server_dir: Path) -> None:
         (server_dir / "server.jar").write_bytes(b"fake")
-        with pytest.raises(LaunchError, match="mémoire"):
+        with pytest.raises(LaunchError, match="memory"):
             registry.build_spec(
                 "jar",
                 context(
@@ -178,7 +178,7 @@ class TestCustomLauncher:
         assert spec.argv == (sys.executable, "-c", "print('ok')")
 
     def test_empty_argv_is_refused(self, server_dir: Path) -> None:
-        with pytest.raises(LaunchError, match="personnalisée"):
+        with pytest.raises(LaunchError, match="custom"):
             registry.build_spec("custom", context(server_dir))
 
     def test_unknown_program_is_reported(self, server_dir: Path) -> None:
@@ -200,7 +200,7 @@ class TestCustomLauncher:
 
 def test_missing_directory_is_reported(tmp_path: Path) -> None:
     absent = tmp_path / "nexiste-pas"
-    with pytest.raises(LaunchError, match=r"[Dd]ossier"):
+    with pytest.raises(LaunchError, match=r"[Ff]older"):
         registry.build_spec("custom", context(absent, custom_argv=(sys.executable,)))
 
 

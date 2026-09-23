@@ -28,6 +28,7 @@ import httpx
 
 from msm import __version__
 from msm.exceptions import MsmError, ValidationError
+from msm.i18n import tr
 from msm.launcher_sync.manifest import MAX_FILE_BYTES
 
 #: Version du contrat, envoyée avec l'état et documentée.
@@ -73,24 +74,24 @@ def normalize_base_url(raw: str) -> str:
     parts = urlsplit(value)
     if parts.scheme not in ("http", "https") or not parts.hostname:
         raise ValidationError(
-            "Adresse du serveur de fichiers invalide.",
-            cause=f"« {raw} » n'est pas une adresse HTTP ou HTTPS complète.",
-            remediation="Indiquer l'adresse de base, par exemple https://frankumc.frankulin.fr",
+            tr("Invalid file server address."),
+            cause=tr("“{address}” is not a complete HTTP or HTTPS address.", address=raw),
+            remediation=tr("Enter the base address, for example https://files.example.com"),
         )
     if parts.query or parts.fragment or parts.username or parts.password:
         raise ValidationError(
-            "Adresse du serveur de fichiers invalide.",
-            cause="L'adresse ne doit contenir ni paramètres, ni fragment, ni identifiants.",
-            remediation="Indiquer uniquement l'adresse de base du serveur de fichiers.",
+            tr("Invalid file server address."),
+            cause=tr("The address must contain no parameters, fragment or credentials."),
+            remediation=tr("Enter only the base address of the file server."),
         )
     if parts.scheme == "http" and not _is_local(parts.hostname):
         raise ValidationError(
-            "HTTPS requis.",
-            cause=(
-                "Le jeton d'écriture accompagne chaque envoi d'état : en HTTP, il "
-                "traverserait Internet en clair."
+            tr("HTTPS required."),
+            cause=tr(
+                "The write token goes with every state push: over HTTP it would cross the "
+                "Internet in clear text."
             ),
-            remediation="Utiliser l'adresse en https://, ou une adresse du réseau local.",
+            remediation=tr("Use the https:// address, or a local network address."),
         )
     return value
 
@@ -133,29 +134,33 @@ class FileServerClient:
                 response = await client.get(f"{self._base}/manifest.json", headers=headers)
         except httpx.HTTPError as exc:
             raise FileServerUnavailable(
-                "Serveur de fichiers injoignable.",
-                cause=f"{self._base} n'a pas répondu : {exc}",
-                remediation="Vérifier l'adresse et que le serveur de fichiers est en ligne.",
+                tr("File server unreachable."),
+                cause=tr("{url} did not answer: {error}", url=self._base, error=exc),
+                remediation=tr("Check the address and that the file server is online."),
             ) from exc
 
         if response.status_code == 304:
             return ManifestFetch(data=None, etag=etag)
         if response.status_code != 200:
             raise FileServerUnavailable(
-                "Manifest indisponible.",
-                cause=f"{self._base}/manifest.json a répondu {response.status_code}.",
-                remediation="Vérifier que le manifest a été généré sur le serveur de fichiers.",
+                tr("Manifest unavailable."),
+                cause=tr(
+                    "{url}/manifest.json answered {status}.",
+                    url=self._base,
+                    status=response.status_code,
+                ),
+                remediation=tr("Check that the manifest has been generated on the file server."),
             )
         try:
             data = response.json()
         except (json.JSONDecodeError, ValueError) as exc:
             # Cas typique : manifest lu pendant sa réécriture, qui n'est pas atomique.
             raise FileServerUnavailable(
-                "Manifest illisible.",
-                cause=f"Le manifest n'est pas un JSON valide : {exc}",
-                remediation=(
-                    "Il est peut-être en cours de régénération : la synchronisation "
-                    "suivante réessaiera. Rien n'a été modifié."
+                tr("Unreadable manifest."),
+                cause=tr("The manifest is not valid JSON: {error}", error=exc),
+                remediation=tr(
+                    "It may be being regenerated: the next synchronisation will try again. "
+                    "Nothing was changed."
                 ),
             ) from exc
         return ManifestFetch(data=data, etag=response.headers.get("etag"))
@@ -182,27 +187,33 @@ class FileServerClient:
             ):
                 if response.status_code != 200:
                     raise FileServerUnavailable(
-                        "Fichier indisponible.",
-                        cause=f"« {path} » : réponse {response.status_code}.",
-                        remediation="Régénérer le manifest : il annonce un fichier absent.",
+                        tr("File unavailable."),
+                        cause=tr(
+                            "“{path}”: answer {status}.", path=path, status=response.status_code
+                        ),
+                        remediation=tr("Regenerate the manifest: it lists a missing file."),
                     )
                 with partial.open("wb") as handle:
                     async for chunk in response.aiter_bytes(_CHUNK):
                         received += len(chunk)
                         if received > limit:
                             raise ValidationError(
-                                "Fichier plus gros qu'annoncé.",
-                                cause=f"« {path} » dépasse les {size} octets du manifest.",
-                                remediation="Régénérer le manifest sur le serveur de fichiers.",
+                                tr("File larger than announced."),
+                                cause=tr(
+                                    "“{path}” exceeds the {size} bytes of the manifest.",
+                                    path=path,
+                                    size=size,
+                                ),
+                                remediation=tr("Regenerate the manifest on the file server."),
                             )
                         digest.update(chunk)
                         handle.write(chunk)
         except httpx.HTTPError as exc:
             partial.unlink(missing_ok=True)
             raise FileServerUnavailable(
-                "Téléchargement interrompu.",
-                cause=f"« {path} » : {exc}",
-                remediation="La synchronisation suivante reprendra où elle s'est arrêtée.",
+                tr("Download interrupted."),
+                cause=tr("“{path}”: {error}", path=path, error=exc),
+                remediation=tr("The next synchronisation will pick up where it stopped."),
             ) from exc
         except BaseException:
             partial.unlink(missing_ok=True)
@@ -211,11 +222,11 @@ class FileServerClient:
         if digest.hexdigest() != sha256:
             partial.unlink(missing_ok=True)
             raise ValidationError(
-                "Fichier altéré.",
-                cause=f"L'empreinte de « {path} » ne correspond pas à celle du manifest.",
-                remediation=(
-                    "Le fichier a peut-être changé sans que le manifest soit régénéré. "
-                    "Régénérer le manifest, puis relancer la synchronisation."
+                tr("Corrupted file."),
+                cause=tr("The checksum of “{path}” does not match the manifest.", path=path),
+                remediation=tr(
+                    "The file may have changed without the manifest being regenerated. "
+                    "Regenerate the manifest, then synchronise again."
                 ),
             )
         partial.replace(destination)
@@ -240,34 +251,42 @@ class FileServerClient:
                 )
         except httpx.HTTPError as exc:
             raise FileServerUnavailable(
-                "Envoi de l'état impossible.",
-                cause=f"{self._base} n'a pas répondu : {exc}",
-                remediation="L'envoi sera retenté à la prochaine synchronisation.",
+                tr("Cannot push the state."),
+                cause=tr("{url} did not answer: {error}", url=self._base, error=exc),
+                remediation=tr("It will be sent again at the next synchronisation."),
             ) from exc
 
         if response.status_code in (401, 403):
             raise ValidationError(
-                "Jeton refusé par le serveur de fichiers.",
-                cause=f"{self._base}/msm/state a répondu {response.status_code}.",
-                remediation=(
-                    "Vérifier que le jeton saisi dans MSM est identique à celui "
-                    "configuré sur le serveur de fichiers."
+                tr("Token refused by the file server."),
+                cause=tr(
+                    "{url}/msm/state answered {status}.",
+                    url=self._base,
+                    status=response.status_code,
+                ),
+                remediation=tr(
+                    "Check that the token entered in MSM is the same as the one configured on "
+                    "the file server."
                 ),
             )
         if response.status_code == 404:
             raise ValidationError(
-                "Route d'état absente du serveur de fichiers.",
-                cause=f"{self._base}/msm/state n'existe pas.",
-                remediation=(
-                    "Ajouter la route `PUT /msm/state` au serveur de fichiers — voir "
+                tr("State route missing from the file server."),
+                cause=tr("{url}/msm/state does not exist.", url=self._base),
+                remediation=tr(
+                    "Add the `PUT /msm/state` route to the file server — see "
                     "docs/LAUNCHER_INTEGRATION.md."
                 ),
             )
         if not 200 <= response.status_code < 300:
             raise FileServerUnavailable(
-                "Envoi de l'état refusé.",
-                cause=f"{self._base}/msm/state a répondu {response.status_code}.",
-                remediation="L'envoi sera retenté à la prochaine synchronisation.",
+                tr("State push refused."),
+                cause=tr(
+                    "{url}/msm/state answered {status}.",
+                    url=self._base,
+                    status=response.status_code,
+                ),
+                remediation=tr("It will be sent again at the next synchronisation."),
             )
 
 

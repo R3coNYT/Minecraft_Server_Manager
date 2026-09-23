@@ -19,6 +19,7 @@ scheduled tasks — and two-way sync with a custom launcher's modpack.
 | **Survives restarts** | Restarting or updating MSM never disconnects players: running servers are re-adopted when the panel comes back. |
 | **Secure** | Mandatory authentication, per-server roles, audit log of every action, strict path confinement, no arbitrary shell commands. |
 | **Portable** | Production on Linux (hardened systemd unit); development and deployment on Windows fully supported. CI runs on both. |
+| **Bilingual** | English by default, French in one click from **Settings → Language** — including the messages produced by the server (errors, console notices, audit log). |
 
 ### Server overview
 
@@ -115,7 +116,8 @@ install the code as it is in the folder, `--force` to reinstall the same version
 
 ## Documentation
 
-The interface and the detailed documentation are in French.
+The interface is in English by default and can be switched to French in **Settings → Language**.
+The detailed documentation is in French.
 
 - [Architecture](docs/ARCHITECTURE.md) — complete design, technical decisions and their rationale
 - [Deployment](docs/DEPLOY.md) — installation, reverse proxy, backups, updates

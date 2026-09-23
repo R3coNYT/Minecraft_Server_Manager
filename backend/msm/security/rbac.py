@@ -13,6 +13,7 @@ from msm.core.permissions import Permission, Role, effective_permissions
 from msm.db.models.server import ServerPermission
 from msm.db.models.user import User
 from msm.exceptions import PermissionDenied
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 
 logger = get_logger(__name__)
@@ -52,14 +53,29 @@ class AccessContext:
         """Exige une permission, ou lève :class:`PermissionDenied`."""
         if self.has(permission):
             return
-        scope = f" sur ce serveur (#{self.server_id})" if self.server_id is not None else ""
+        message = (
+            tr("Action not allowed on this server (#{server_id}).", server_id=self.server_id)
+            if self.server_id is not None
+            else tr("Action not allowed.")
+        )
+        cause = (
+            tr(
+                "The {role} role lacks the “{permission}” permission required to {action}.",
+                role=self.role.value,
+                permission=permission.value,
+                action=action,
+            )
+            if action
+            else tr(
+                "The {role} role lacks the “{permission}” permission.",
+                role=self.role.value,
+                permission=permission.value,
+            )
+        )
         raise PermissionDenied(
-            f"Action non autorisée{scope}.",
-            cause=(
-                f"Le rôle {self.role.value} ne dispose pas de la permission "
-                f"« {permission.value} »" + (f" nécessaire pour {action}." if action else ".")
-            ),
-            remediation="Demander à un administrateur de vous accorder ce droit.",
+            message,
+            cause=cause,
+            remediation=tr("Ask an administrator to grant you this permission."),
             context={"permission": permission.value, "server_id": self.server_id},
         )
 

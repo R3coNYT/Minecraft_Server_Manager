@@ -36,29 +36,30 @@ import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ServerStatusBadge } from '@/components/servers/ServerStatusBadge'
 import { ServerActions } from '@/components/servers/ServerActions'
 import { SyncCountdown } from '@/components/launcher/SyncCountdown'
+import { t, type MessageKey } from '@/i18n'
 
 interface TabDefinition {
   to: string
-  label: string
+  label: MessageKey
   icon: typeof Terminal
   capability?: string
   end?: boolean
 }
 
 const TABS: TabDefinition[] = [
-  { to: '', label: 'Aperçu', icon: Settings, end: true },
-  { to: 'console', label: 'Console', icon: Terminal, capability: 'console' },
-  { to: 'players', label: 'Joueurs', icon: Users, capability: 'players' },
-  { to: 'mods', label: 'Mods', icon: Package, capability: 'mods' },
-  { to: 'plugins', label: 'Plugins', icon: Puzzle, capability: 'plugins' },
-  { to: 'properties', label: 'Réglages', icon: Settings2, capability: 'properties' },
-  { to: 'configs', label: 'Configurations', icon: FileCog, capability: 'configs' },
-  { to: 'events', label: 'Événements', icon: CalendarClock, capability: 'events' },
+  { to: '', label: 'tab.overview', icon: Settings, end: true },
+  { to: 'console', label: 'tab.console', icon: Terminal, capability: 'console' },
+  { to: 'players', label: 'tab.players', icon: Users, capability: 'players' },
+  { to: 'mods', label: 'tab.mods', icon: Package, capability: 'mods' },
+  { to: 'plugins', label: 'tab.plugins', icon: Puzzle, capability: 'plugins' },
+  { to: 'properties', label: 'tab.properties', icon: Settings2, capability: 'properties' },
+  { to: 'configs', label: 'tab.configs', icon: FileCog, capability: 'configs' },
+  { to: 'events', label: 'tab.events', icon: CalendarClock, capability: 'events' },
   // Pas de capacité conditionnelle : tout serveur se sauvegarde, y compris celui
   // qui n'a pas encore de monde — c'est justement le moment d'y penser.
-  { to: 'backups', label: 'Sauvegardes', icon: Archive },
-  { to: 'schedules', label: 'Planification', icon: Timer },
-  { to: 'launcher', label: 'Launcher', icon: Link2 },
+  { to: 'backups', label: 'tab.backups', icon: Archive },
+  { to: 'schedules', label: 'tab.schedules', icon: Timer },
+  { to: 'launcher', label: 'tab.launcher', icon: Link2 },
 ]
 
 export function ServerLayout() {
@@ -104,24 +105,24 @@ export function ServerLayout() {
 
         <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs">
           <div className="flex gap-1.5">
-            <dt className="text-slate-500">Type</dt>
+            <dt className="text-slate-500">{t('serverHeader.type')}</dt>
             <dd className="text-slate-300">
               {server.server_type}
               {server.minecraft_version ? ` ${server.minecraft_version}` : ''}
             </dd>
           </div>
           <div className="flex gap-1.5">
-            <dt className="text-slate-500">Actif depuis</dt>
+            <dt className="text-slate-500">{t('serverHeader.uptime')}</dt>
             <dd className="tabular-nums text-slate-300">{formatUptime(status?.uptime_s ?? 0)}</dd>
           </div>
           <div className="flex gap-1.5">
-            <dt className="text-slate-500">Processeur</dt>
+            <dt className="text-slate-500">{t('serverHeader.cpu')}</dt>
             <dd className="tabular-nums text-slate-300">
               {status?.stats ? formatPercent(status.stats.cpu_percent) : '—'}
             </dd>
           </div>
           <div className="flex gap-1.5">
-            <dt className="text-slate-500">Mémoire</dt>
+            <dt className="text-slate-500">{t('serverHeader.memory')}</dt>
             <dd className="tabular-nums text-slate-300">
               {status?.stats && status.stats.memory_mb > 0
                 ? formatMemory(status.stats.memory_mb)
@@ -129,20 +130,20 @@ export function ServerLayout() {
             </dd>
           </div>
           <div className="flex gap-1.5">
-            <dt className="text-slate-500">PID</dt>
+            <dt className="text-slate-500">{t('serverHeader.pid')}</dt>
             <dd className="tabular-nums text-slate-300">{status?.pid ?? '—'}</dd>
           </div>
           <div className="flex gap-1.5">
-            <dt className="text-slate-500">Joueurs</dt>
+            <dt className="text-slate-500">{t('serverHeader.players')}</dt>
             <dd className="tabular-nums text-slate-300">{status?.players_online ?? 0}</dd>
           </div>
           {launcherLink ? (
             <div className="flex gap-1.5">
-              <dt className="text-slate-500">Synchro launcher</dt>
+              <dt className="text-slate-500">{t('serverHeader.launcherSync')}</dt>
               <dd className="text-slate-300">
                 <SyncCountdown serverId={serverId} link={launcherLink} />
                 {launcherLink.pending ? (
-                  <span className="ml-1.5 text-sky-300">· changements en attente</span>
+                  <span className="ml-1.5 text-sky-300">{t('serverHeader.pendingChanges')}</span>
                 ) : null}
               </dd>
             </div>
@@ -165,7 +166,7 @@ export function ServerLayout() {
               }
             >
               <tab.icon className="size-4" />
-              {tab.label}
+              {t(tab.label)}
             </NavLink>
           ))}
         </nav>

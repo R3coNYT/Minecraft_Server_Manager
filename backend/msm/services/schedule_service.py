@@ -39,6 +39,7 @@ from msm.db.models.user import User
 from msm.db.repositories import AuditRepository
 from msm.db.session import session_scope
 from msm.exceptions import MsmError, NotFoundError, PermissionDenied, ValidationError
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.schedule.rules import Rule, describe, next_occurrence, parse_rule
@@ -63,9 +64,9 @@ def _payload_for(action: ScheduleAction, payload: dict[str, Any]) -> dict[str, A
         event_id = payload.get("event_id")
         if not isinstance(event_id, int):
             raise ValidationError(
-                "Événement manquant.",
-                cause="Une tâche « événement » doit désigner l'événement à déclencher.",
-                remediation="Choisir un événement enregistré dans la liste.",
+                tr("Missing event."),
+                cause=tr("An “event” task must name the event to run."),
+                remediation=tr("Choose a saved event from the list."),
             )
         return {"event_id": event_id}
 
@@ -73,9 +74,9 @@ def _payload_for(action: ScheduleAction, payload: dict[str, Any]) -> dict[str, A
         command = str(payload.get("command", "")).strip()
         if not command:
             raise ValidationError(
-                "Commande manquante.",
-                cause="Une tâche « commande » doit indiquer la commande à envoyer.",
-                remediation="Saisir la commande, sans le `/` initial.",
+                tr("Missing command."),
+                cause=tr("A “command” task must give the command to send."),
+                remediation=tr("Enter the command, without the leading `/`."),
             )
         return {"command": command}
 
@@ -104,9 +105,9 @@ class ScheduleService:
         schedule = await self._session.get(Schedule, schedule_id)
         if schedule is None or schedule.server_id != server.id:
             raise NotFoundError(
-                "Tâche programmée introuvable.",
-                cause=f"Aucune tâche n'a l'identifiant {schedule_id} sur ce serveur.",
-                remediation="Rafraîchir la liste des tâches programmées.",
+                tr("Scheduled task not found."),
+                cause=tr("No task has the identifier {id} on this server.", id=schedule_id),
+                remediation=tr("Refresh the list of scheduled tasks."),
             )
         return schedule
 
@@ -128,15 +129,16 @@ class ScheduleService:
         # par un bouton. La vérification a lieu dès la création plutôt que de
         # produire une tâche qui échouerait chaque nuit.
         context.require(
-            REQUIRED_PERMISSION[action], action=f"programmer une action « {action.value} »"
+            REQUIRED_PERMISSION[action],
+            action=tr("schedule a “{action}” action", action=action.value),
         )
 
         clean_name = name.strip()
         if not clean_name:
             raise ValidationError(
-                "Nom manquant.",
-                cause="Le nom de la tâche ne peut pas être vide.",
-                remediation="Donner un nom à cette tâche.",
+                tr("Missing name."),
+                cause=tr("The task name cannot be empty."),
+                remediation=tr("Give this task a name."),
             )
 
         parsed = parse_rule(rule)
@@ -157,7 +159,12 @@ class ScheduleService:
         await self._session.flush()
 
         self._record(
-            f"Tâche « {clean_name} » programmée sur « {server.name} » : {describe(parsed)}.",
+            tr(
+                "Task “{task}” scheduled on “{server}”: {rule}.",
+                task=clean_name,
+                server=server.name,
+                rule=describe(parsed),
+            ),
             server,
             context,
             ip_address,
@@ -177,9 +184,7 @@ class ScheduleService:
         context: AccessContext,
         ip_address: str | None = None,
     ) -> Schedule:
-        context.require(
-            REQUIRED_PERMISSION[schedule.action], action="modifier cette tâche programmée"
-        )
+        context.require(REQUIRED_PERMISSION[schedule.action], action=tr("edit this scheduled task"))
 
         if name is not None and name.strip():
             schedule.name = name.strip()
@@ -200,7 +205,7 @@ class ScheduleService:
         )
 
         self._record(
-            f"Tâche « {schedule.name} » modifiée sur « {server.name} ».",
+            tr("Task “{task}” updated on “{server}”.", task=schedule.name, server=server.name),
             server,
             context,
             ip_address,
@@ -217,12 +222,12 @@ class ScheduleService:
         ip_address: str | None = None,
     ) -> None:
         context.require(
-            REQUIRED_PERMISSION[schedule.action], action="supprimer cette tâche programmée"
+            REQUIRED_PERMISSION[schedule.action], action=tr("delete this scheduled task")
         )
         name = schedule.name
         await self._session.delete(schedule)
         self._record(
-            f"Tâche « {name} » supprimée sur « {server.name} ».",
+            tr("Task “{task}” deleted on “{server}”.", task=name, server=server.name),
             server,
             context,
             ip_address,
@@ -237,9 +242,9 @@ class ScheduleService:
         ip_address: str | None = None,
     ) -> Schedule:
         """Déclenche la tâche à la main, sans toucher à sa programmation."""
-        context.require(REQUIRED_PERMISSION[schedule.action], action="déclencher cette tâche")
+        context.require(REQUIRED_PERMISSION[schedule.action], action=tr("run this task"))
         self._record(
-            f"Déclenchement manuel de la tâche « {schedule.name} ».",
+            tr("Task “{task}” run manually.", task=schedule.name),
             server,
             context,
             ip_address,
@@ -262,9 +267,9 @@ class ScheduleService:
         event = await self._session.get(EventDefinition, payload["event_id"])
         if event is None or event.server_id not in (None, server.id):
             raise NotFoundError(
-                "Événement introuvable.",
-                cause="L'événement à déclencher n'existe pas sur ce serveur.",
-                remediation="Choisir un événement existant dans la liste.",
+                tr("Event not found."),
+                cause=tr("The event to run does not exist on this server."),
+                remediation=tr("Choose an existing event from the list."),
             )
 
     def _record(
@@ -300,17 +305,17 @@ async def _context_for(session: AsyncSession, schedule: Schedule) -> AccessConte
     """
     if schedule.created_by is None:
         raise PermissionDenied(
-            "Auteur de la tâche inconnu.",
-            cause="Le compte qui a créé cette tâche a été supprimé.",
-            remediation="Recréer la tâche depuis un compte existant.",
+            tr("Unknown task author."),
+            cause=tr("The account that created this task has been deleted."),
+            remediation=tr("Recreate the task from an existing account."),
         )
 
     user = await session.get(User, schedule.created_by)
     if user is None or not user.is_active:
         raise PermissionDenied(
-            "Auteur de la tâche indisponible.",
-            cause="Le compte qui a créé cette tâche est supprimé ou désactivé.",
-            remediation="Recréer la tâche depuis un compte actif.",
+            tr("Task author unavailable."),
+            cause=tr("The account that created this task is deleted or disabled."),
+            remediation=tr("Recreate the task from an active account."),
         )
 
     override = (
@@ -346,38 +351,38 @@ async def _perform(
         case ScheduleAction.BACKUP:
             service = BackupService(session, supervisor, settings=settings)
             backup = await service.start_backup(server, context=context)
-            return f"Sauvegarde lancée (#{backup.id})."
+            return tr("Backup started (#{id}).", id=backup.id)
 
         case ScheduleAction.RESTART:
             if not running:
-                raise _Skipped("Le serveur était déjà arrêté.")
+                raise _Skipped(tr("The server was already stopped."))
             await LifecycleService(session, supervisor).restart(server, context=context)
-            return "Serveur redémarré."
+            return tr("Server restarted.")
 
         case ScheduleAction.START:
             if running:
-                raise _Skipped("Le serveur tournait déjà.")
+                raise _Skipped(tr("The server was already running."))
             await LifecycleService(session, supervisor).start(server, context=context)
-            return "Serveur démarré."
+            return tr("Server started.")
 
         case ScheduleAction.STOP:
             if not running:
-                raise _Skipped("Le serveur était déjà arrêté.")
+                raise _Skipped(tr("The server was already stopped."))
             await LifecycleService(session, supervisor).stop(server, context=context)
-            return "Serveur arrêté."
+            return tr("Server stopped.")
 
         case ScheduleAction.EVENT:
             events = EventService(session, supervisor)
             event = await events.get_event(server, schedule.payload["event_id"])
             run = await events.start_run(server, event, context=context, confirm=True)
-            return f"Événement « {event.name} » lancé (#{run.id})."
+            return tr("Event “{name}” started (#{id}).", name=event.name, id=run.id)
 
         case _:
             command = schedule.payload["command"]
             await ConsoleService(session, supervisor).send_command(
                 server, command, context=context, confirm=True
             )
-            return f"Commande envoyée : {command}"
+            return tr("Command sent: {command}", command=command)
 
 
 class _Skipped(MsmError):
@@ -407,13 +412,13 @@ async def run_schedule(
         status = ScheduleStatus.SUCCESS
         message: str | None = None
         audit = AuditRepository(session)
-        actor = "planification"
+        actor = tr("scheduler")
 
         try:
             context = await _context_for(session, schedule)
-            actor = f"planification ({context.username})"
+            actor = tr("scheduler ({username})", username=context.username)
             context.require(
-                REQUIRED_PERMISSION[schedule.action], action="exécuter cette tâche programmée"
+                REQUIRED_PERMISSION[schedule.action], action=tr("run this scheduled task")
             )
             summary = await _perform(session, schedule, server, context, supervisor, settings)
         except _Skipped as exc:
@@ -421,7 +426,7 @@ async def run_schedule(
         except MsmError as exc:
             status = ScheduleStatus.FAILED
             message = " ".join(part for part in (exc.message, exc.cause) if part)
-            summary = f"Échec de la tâche « {schedule.name} » : {message}"
+            summary = tr("Task “{task}” failed: {error}", task=schedule.name, error=message)
             logger.warning(
                 "schedule_failed",
                 schedule_id=schedule.id,
@@ -431,7 +436,7 @@ async def run_schedule(
         except Exception as exc:
             status = ScheduleStatus.FAILED
             message = str(exc)
-            summary = f"Échec de la tâche « {schedule.name} » : {message}"
+            summary = tr("Task “{task}” failed: {error}", task=schedule.name, error=message)
             logger.exception("schedule_crashed", schedule_id=schedule.id)
 
         schedule.last_run_at = datetime.now(UTC)
@@ -520,9 +525,7 @@ class Scheduler:
                 # Trop tard pour avoir encore du sens : on le dit, et l'on passe
                 # à l'occurrence suivante plutôt que de rejouer la nuit en plein jour.
                 schedule.last_status = ScheduleStatus.MISSED
-                schedule.last_error = (
-                    "Exécution manquée pendant un arrêt de MSM, trop tardive pour être rattrapée."
-                )
+                schedule.last_error = tr("Missed while MSM was stopped, too late to catch up.")
                 schedule.next_run_at = next_occurrence(parse_rule(schedule.rule), moment)
                 logger.info(
                     "schedule_missed",

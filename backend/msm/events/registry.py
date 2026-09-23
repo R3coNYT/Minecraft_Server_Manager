@@ -12,13 +12,14 @@ from typing import Any
 from msm.core.danger import DangerLevel
 from msm.events.actions import BUILTIN_ACTIONS, Action, CommandAction
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 
 _REGISTRY: dict[str, Action] = {}
 
 
 def register(action: Action, *, replace: bool = False) -> None:
     if action.key in _REGISTRY and not replace:
-        raise ValueError(f"Une action est déjà enregistrée sous la clé « {action.key} ».")
+        raise ValueError(f"An action is already registered under the key {action.key!r}.")
     _REGISTRY[action.key] = action
 
 
@@ -26,11 +27,11 @@ def get(key: str) -> Action:
     try:
         return _REGISTRY[key]
     except KeyError:
-        known = ", ".join(sorted(_REGISTRY)) or "aucune"
+        known = ", ".join(sorted(_REGISTRY)) or tr("none")
         raise ValidationError(
-            "Type d'action inconnu.",
-            cause=f"« {key} » ne correspond à aucune action enregistrée.",
-            remediation=f"Actions disponibles : {known}.",
+            tr("Unknown action type."),
+            cause=tr("“{key}” matches no registered action.", key=key),
+            remediation=tr("Available actions: {actions}.", actions=known),
         ) from None
 
 

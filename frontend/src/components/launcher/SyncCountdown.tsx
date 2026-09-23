@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '@/hooks/useApi'
 import type { LauncherLink } from '@/lib/types'
+import { t } from '@/i18n'
 
 function remaining(iso: string | null, now: number): number | null {
   if (!iso) return null
@@ -19,13 +20,13 @@ function remaining(iso: string | null, now: number): number | null {
 }
 
 export function formatCountdown(seconds: number): string {
-  if (seconds <= 0) return 'imminente'
+  if (seconds <= 0) return t('sync.imminent')
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const secs = seconds % 60
-  if (hours > 0) return `dans ${hours} h ${String(minutes).padStart(2, '0')} min`
-  if (minutes > 0) return `dans ${minutes} min ${String(secs).padStart(2, '0')} s`
-  return `dans ${secs} s`
+  if (hours > 0) return t('sync.inHours', { hours, minutes: String(minutes).padStart(2, '0') })
+  if (minutes > 0) return t('sync.inMinutes', { minutes, seconds: String(secs).padStart(2, '0') })
+  return t('sync.inSeconds', { seconds: secs })
 }
 
 export function SyncCountdown({
@@ -55,7 +56,7 @@ export function SyncCountdown({
     }
   }, [bucket, queryClient, serverId])
 
-  if (!link.enabled) return <span className="text-slate-500">désactivée</span>
+  if (!link.enabled) return <span className="text-slate-500">{t('sync.disabled')}</span>
   if (seconds === null) return <span className="text-slate-500">—</span>
   return <span className="tabular-nums">{formatCountdown(seconds)}</span>
 }

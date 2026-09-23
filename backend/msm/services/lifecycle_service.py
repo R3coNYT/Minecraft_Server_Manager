@@ -16,6 +16,7 @@ from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction, AuditResult
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository, ServerRepository
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.server_runtime import ServerRuntime
 from msm.runtime.supervisor import Supervisor
@@ -35,7 +36,7 @@ class LifecycleService:
     async def start(
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> dict[str, Any]:
-        context.require(Permission.SERVER_START, action="démarrer ce serveur")
+        context.require(Permission.SERVER_START, action=tr("start this server"))
         runtime = self._supervisor.get(server.id)
 
         try:
@@ -43,7 +44,11 @@ class LifecycleService:
         except Exception as exc:
             self._record(
                 AuditAction.SERVER_STARTED,
-                f"Échec du démarrage de « {server.name} » : {getattr(exc, 'cause', exc)}",
+                tr(
+                    "Start of “{name}” failed: {cause}",
+                    name=server.name,
+                    cause=getattr(exc, "cause", exc),
+                ),
                 server,
                 context,
                 ip_address,
@@ -53,7 +58,7 @@ class LifecycleService:
 
         self._record(
             AuditAction.SERVER_STARTED,
-            f"Démarrage du serveur « {server.name} ».",
+            tr("Server “{name}” started.", name=server.name),
             server,
             context,
             ip_address,
@@ -64,15 +69,19 @@ class LifecycleService:
     async def stop(
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> dict[str, Any]:
-        context.require(Permission.SERVER_STOP, action="arrêter ce serveur")
+        context.require(Permission.SERVER_STOP, action=tr("stop this server"))
         runtime = self._supervisor.get(server.id)
 
         outcome = await runtime.stop(actor=context.username)
 
-        detail = "arrêt propre" if not outcome.forced else f"arrêt forcé ({outcome.stage.value})"
+        detail = (
+            tr("clean shutdown")
+            if not outcome.forced
+            else tr("forced stop ({stage})", stage=outcome.stage.value)
+        )
         self._record(
             AuditAction.SERVER_STOPPED,
-            f"Arrêt du serveur « {server.name} » — {detail}.",
+            tr("Server “{name}” stopped — {detail}.", name=server.name, detail=detail),
             server,
             context,
             ip_address,
@@ -95,14 +104,14 @@ class LifecycleService:
     async def restart(
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> dict[str, Any]:
-        context.require(Permission.SERVER_RESTART, action="redémarrer ce serveur")
+        context.require(Permission.SERVER_RESTART, action=tr("restart this server"))
         runtime = self._supervisor.get(server.id)
 
         await runtime.restart(actor=context.username)
 
         self._record(
             AuditAction.SERVER_RESTARTED,
-            f"Redémarrage du serveur « {server.name} ».",
+            tr("Server “{name}” restarted.", name=server.name),
             server,
             context,
             ip_address,
@@ -114,14 +123,14 @@ class LifecycleService:
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> dict[str, Any]:
         """Terminaison immédiate : le monde n'est pas sauvegardé."""
-        context.require(Permission.SERVER_KILL, action="forcer l'arrêt de ce serveur")
+        context.require(Permission.SERVER_KILL, action=tr("force-stop this server"))
         runtime = self._supervisor.get(server.id)
 
         await runtime.kill(actor=context.username)
 
         self._record(
             AuditAction.SERVER_KILLED,
-            f"Arrêt FORCÉ du serveur « {server.name} » — le monde n'a pas été sauvegardé.",
+            tr("FORCED stop of server “{name}” — the world was not saved.", name=server.name),
             server,
             context,
             ip_address,

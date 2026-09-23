@@ -19,6 +19,7 @@ from argon2.exceptions import (
 )
 
 from msm.exceptions import ValidationError
+from msm.i18n import tr
 
 _hasher = PasswordHasher()
 
@@ -58,23 +59,32 @@ def validate_password_strength(password: str) -> str:
     """
     if not isinstance(password, str) or not password:
         raise ValidationError(
-            "Mot de passe manquant.",
-            cause="Aucun mot de passe n'a été fourni.",
-            remediation="Saisir un mot de passe.",
+            tr("Missing password."),
+            cause=tr("No password was provided."),
+            remediation=tr("Enter a password."),
         )
     if len(password) < MIN_PASSWORD_LENGTH:
         raise ValidationError(
-            "Mot de passe trop court.",
-            cause=f"{len(password)} caractères pour un minimum de {MIN_PASSWORD_LENGTH}.",
-            remediation=(
-                f"Choisir un mot de passe d'au moins {MIN_PASSWORD_LENGTH} caractères — "
-                "une phrase de passe est plus sûre et plus facile à retenir."
+            tr("Password too short."),
+            cause=tr(
+                "{length} characters for a minimum of {minimum}.",
+                length=len(password),
+                minimum=MIN_PASSWORD_LENGTH,
+            ),
+            remediation=tr(
+                "Choose a password of at least {minimum} characters — a passphrase is "
+                "both safer and easier to remember.",
+                minimum=MIN_PASSWORD_LENGTH,
             ),
         )
     if len(password) > MAX_PASSWORD_LENGTH:
         raise ValidationError(
-            "Mot de passe trop long.",
-            cause=f"{len(password)} caractères pour un maximum de {MAX_PASSWORD_LENGTH}.",
-            remediation="Raccourcir le mot de passe.",
+            tr("Password too long."),
+            cause=tr(
+                "{length} characters for a maximum of {maximum}.",
+                length=len(password),
+                maximum=MAX_PASSWORD_LENGTH,
+            ),
+            remediation=tr("Shorten the password."),
         )
     return password

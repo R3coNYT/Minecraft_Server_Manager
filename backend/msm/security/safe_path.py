@@ -24,6 +24,7 @@ import sys
 from pathlib import Path, PurePath
 
 from msm.exceptions import PathTraversalError
+from msm.i18n import tr
 
 #: Segments interdits : `..` bien sûr, mais aussi les flux alternatifs Windows.
 _FORBIDDEN_SEGMENTS = {"..", ""}
@@ -72,9 +73,9 @@ def resolve_within(root: Path, relative: str | None, *, must_exist: bool = False
         root_resolved = root.expanduser().resolve()
     except OSError as exc:  # pragma: no cover - racine inaccessible
         raise PathTraversalError(
-            "Dossier du serveur inaccessible.",
+            tr("Server folder not accessible."),
             cause=str(exc),
-            remediation="Vérifier le chemin du serveur et les droits d'accès.",
+            remediation=tr("Check the server path and the access rights."),
         ) from exc
 
     value = (relative or "").strip().replace("\\", "/")
@@ -83,17 +84,17 @@ def resolve_within(root: Path, relative: str | None, *, must_exist: bool = False
 
     if _FORBIDDEN_CHARS & set(value):
         raise PathTraversalError(
-            "Chemin refusé.",
-            cause="Le chemin contient un caractère de contrôle.",
-            remediation="Sélectionner le fichier depuis la liste plutôt que de saisir son chemin.",
+            tr("Path refused."),
+            cause=tr("The path contains a control character."),
+            remediation=tr("Select the file from the list instead of typing its path."),
         )
 
     candidate = PurePath(value)
     if candidate.is_absolute() or candidate.drive or _ROOTED_RE.match(value):
         raise PathTraversalError(
-            "Chemin refusé.",
-            cause=f"« {relative} » est un chemin absolu.",
-            remediation="Indiquer un chemin relatif au dossier du serveur.",
+            tr("Path refused."),
+            cause=tr("“{path}” is an absolute path.", path=relative),
+            remediation=tr("Enter a path relative to the server folder."),
         )
 
     # Le refus explicite de `..` produit un message clair ; la vérification de
@@ -101,35 +102,36 @@ def resolve_within(root: Path, relative: str | None, *, must_exist: bool = False
     for part in candidate.parts:
         if part in _FORBIDDEN_SEGMENTS or part.strip() in _FORBIDDEN_SEGMENTS:
             raise PathTraversalError(
-                "Chemin refusé.",
-                cause="Le chemin tente de remonter au-dessus du dossier du serveur.",
-                remediation="Rester dans l'arborescence du serveur.",
+                tr("Path refused."),
+                cause=tr("The path tries to climb above the server folder."),
+                remediation=tr("Stay inside the server folder tree."),
             )
 
     try:
         resolved = (root_resolved / candidate).resolve()
     except (OSError, RuntimeError) as exc:
         raise PathTraversalError(
-            "Chemin illisible.",
+            tr("Unreadable path."),
             cause=str(exc),
-            remediation="Vérifier que le chemin ne contient pas de lien circulaire.",
+            remediation=tr("Check that the path contains no circular link."),
         ) from exc
 
     if not _is_within(root_resolved, resolved):
         raise PathTraversalError(
-            "Accès refusé.",
-            cause=(
-                f"« {relative} » désigne un emplacement situé hors du dossier du serveur "
-                f"({root_resolved})."
+            tr("Access denied."),
+            cause=tr(
+                "“{path}” points to a location outside the server folder ({root}).",
+                path=relative,
+                root=root_resolved,
             ),
-            remediation="Rester dans l'arborescence du serveur.",
+            remediation=tr("Stay inside the server folder tree."),
         )
 
     if must_exist and not resolved.exists():
         raise PathTraversalError(
-            "Fichier introuvable.",
-            cause=f"{relative} n'existe pas dans le dossier du serveur.",
-            remediation="Rafraîchir la liste des fichiers.",
+            tr("File not found."),
+            cause=tr("{path} does not exist in the server folder.", path=relative),
+            remediation=tr("Refresh the file list."),
             code="NOT_FOUND",
             status_code=404,
         )

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from msm.exceptions import ValidationError
+from msm.i18n import set_language
 from msm.schedule.rules import (
     MIN_INTERVAL_MINUTES,
     Rule,
@@ -161,9 +162,9 @@ class TestDescribe:
     @pytest.mark.parametrize(
         ("rule", "expected"),
         [
-            (Rule(TriggerKind.INTERVAL, interval_minutes=360), "Toutes les 6 h"),
-            (Rule(TriggerKind.INTERVAL, interval_minutes=60), "Toutes les heures"),
-            (Rule(TriggerKind.INTERVAL, interval_minutes=90), "Toutes les 90 min"),
+            (Rule(TriggerKind.INTERVAL, interval_minutes=360), "Every 6 h"),
+            (Rule(TriggerKind.INTERVAL, interval_minutes=60), "Every hour"),
+            (Rule(TriggerKind.INTERVAL, interval_minutes=90), "Every 90 min"),
         ],
     )
     def test_interval(self, rule: Rule, expected: str) -> None:
@@ -172,4 +173,13 @@ class TestDescribe:
     def test_weekly_names_the_days(self) -> None:
         rule = Rule(TriggerKind.WEEKLY, hour=3, minute=30, days=(0, 3), timezone="Europe/Paris")
 
-        assert describe(rule) == "Chaque lundi, jeudi à 03:30 (Europe/Paris)"
+        assert describe(rule) == "Every Monday, Thursday at 03:30 (Europe/Paris)"
+
+    def test_summary_follows_the_interface_language(self) -> None:
+        """Le résumé est calculé à la lecture : il suit la langue choisie."""
+        rule = Rule(TriggerKind.WEEKLY, hour=3, minute=30, days=(0, 3), timezone="Europe/Paris")
+        set_language("fr")
+        try:
+            assert describe(rule) == "Chaque lundi, jeudi à 03:30 (Europe/Paris)"
+        finally:
+            set_language("en")

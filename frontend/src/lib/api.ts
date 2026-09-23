@@ -46,8 +46,10 @@ import type {
   StopResult,
   SystemStats,
   User,
+  UiSettings,
   ApiErrorBody,
 } from './types'
+import { t } from '@/i18n'
 
 const BASE = '/api/v1'
 
@@ -60,7 +62,7 @@ export class ApiError extends Error {
   readonly traceId?: string
 
   constructor(status: number, body: ApiErrorBody) {
-    super(body.message || 'Erreur inattendue')
+    super(body.message || t('api.unexpected'))
     this.name = 'ApiError'
     this.status = status
     this.code = body.code || 'UNKNOWN'
@@ -84,9 +86,9 @@ export class NetworkError extends ApiError {
   constructor(detail: string) {
     super(0, {
       code: 'NETWORK_ERROR',
-      message: 'Le panneau ne répond pas.',
+      message: t('api.networkMessage'),
       cause: detail,
-      remediation: 'Vérifier que le service MSM est démarré, puis réessayer.',
+      remediation: t('api.networkFix'),
     })
     this.name = 'NetworkError'
   }
@@ -145,7 +147,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!response.ok) {
     throw new ApiError(response.status, (payload as ApiErrorBody) ?? {
       code: `HTTP_${response.status}`,
-      message: 'Erreur inattendue',
+      message: t('api.unexpected'),
     })
   }
 
@@ -182,7 +184,7 @@ async function sendForm<T>(path: string, form: FormData): Promise<T> {
   if (!response.ok) {
     throw new ApiError(response.status, (payload as ApiErrorBody) ?? {
       code: `HTTP_${response.status}`,
-      message: 'Erreur inattendue',
+      message: t('api.unexpected'),
     })
   }
   return payload as T
@@ -421,6 +423,13 @@ export const api = {
         method: 'PUT',
         body: { path, side },
       }),
+  },
+
+  ui: {
+    /** Public : l'écran de connexion s'affiche déjà dans la langue choisie. */
+    get: () => request<UiSettings>('/ui'),
+    setLanguage: (language: string) =>
+      request<UiSettings>('/settings/language', { method: 'PUT', body: { language } }),
   },
 
   notifications: {

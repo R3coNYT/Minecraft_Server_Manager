@@ -35,7 +35,7 @@ class TestSchedules:
 
         assert response.status_code == 201, response.text
         body = response.json()
-        assert body["summary"] == "Chaque jour à 04:00 (Europe/Paris)"
+        assert body["summary"] == "Every day at 04:00 (Europe/Paris)"
         assert body["next_run_at"] is not None
         assert body["last_status"] == "NEVER"
 
@@ -260,7 +260,7 @@ class TestScheduleExecution:
         assert status.value == "FAILED"
         async with session_scope() as session:
             schedule = await session.get(Schedule, created["id"])
-            assert "désactivé" in (schedule.last_error or "")
+            assert "disabled" in (schedule.last_error or "")
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 

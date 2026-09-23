@@ -24,6 +24,7 @@ from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
 from msm.db.repositories.player_repo import PlayerRepository
 from msm.exceptions import ServerNotRunning
+from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.minecraft.players import json_files
 from msm.runtime.supervisor import Supervisor
@@ -181,7 +182,7 @@ class PlayerService:
             commands.build_op(username),
             permission=Permission.PLAYER_OP,
             action=AuditAction.PLAYER_OP,
-            summary=f"{username} promu opérateur",
+            summary=tr("{username} made operator", username=username),
             username=username,
             **kwargs,
         )
@@ -192,7 +193,7 @@ class PlayerService:
             commands.build_deop(username),
             permission=Permission.PLAYER_OP,
             action=AuditAction.PLAYER_DEOP,
-            summary=f"{username} n'est plus opérateur",
+            summary=tr("{username} is no longer operator", username=username),
             username=username,
             **kwargs,
         )
@@ -205,7 +206,11 @@ class PlayerService:
             commands.build_kick(username, reason),
             permission=Permission.PLAYER_KICK,
             action=AuditAction.PLAYER_KICKED,
-            summary=f"{username} expulsé" + (f" ({reason})" if reason else ""),
+            summary=(
+                tr("{username} kicked ({reason})", username=username, reason=reason)
+                if reason
+                else tr("{username} kicked", username=username)
+            ),
             username=username,
             **kwargs,
         )
@@ -218,7 +223,11 @@ class PlayerService:
             commands.build_ban(username, reason),
             permission=Permission.PLAYER_BAN,
             action=AuditAction.PLAYER_BANNED,
-            summary=f"{username} banni" + (f" ({reason})" if reason else ""),
+            summary=(
+                tr("{username} banned ({reason})", username=username, reason=reason)
+                if reason
+                else tr("{username} banned", username=username)
+            ),
             username=username,
             **kwargs,
         )
@@ -229,7 +238,7 @@ class PlayerService:
             commands.build_pardon(username),
             permission=Permission.PLAYER_BAN,
             action=AuditAction.PLAYER_UNBANNED,
-            summary=f"{username} débanni",
+            summary=tr("{username} unbanned", username=username),
             username=username,
             **kwargs,
         )
@@ -240,7 +249,7 @@ class PlayerService:
             commands.build_kill(username),
             permission=Permission.PLAYER_KILL,
             action=AuditAction.PLAYER_KILLED,
-            summary=f"{username} tué",
+            summary=tr("{username} killed", username=username),
             username=username,
             **kwargs,
         )
@@ -253,7 +262,9 @@ class PlayerService:
             commands.build_give(username, item, count),
             permission=Permission.PLAYER_GIVE,
             action=AuditAction.PLAYER_GIVE,
-            summary=f"{count} x {item} donné(s) à {username}",
+            summary=tr(
+                "{count} x {item} given to {username}", count=count, item=item, username=username
+            ),
             username=username,
             **kwargs,
         )
@@ -266,7 +277,9 @@ class PlayerService:
             commands.build_teleport(username, destination),
             permission=Permission.PLAYER_TELEPORT,
             action=AuditAction.PLAYER_TELEPORTED,
-            summary=f"{username} téléporté vers {destination}",
+            summary=tr(
+                "{username} teleported to {destination}", username=username, destination=destination
+            ),
             username=username,
             **kwargs,
         )
@@ -290,16 +303,16 @@ class PlayerService:
         runtime = self._supervisor.find(server.id)
         if runtime is None or not runtime.state.is_running:
             raise ServerNotRunning(
-                "Action impossible : le serveur n'est pas démarré.",
-                cause="Les actions sur les joueurs passent par la console du serveur.",
-                remediation="Démarrer le serveur avant d'agir sur un joueur.",
+                tr("Cannot act: the server is not running."),
+                cause=tr("Player actions go through the server console."),
+                remediation=tr("Start the server before acting on a player."),
             )
 
         sent = await runtime.send_command(command, actor=context.username)
 
         self._audit.record(
             action=action,
-            summary=f"{summary} sur « {server.name} ».",
+            summary=tr("{summary} on “{name}”.", summary=summary, name=server.name),
             actor_id=context.user_id,
             actor_username=context.username,
             actor_role=context.role.value,

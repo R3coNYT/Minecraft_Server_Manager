@@ -164,5 +164,5 @@ class TestEventBus:
         subscription.close()  # idempotent
 
     def test_subscribe_requires_a_topic(self) -> None:
-        with pytest.raises(ValueError, match="sujet"):
+        with pytest.raises(ValueError, match="topic"):
             EventBus().subscribe()

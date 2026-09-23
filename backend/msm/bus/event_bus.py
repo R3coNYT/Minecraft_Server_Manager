@@ -154,7 +154,7 @@ class EventBus:
     def subscribe(self, *topics: str, maxsize: int = DEFAULT_QUEUE_SIZE) -> Subscription:
         """Crée un abonnement. Le fermer libère la ressource."""
         if not topics:
-            raise ValueError("Au moins un sujet doit être fourni.")
+            raise ValueError("At least one topic must be given.")
         subscription = Subscription(self, frozenset(topics), maxsize)
         self._subscriptions.append(subscription)
         return subscription

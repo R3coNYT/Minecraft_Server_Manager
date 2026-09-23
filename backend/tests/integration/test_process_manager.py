@@ -87,7 +87,7 @@ async def test_start_failure_reports_cause_and_returns_offline(server_dir, bus) 
     assert last_error["cause"]
     assert last_error["remediation"]
     # La console doit porter le diagnostic, pas seulement les logs serveur.
-    assert any("Échec du démarrage" in line.text for line in runtime.logs_tail(20))
+    assert any("Start failed" in line.text for line in runtime.logs_tail(20))
 
 
 # --------------------------------------------------------------------------- #

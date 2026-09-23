@@ -20,6 +20,7 @@ from msm.db.models.user import User
 from msm.db.repositories import ServerPermissionRepository
 from msm.db.session import session_scope
 from msm.exceptions import AuthenticationError, PermissionDenied
+from msm.i18n import tr
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext, build_context
 from msm.security.tokens import tokens_equal
@@ -54,7 +55,7 @@ def get_app_settings(request: Request) -> Settings:
 def get_supervisor(request: Request) -> Supervisor:
     supervisor: Supervisor | None = getattr(request.app.state, "supervisor", None)
     if supervisor is None:  # pragma: no cover - impossible hors test mal configuré
-        raise RuntimeError("Le superviseur n'est pas initialisé.")
+        raise RuntimeError("Supervisor not initialised.")
     return supervisor
 
 
@@ -101,17 +102,17 @@ async def get_current_user(
     """Utilisateur authentifié, ou 401."""
     if not msm_session:
         raise AuthenticationError(
-            "Authentification requise.",
-            cause="Aucun cookie de session n'accompagne la requête.",
-            remediation="Se connecter au panel.",
+            tr("Authentication required."),
+            cause=tr("The request carries no session cookie."),
+            remediation=tr("Sign in to the panel."),
         )
 
     resolved = await auth.resolve_session(msm_session)
     if resolved is None:
         raise AuthenticationError(
-            "Session expirée ou invalide.",
-            cause="Le jeton de session n'est plus valide.",
-            remediation="Se reconnecter au panel.",
+            tr("Session expired or invalid."),
+            cause=tr("The session token is no longer valid."),
+            remediation=tr("Sign in to the panel again."),
         )
     user, _ = resolved
     return user
@@ -132,9 +133,9 @@ async def require_csrf(
     """
     if not msm_csrf or not header_token or not tokens_equal(msm_csrf, header_token):
         raise PermissionDenied(
-            "Requête refusée : jeton anti-CSRF absent ou invalide.",
-            cause="L'en-tête X-CSRF-Token ne correspond pas au cookie de session.",
-            remediation="Recharger la page pour obtenir un nouveau jeton.",
+            tr("Request refused: missing or invalid anti-CSRF token."),
+            cause=tr("The X-CSRF-Token header does not match the session cookie."),
+            remediation=tr("Reload the page to get a new token."),
             code="CSRF_INVALID",
         )
 
@@ -164,7 +165,7 @@ async def get_server_and_context(
     override = await ServerPermissionRepository(session).get(user.id, server_id)
     context = build_context(user, server_id=server_id, override=override)
     # Ne pas révéler l'existence d'un serveur auquel l'utilisateur n'a pas accès.
-    context.require(Permission.SERVER_VIEW, action="consulter ce serveur")
+    context.require(Permission.SERVER_VIEW, action=tr("view this server"))
     return server, context
 
 

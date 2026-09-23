@@ -19,6 +19,7 @@ import { Badge, Field, Input } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ActionForm, ActionSelect, defaultParams } from './ActionForm'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 export interface DraftStep {
   action: string
@@ -76,13 +77,13 @@ export function EventEditor({
     <Dialog
       open={open}
       onClose={onClose}
-      title={initialName ? `Modifier « ${initialName} »` : 'Nouvel événement'}
-      description="Les étapes s'exécutent dans l'ordre, de haut en bas."
+      title={initialName ? t('eventEditor.editTitle', { name: initialName }) : t('eventEditor.newTitle')}
+      description={t('eventEditor.description')}
       size="lg"
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Annuler
+            {t('common.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -90,38 +91,38 @@ export function EventEditor({
             disabled={!name.trim() || steps.length === 0}
             onClick={() => onSave({ name: name.trim(), description, steps })}
           >
-            Enregistrer
+            {t('common.save')}
           </Button>
         </>
       }
     >
       <div className="space-y-5">
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Nom">
+          <Field label={t('eventEditor.name')}>
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Tournoi hebdomadaire"
+              placeholder={t('eventEditor.namePlaceholder')}
               autoFocus
             />
           </Field>
-          <Field label="Description (facultatif)">
+          <Field label={t('eventEditor.descriptionLabel')}>
             <Input
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Ouverture du tournoi du dimanche"
+              placeholder={t('eventEditor.descriptionPlaceholder')}
             />
           </Field>
         </div>
 
         <div>
           <p className="mb-2 text-xs font-medium text-slate-300">
-            Étapes {steps.length > 0 ? `(${steps.length})` : ''}
+            {t('eventEditor.steps')} {steps.length > 0 ? `(${steps.length})` : ''}
           </p>
 
           {steps.length === 0 ? (
             <p className="rounded-lg border border-dashed border-slate-700 px-4 py-6 text-center text-xs text-slate-600">
-              Aucune étape. En ajouter une ci-dessous.
+              {t('eventEditor.noSteps')}
             </p>
           ) : (
             <ol className="space-y-1.5">
@@ -152,14 +153,14 @@ export function EventEditor({
                     </span>
                     {destructive ? (
                       <Badge className="bg-red-500/10 text-red-300 ring-red-500/30">
-                        irréversible
+                        {t('eventEditor.irreversible')}
                       </Badge>
                     ) : null}
                     <button
                       className="rounded p-1 text-slate-500 hover:text-slate-200 disabled:opacity-30"
                       disabled={index === 0}
                       onClick={() => move(index, -1)}
-                      aria-label="Monter"
+                      aria-label={t('eventEditor.moveUp')}
                     >
                       <ArrowUp className="size-3.5" />
                     </button>
@@ -167,14 +168,14 @@ export function EventEditor({
                       className="rounded p-1 text-slate-500 hover:text-slate-200 disabled:opacity-30"
                       disabled={index === steps.length - 1}
                       onClick={() => move(index, 1)}
-                      aria-label="Descendre"
+                      aria-label={t('eventEditor.moveDown')}
                     >
                       <ArrowDown className="size-3.5" />
                     </button>
                     <button
                       className="rounded p-1 text-slate-500 hover:text-red-300"
                       onClick={() => setSteps(steps.filter((_, i) => i !== index))}
-                      aria-label="Retirer"
+                      aria-label={t('eventEditor.remove')}
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -186,7 +187,7 @@ export function EventEditor({
         </div>
 
         <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
-          <p className="mb-3 text-xs font-medium text-slate-300">Ajouter une étape</p>
+          <p className="mb-3 text-xs font-medium text-slate-300">{t('eventEditor.addStepTitle')}</p>
           <div className="space-y-3">
             <ActionSelect
               actions={actions}
@@ -212,7 +213,7 @@ export function EventEditor({
               icon={<Plus className="size-3.5" />}
               onClick={addStep}
             >
-              Ajouter l'étape
+              {t('eventEditor.addStep')}
             </Button>
           </div>
         </div>

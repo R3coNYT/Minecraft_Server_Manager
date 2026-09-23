@@ -43,7 +43,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             resolved = await AuthService(session, settings).resolve_session(token)
             if resolved is None:
                 await websocket.close(
-                    code=CLOSE_UNAUTHENTICATED, reason="Session expirée ou invalide"
+                    code=CLOSE_UNAUTHENTICATED, reason="Session expired or invalid"
                 )
                 return
             user, _ = resolved

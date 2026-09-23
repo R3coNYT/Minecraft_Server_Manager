@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn'
 import { Card, CardHeader, EmptyState, LoadingBlock, Select } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/Button'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { t } from '@/i18n'
 
 const PAGE_SIZE = 50
 
@@ -50,9 +51,9 @@ export function AuditPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6">
       <div>
-        <h1 className="text-lg font-semibold text-slate-100">Journal d'audit</h1>
+        <h1 className="text-lg font-semibold text-slate-100">{t('audit.title')}</h1>
         <p className="text-sm text-slate-500">
-          Chaque action passée par le panneau y est consignée, y compris les refus.
+          {t('audit.subtitle')}
         </p>
       </div>
 
@@ -65,7 +66,7 @@ export function AuditPage() {
               setOffset(0)
             }}
           >
-            <option value="">Tous les serveurs</option>
+            <option value="">{t('audit.allServers')}</option>
             {(servers ?? []).map((server) => (
               <option key={server.id} value={server.id}>
                 {server.name}
@@ -81,7 +82,7 @@ export function AuditPage() {
               setOffset(0)
             }}
           >
-            <option value="">Toutes les actions</option>
+            <option value="">{t('audit.allActions')}</option>
             {(actions ?? []).map((value) => (
               <option key={value} value={value}>
                 {value}
@@ -95,8 +96,10 @@ export function AuditPage() {
 
       <Card>
         <CardHeader
-          title="Événements"
-          subtitle={total > 0 ? `${pageStart} – ${pageEnd} sur ${total}` : undefined}
+          title={t('audit.events')}
+          subtitle={
+            total > 0 ? t('audit.range', { start: pageStart, end: pageEnd, total }) : undefined
+          }
         />
 
         {isLoading ? (
@@ -106,10 +109,10 @@ export function AuditPage() {
             <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-slate-800 text-left text-xs text-slate-500">
-                  <th className="px-5 py-2.5 font-medium">Date</th>
-                  <th className="px-5 py-2.5 font-medium">Auteur</th>
-                  <th className="px-5 py-2.5 font-medium">Action</th>
-                  <th className="px-5 py-2.5 font-medium">Détail</th>
+                  <th className="px-5 py-2.5 font-medium">{t('audit.date')}</th>
+                  <th className="px-5 py-2.5 font-medium">{t('audit.author')}</th>
+                  <th className="px-5 py-2.5 font-medium">{t('audit.action')}</th>
+                  <th className="px-5 py-2.5 font-medium">{t('audit.detail')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -131,7 +134,7 @@ export function AuditPage() {
                       {entry.result !== 'SUCCESS' ? (
                         <span className="ml-1.5 inline-flex items-center gap-1 text-[11px] text-amber-400">
                           <ShieldAlert className="size-3" />
-                          {entry.result === 'DENIED' ? 'refusé' : 'erreur'}
+                          {entry.result === 'DENIED' ? t('audit.denied') : t('audit.error')}
                         </span>
                       ) : null}
                     </td>
@@ -142,7 +145,7 @@ export function AuditPage() {
             </table>
           </div>
         ) : (
-          <EmptyState title="Aucun événement" description="Aucune entrée ne correspond aux filtres." />
+          <EmptyState title={t('audit.empty')} description={t('audit.emptyHint')} />
         )}
 
         {total > PAGE_SIZE ? (
@@ -153,7 +156,7 @@ export function AuditPage() {
               disabled={offset === 0}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
             >
-              Précédent
+              {t('audit.previous')}
             </Button>
             <Button
               size="sm"
@@ -161,7 +164,7 @@ export function AuditPage() {
               disabled={pageEnd >= total}
               onClick={() => setOffset(offset + PAGE_SIZE)}
             >
-              Suivant
+              {t('audit.next')}
             </Button>
           </div>
         ) : null}

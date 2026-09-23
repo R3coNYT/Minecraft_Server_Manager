@@ -16,6 +16,7 @@ import { LogView } from '@/components/console/LogView'
 import { CommandInput } from '@/components/console/CommandInput'
 import { LoadingBlock } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { t } from '@/i18n'
 
 export function ConsolePage() {
   const { server, status } = useServerContext()
@@ -45,14 +46,14 @@ export function ConsolePage() {
   const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
 
   const disabledReason = !canWrite
-    ? "Votre rôle ne permet pas d'écrire dans la console."
+    ? t('console.noRight')
     : !running
-      ? 'Le serveur doit être démarré pour recevoir des commandes.'
+      ? t('console.mustRun')
       : !writable
-        ? "L'entrée standard du serveur n'est pas accessible : ce script de démarrage ne la transmet pas. Activer le mode PTY ou configurer RCON."
+        ? t('console.noStdin')
         : undefined
 
-  if (isLoading) return <LoadingBlock label="Chargement de l'historique…" />
+  if (isLoading) return <LoadingBlock label={t('console.loadingHistory')} />
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -68,8 +69,8 @@ export function ConsolePage() {
         onClear={() => clearLogs(server.id)}
         emptyHint={
           running
-            ? 'Le serveur tourne mais n’a encore rien écrit.'
-            : 'Démarrer le serveur pour voir apparaître sa console.'
+            ? t('console.runningEmpty')
+            : t('console.stoppedEmpty')
         }
       />
 

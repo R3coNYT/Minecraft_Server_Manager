@@ -70,7 +70,7 @@ class TestCreation:
         response = await admin.post("/api/v1/servers", json=payload)
 
         assert response.status_code == 422
-        assert "relatif" in response.json()["cause"]
+        assert "relative" in response.json()["cause"]
 
     async def test_missing_directory_is_refused(self, admin: ApiClient, tmp_path: Path) -> None:
         response = await admin.post(

@@ -138,7 +138,7 @@ class TestRestartPolicy:
         policy = RestartPolicy(mode=AutoRestartMode.ALWAYS, max_consecutive_crashes=3)
         decision = policy.evaluate(stop_requested=False, exit_code=1, consecutive_crashes=3)
         assert not decision.should_restart
-        assert "boucle" in decision.reason
+        assert "loop" in decision.reason
 
     def test_delay_grows_exponentially_then_plateaus(self) -> None:
         policy = RestartPolicy(delay_s=10, backoff_factor=2.0, max_delay_s=60)

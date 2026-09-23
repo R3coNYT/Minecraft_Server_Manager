@@ -105,7 +105,7 @@ class TestCreate:
         backup = await _wait_backup(admin, server_id, started.json()["id"])
 
         assert backup["status"] == "FAILED"
-        assert "monde" in (backup["error"] or "")
+        assert "world" in (backup["error"] or "")
 
 
 class TestHotBackup:
@@ -145,7 +145,7 @@ class TestHotBackup:
         backup = await _wait_backup(admin, server_id, started.json()["id"], timeout=90.0)
 
         assert backup["status"] == "FAILED"
-        assert "confirmé" in (backup["error"] or "")
+        assert "confirm" in (backup["error"] or "")
 
         await admin.post(f"/api/v1/servers/{server_id}/stop")
 

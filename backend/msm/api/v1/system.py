@@ -10,11 +10,13 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from msm import __version__
+from msm.api.schemas import LanguageOut
+from msm.i18n import SUPPORTED_LANGUAGES, current_language
 from msm.launchers import registry as launcher_registry
 from msm.runtime.backends import get_backend
 from msm.runtime.stats import system_stats
 
-router = APIRouter(tags=["système"])
+router = APIRouter(tags=["system"])
 
 
 class HealthResponse(BaseModel):
@@ -28,7 +30,7 @@ class HealthResponse(BaseModel):
     servers_registered: int
 
 
-@router.get("/health", response_model=HealthResponse, summary="Sonde de santé")
+@router.get("/health", response_model=HealthResponse, summary="Health probe")
 async def health(request: Request) -> HealthResponse:
     """Vérifie que l'application répond et expose son environnement d'exécution."""
     supervisor = getattr(request.app.state, "supervisor", None)
@@ -42,13 +44,13 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
-@router.get("/system/stats", summary="Ressources de la machine hôte")
+@router.get("/system/stats", summary="Host resources")
 async def host_stats() -> dict[str, Any]:
     """CPU, mémoire et disque de la machine, pour le tableau de bord."""
     return system_stats()
 
 
-@router.get("/system/launchers", summary="Méthodes de démarrage disponibles")
+@router.get("/system/launchers", summary="Available start methods")
 async def launchers() -> list[dict[str, str | None]]:
     """Liste les launchers, avec la raison d'indisponibilité le cas échéant.
 
@@ -56,3 +58,9 @@ async def launchers() -> list[dict[str, str | None]]:
     plutôt que de laisser l'utilisateur découvrir l'échec au démarrage.
     """
     return launcher_registry.describe_all()
+
+
+@router.get("/ui", response_model=LanguageOut, summary="Interface settings")
+async def ui_settings() -> LanguageOut:
+    """Public : l'écran de connexion s'affiche déjà dans la langue choisie."""
+    return LanguageOut(language=current_language(), languages=list(SUPPORTED_LANGUAGES))

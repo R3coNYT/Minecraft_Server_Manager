@@ -1,5 +1,5 @@
 import type { ServerState } from '@/lib/types'
-import { STATE_LABELS, STATE_STYLES } from '@/lib/format'
+import { STATE_STYLES, stateLabel } from '@/lib/format'
 import { cn } from '@/lib/cn'
 
 export function StatusDot({ state, className }: { state: ServerState; className?: string }) {
@@ -15,7 +15,7 @@ export function ServerStatusBadge({ state }: { state: ServerState }) {
       )}
     >
       <StatusDot state={state} />
-      {STATE_LABELS[state]}
+      {stateLabel(state)}
     </span>
   )
 }

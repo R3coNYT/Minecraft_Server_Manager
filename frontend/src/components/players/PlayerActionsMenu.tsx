@@ -19,6 +19,7 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { Field, Input } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { cn } from '@/lib/cn'
+import { t } from '@/i18n'
 
 type ActionKey = 'op' | 'deop' | 'kick' | 'ban' | 'unban' | 'kill' | 'give'
 
@@ -74,7 +75,7 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
       }
     },
     onSuccess: (result) => {
-      push({ kind: 'success', title: 'Commande exécutée', detail: result?.command })
+      push({ kind: 'success', title: t('playerActions.done'), detail: result?.command })
       setPending(null)
       setReason('')
       refresh()
@@ -91,13 +92,13 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
   }
 
   const entries: { key: ActionKey; label: string; icon: typeof Shield; allowed: boolean; show: boolean }[] = [
-    { key: 'op', label: 'Promouvoir opérateur', icon: Shield, allowed: can.op, show: !player.is_op },
-    { key: 'deop', label: 'Retirer les droits', icon: ShieldOff, allowed: can.op, show: player.is_op },
-    { key: 'give', label: 'Donner un objet', icon: Gift, allowed: can.give, show: player.online },
-    { key: 'kick', label: 'Expulser', icon: UserMinus, allowed: can.kick, show: player.online },
-    { key: 'kill', label: 'Tuer', icon: Skull, allowed: can.kill, show: player.online },
-    { key: 'ban', label: 'Bannir', icon: Ban, allowed: can.ban, show: !player.is_banned },
-    { key: 'unban', label: 'Lever le bannissement', icon: UserCheck, allowed: can.ban, show: player.is_banned },
+    { key: 'op', label: t('playerActions.op'), icon: Shield, allowed: can.op, show: !player.is_op },
+    { key: 'deop', label: t('playerActions.deop'), icon: ShieldOff, allowed: can.op, show: player.is_op },
+    { key: 'give', label: t('playerActions.give'), icon: Gift, allowed: can.give, show: player.online },
+    { key: 'kick', label: t('playerActions.kick'), icon: UserMinus, allowed: can.kick, show: player.online },
+    { key: 'kill', label: t('playerActions.kill'), icon: Skull, allowed: can.kill, show: player.online },
+    { key: 'ban', label: t('playerActions.ban'), icon: Ban, allowed: can.ban, show: !player.is_banned },
+    { key: 'unban', label: t('playerActions.unban'), icon: UserCheck, allowed: can.ban, show: player.is_banned },
   ]
 
   const available = entries.filter((entry) => entry.show && entry.allowed)
@@ -123,9 +124,9 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
         icon={<MoreHorizontal className="size-4" />}
         onClick={() => setOpen((value) => !value)}
         disabled={!serverRunning}
-        title={serverRunning ? 'Actions' : 'Le serveur doit être démarré'}
+        title={serverRunning ? t('playerActions.actions') : t('playerActions.mustRun')}
       >
-        <span className="sr-only">Actions sur {player.username}</span>
+        <span className="sr-only">{t('playerActions.actionsOn', { name: player.username })}</span>
       </Button>
 
       {open ? (
@@ -154,16 +155,16 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
       {/* Actions immédiates : une simple confirmation suffit. */}
       <ConfirmDialog
         open={pending !== null && !needsForm}
-        title={`${entries.find((e) => e.key === pending)?.label ?? 'Action'} — ${player.username}`}
+        title={`${entries.find((e) => e.key === pending)?.label ?? t('playerActions.action')} — ${player.username}`}
         consequence={
           pending === 'op'
-            ? 'Le joueur obtiendra les pleins pouvoirs administrateur sur le serveur.'
+            ? t('playerActions.opConsequence')
             : pending === 'kill'
-              ? 'Le joueur mourra immédiatement et perdra son inventaire selon les règles du monde.'
+              ? t('playerActions.killConsequence')
               : undefined
         }
-        description={pending ? `Commande : ${commandPreview[pending]}` : undefined}
-        confirmLabel="Exécuter"
+        description={pending ? t('playerActions.command', { command: commandPreview[pending] }) : undefined}
+        confirmLabel={t('playerActions.run')}
         danger={pending === 'kill' || pending === 'op'}
         loading={run.isPending}
         onConfirm={() => pending && run.mutate(pending)}
@@ -179,14 +180,14 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
         footer={
           <>
             <Button variant="ghost" onClick={() => setPending(null)}>
-              Annuler
+              {t('common.cancel')}
             </Button>
             <Button
               variant={pending === 'ban' ? 'danger' : 'primary'}
               loading={run.isPending}
               onClick={() => pending && run.mutate(pending)}
             >
-              Exécuter
+              {t('playerActions.run')}
             </Button>
           </>
         }
@@ -195,7 +196,7 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
           {pending === 'give' ? (
             <div className="grid grid-cols-3 gap-3">
               <div className="col-span-2">
-                <Field label="Objet" hint="Identifiant Minecraft, par exemple diamond_sword">
+                <Field label={t('playerActions.item')} hint={t('playerActions.itemHint')}>
                   <Input
                     value={item}
                     onChange={(event) => setItem(event.target.value)}
@@ -204,7 +205,7 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
                   />
                 </Field>
               </div>
-              <Field label="Quantité">
+              <Field label={t('playerActions.quantity')}>
                 <Input
                   type="number"
                   min={1}
@@ -215,11 +216,11 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
               </Field>
             </div>
           ) : (
-            <Field label="Motif" hint="Facultatif — affiché au joueur concerné">
+            <Field label={t('playerActions.reason')} hint={t('playerActions.reasonHint')}>
               <Input
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
-                placeholder="Comportement inapproprié"
+                placeholder={t('playerActions.reasonPlaceholder')}
                 autoFocus
               />
             </Field>

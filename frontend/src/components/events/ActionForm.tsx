@@ -8,6 +8,7 @@
 
 import type { ActionField, ActionType } from '@/lib/types'
 import { Field, Input, Select } from '@/components/ui/primitives'
+import { t } from '@/i18n'
 
 interface ActionFormProps {
   action: ActionType
@@ -71,7 +72,7 @@ export function ActionForm({ action, values, onChange, disabled = false }: Actio
       {action.fields.map((field) => (
         <div key={field.name} className={field.type === 'text' ? 'sm:col-span-2' : ''}>
           <Field
-            label={field.label + (field.required ? '' : ' (facultatif)')}
+            label={field.label + (field.required ? '' : t('eventEditor.optional'))}
             hint={field.help}
           >
             <FieldInput
@@ -103,7 +104,7 @@ export function ActionSelect({
       {actions.map((action) => (
         <option key={action.key} value={action.key}>
           {action.label}
-          {action.danger !== 'SAFE' ? ' — irréversible' : ''}
+          {action.danger !== 'SAFE' ? t('eventEditor.irreversibleSuffix') : ''}
         </option>
       ))}
     </Select>

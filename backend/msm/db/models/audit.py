@@ -109,7 +109,7 @@ class AuditLog(Base):
 
     #: Nul pour les actions du système (redémarrage automatique, tâche planifiée).
     actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
-    actor_username: Mapped[str] = mapped_column(String(64), nullable=False, default="système")
+    actor_username: Mapped[str] = mapped_column(String(64), nullable=False, default="system")
     actor_role: Mapped[str | None] = mapped_column(String(16))
     ip_address: Mapped[str | None] = mapped_column(String(45))
 

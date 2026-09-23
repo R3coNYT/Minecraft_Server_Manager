@@ -544,3 +544,8 @@ export interface LauncherLink {
   }
   mods: LauncherLinkMod[]
 }
+
+export interface UiSettings {
+  language: 'en' | 'fr'
+  languages: string[]
+}
