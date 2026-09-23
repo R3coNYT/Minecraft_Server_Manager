@@ -4,6 +4,8 @@
 #
 # Le script est **idempotent** : le relancer met à jour une installation
 # existante sans écraser la configuration, la base de données ni les serveurs.
+# Pour une mise à jour, préférer update.sh : il sauvegarde la base avant de
+# migrer et revient en arrière tout seul si quelque chose échoue.
 #
 #   sudo ./install.sh
 #   sudo ./install.sh --dir /srv/msm --servers-root /data/minecraft
@@ -25,6 +27,7 @@ BIND_HOST="127.0.0.1"
 BIND_PORT="8000"
 SKIP_FRONTEND=0
 SKIP_ADMIN=0
+FROM_UPDATE=0
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -66,6 +69,7 @@ Options :
   --port PORT             Port d'écoute               (défaut : ${BIND_PORT})
   --skip-frontend         Ne pas compiler l'interface
   --skip-admin            Ne pas créer de compte administrateur
+  --from-update           Mode utilisé par update.sh (aucune question)
   -h, --help              Afficher cette aide
 EOF
 }
@@ -82,6 +86,8 @@ while [[ $# -gt 0 ]]; do
     --port)         BIND_PORT="$2"; shift 2 ;;
     --skip-frontend) SKIP_FRONTEND=1; shift ;;
     --skip-admin)   SKIP_ADMIN=1; shift ;;
+    # Appel par update.sh : aucune question, pas de récapitulatif final.
+    --from-update)  FROM_UPDATE=1; SKIP_ADMIN=1; shift ;;
     -h|--help)      usage; exit 0 ;;
     *) fail "Option inconnue : $1" "L'argument n'est pas reconnu." "Lancer ./install.sh --help" ;;
   esac
@@ -187,6 +193,13 @@ if [[ "$SOURCE_DIR" != "$INSTALL_DIR" ]]; then
 else
   ok "Installation en place dans $INSTALL_DIR"
 fi
+
+# Version installée, relue par update.sh pour savoir s'il y a du nouveau.
+# `safe.directory` : le dépôt appartient souvent à un autre compte que root, et
+# git refuse alors de le lire sans cette précision.
+BUILD_COMMIT="$(git -c safe.directory="$SOURCE_DIR" -C "$SOURCE_DIR" rev-parse HEAD 2>/dev/null || echo unknown)"
+printf 'commit=%s\ninstalled_at=%s\n' "$BUILD_COMMIT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "$INSTALL_DIR/.msm-build"
 
 # --------------------------------------------------------------------------- #
 #  5. Environnement Python
@@ -363,14 +376,8 @@ UNIT_SOURCE="$SOURCE_DIR/systemd/${SERVICE_NAME}.service"
   "Le fichier ${UNIT_SOURCE} est absent." \
   "Relancer le script depuis la racine du dépôt."
 
-sed -e "s|__MSM_USER__|${MSM_USER}|g" \
-    -e "s|__MSM_GROUP__|${MSM_GROUP}|g" \
-    -e "s|__MSM_HOME__|${INSTALL_DIR}|g" \
-    -e "s|__MSM_CONFIG__|${CONFIG_DIR}|g" \
-    -e "s|__MSM_DATA__|${DATA_DIR}|g" \
-    -e "s|__MSM_LOGS__|${LOG_DIR}|g" \
-    -e "s|__MSM_SERVERS__|${SERVERS_ROOT}|g" \
-    "$UNIT_SOURCE" > "/etc/systemd/system/${SERVICE_NAME}.service"
+bash "$SOURCE_DIR/systemd/render-unit.sh" "$UNIT_SOURCE" "/etc/systemd/system/${SERVICE_NAME}.service" \
+  "$MSM_USER" "$MSM_GROUP" "$INSTALL_DIR" "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR" "$SERVERS_ROOT"
 
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}" >/dev/null 2>&1
@@ -400,6 +407,9 @@ else
        "systemd signale un échec au lancement." \
        "Consulter les journaux : journalctl -u ${SERVICE_NAME} -n 50 --no-pager"
 fi
+
+# update.sh affiche son propre bilan.
+[[ "$FROM_UPDATE" -eq 1 ]] && exit 0
 
 printf "\n${GREEN}${BOLD}Installation terminée.${RESET}\n\n"
 cat <<EOF

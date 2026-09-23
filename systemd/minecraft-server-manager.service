@@ -20,7 +20,12 @@ RestartSec=5s
 # Délai d'arrêt généreux : MSM ne coupe pas les serveurs Minecraft, mais laisse
 # ses écritures en base s'achever proprement.
 TimeoutStopSec=30s
-KillMode=mixed
+# Seul MSM est arrêté. Les serveurs Minecraft font partie du même groupe de
+# contrôle : avec `mixed` ou `control-group`, systemd les tuerait (SIGKILL, sans
+# sauvegarde du monde) à chaque redémarrage ou mise à jour du panneau. Ils lui
+# survivent ainsi, et sont réadoptés au démarrage suivant. systemd signalera ces
+# processus « restants » au redémarrage : c'est attendu.
+KillMode=process
 
 # --- Durcissement -----------------------------------------------------------
 # MSM lance des processus Java qui doivent écrire dans les dossiers des serveurs :

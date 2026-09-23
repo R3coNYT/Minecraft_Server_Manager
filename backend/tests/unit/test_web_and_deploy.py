@@ -108,10 +108,27 @@ class TestDeploymentAssets:
         import re
 
         placeholders = set(re.findall(r"__MSM_[A-Z_]+__", self.UNIT.read_text(encoding="utf-8")))
-        installer = self.INSTALLER.read_text(encoding="utf-8")
+        renderer = (PROJECT_ROOT / "systemd" / "render-unit.sh").read_text(encoding="utf-8")
 
         for placeholder in placeholders:
-            assert placeholder in installer, f"{placeholder} n'est jamais remplacé par install.sh"
+            assert placeholder in renderer, (
+                f"{placeholder} n'est jamais remplacé par render-unit.sh"
+            )
+
+    def test_install_and_update_share_the_unit_renderer(self) -> None:
+        """Deux copies du rendu finiraient par diverger."""
+        for script in (self.INSTALLER, PROJECT_ROOT / "update.sh"):
+            content = script.read_text(encoding="utf-8")
+            assert "render-unit.sh" in content, f"{script.name} ne passe pas par render-unit.sh"
+            assert "__MSM_USER__" not in content, f"{script.name} rend l'unité lui-même"
+
+    def test_unit_does_not_kill_minecraft_servers(self) -> None:
+        """Les serveurs Minecraft sont dans le groupe de contrôle de MSM.
+
+        Avec `mixed` ou `control-group`, systemd les tuerait (SIGKILL, sans
+        sauvegarde du monde) à chaque redémarrage ou mise à jour du panneau.
+        """
+        assert "KillMode=process" in self.UNIT.read_text(encoding="utf-8")
 
     def test_installer_does_not_leak_the_password(self) -> None:
         """Le mot de passe ne doit apparaître ni en argument ni en variable."""

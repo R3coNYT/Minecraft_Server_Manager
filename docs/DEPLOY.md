@@ -193,12 +193,44 @@ revérifiés avant chaque requête.
 
 ## Mise à jour
 
+Depuis le dossier cloné :
+
 ```bash
-git pull && sudo ./install.sh
+sudo ./update.sh
 ```
 
-Le script réinstalle le code et les dépendances, applique les nouvelles
-migrations, et redémarre le service. La configuration et la base sont conservées.
+Le script relit l'installation existante (unité systemd et `.env`) : aucune option à
+répéter. Il :
+
+1. récupère la nouvelle version (`git pull`, exécuté sous le compte propriétaire du
+   dépôt, avec ses identifiants — utile pour un dépôt privé) ;
+2. conserve une copie de la version installée dans `/opt/msm.previous` ;
+3. installe la nouvelle unité systemd **avant** d'arrêter MSM, puis l'arrête — les
+   serveurs Minecraft continuent de tourner ;
+4. sauvegarde la base (API de sauvegarde SQLite) et le `.env` dans
+   `/var/lib/msm/update-backups/` (les 5 dernières sont gardées) ;
+5. installe la nouvelle version via `install.sh`, applique les migrations,
+   redémarre MSM et vérifie que `/api/v1/health` répond.
+
+Si l'étape 5 échoue, l'ancienne version et la base d'avant la mise à jour sont
+remises en place automatiquement : rien n'a été écrit en base entre-temps, le
+service était arrêté.
+
+| Commande | Effet |
+| --- | --- |
+| `sudo ./update.sh --rollback` | Revenir à la version d'avant la dernière mise à jour. Le schéma de base est ramené par les migrations inverses : les données saisies depuis sont conservées. |
+| `sudo ./update.sh --ref v2.1.0` | Installer une branche, un tag ou un commit précis. |
+| `sudo ./update.sh --no-pull` | Installer le code tel qu'il est dans le dossier, sans interroger git. |
+| `sudo ./update.sh --force` | Réinstaller même si la version est déjà la dernière. |
+
+Pour une installation antérieure à `update.sh` : lancer une fois `git pull` dans le
+dossier cloné, puis `sudo ./update.sh`. Ces installations utilisaient
+`KillMode=mixed`, qui faisait tuer les serveurs Minecraft par systemd à chaque
+redémarrage de MSM ; la mise à jour installe l'unité corrigée (`KillMode=process`)
+avant d'arrêter quoi que ce soit.
+
+`sudo ./install.sh` reste utilisable pour réinstaller : il est idempotent et
+conserve configuration et base, mais ne fait ni sauvegarde ni retour arrière.
 
 ## Désinstallation
 

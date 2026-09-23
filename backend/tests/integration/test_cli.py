@@ -98,6 +98,25 @@ class TestMigrate:
         assert "Migrations" in result.stdout
 
 
+class TestRevision:
+    def test_revision_follows_migrations(self, cli_env: dict[str, str]) -> None:
+        """`update.sh` note la révision avant de migrer, pour pouvoir y revenir."""
+        run_cli("migrate", env=cli_env)
+        head = run_cli("db-revision", env=cli_env).stdout.strip()
+        assert head and head != "none"
+        assert len(head.split()) == 1
+
+        run_cli("downgrade", "-1", env=cli_env)
+        previous = run_cli("db-revision", env=cli_env).stdout.strip()
+        assert previous != head
+
+        run_cli("migrate", env=cli_env)
+        assert run_cli("db-revision", env=cli_env).stdout.strip() == head
+
+    def test_blank_database_has_no_revision(self, cli_env: dict[str, str]) -> None:
+        assert run_cli("db-revision", env=cli_env).stdout.strip() == "none"
+
+
 class TestSecret:
     def test_secret_prints_a_usable_key(self, cli_env: dict[str, str]) -> None:
         """Elle sert à remplir le .env : elle ne doit rien afficher d'autre."""

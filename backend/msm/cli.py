@@ -5,7 +5,7 @@ Deux commandes sont indispensables au premier démarrage :
 * ``msm migrate``     — applique le schéma de base de données ;
 * ``msm createadmin`` — crée le premier compte administrateur.
 
-Les commandes destinées aux scripts (``count-users``) n'écrivent que leur
+Les commandes destinées aux scripts (``count-users``, ``db-revision``) n'écrivent que leur
 résultat sur la sortie standard : la journalisation part sur la sortie d'erreur,
 pour qu'un appelant puisse lire la réponse sans la démêler des logs.
 
@@ -58,6 +58,15 @@ def _build_parser() -> argparse.ArgumentParser:
         "count-users",
         help="Afficher le nombre de comptes (un entier seul, pour les scripts)",
     )
+    subparsers.add_parser(
+        "db-revision",
+        help="Afficher la révision du schéma de base (seule, pour les scripts)",
+    )
+    downgrade = subparsers.add_parser(
+        "downgrade",
+        help="Ramener le schéma à une révision antérieure (retour arrière d'une mise à jour)",
+    )
+    downgrade.add_argument("revision", help="Révision cible, telle qu'affichée par db-revision")
 
     return parser
 
@@ -81,6 +90,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "migrate":
         return _run_migrations()
+    if args.command == "downgrade":
+        return _run_migrations(args.revision)
 
     return asyncio.run(_run_async_command(args, settings))
 
@@ -94,6 +105,8 @@ async def _run_async_command(args: argparse.Namespace, settings: object) -> int:
             return await _purge_sessions(settings)
         if args.command == "count-users":
             return await _count_users(settings)
+        if args.command == "db-revision":
+            return await _db_revision()
     finally:
         await dispose_engine()
     return 1
@@ -138,6 +151,23 @@ async def _count_users(settings: object) -> int:
     return 0
 
 
+async def _db_revision() -> int:
+    """Écrit la révision courante du schéma, ou ``none`` pour une base vierge.
+
+    `update.sh` la note avant de migrer : c'est la cible d'un retour arrière.
+    """
+    from alembic.runtime.migration import MigrationContext
+
+    from msm.db.session import get_engine
+
+    async with get_engine().connect() as connection:
+        revision = await connection.run_sync(
+            lambda sync: MigrationContext.configure(sync).get_current_revision()
+        )
+    print(revision or "none")
+    return 0
+
+
 async def _purge_sessions(settings: object) -> int:
     async with session_scope() as session:
         removed = await AuthService(session, settings).purge_expired_sessions()  # type: ignore[arg-type]
@@ -155,8 +185,8 @@ def _prompt_password() -> str | None:
     return password
 
 
-def _run_migrations() -> int:
-    """Applique les migrations Alembic depuis le dossier `backend`."""
+def _run_migrations(downgrade_to: str | None = None) -> int:
+    """Applique les migrations Alembic, ou ramène le schéma à ``downgrade_to``."""
     from alembic import command
     from alembic.config import Config
 
@@ -166,6 +196,11 @@ def _run_migrations() -> int:
     if not config_path.is_file():
         print(f"Configuration Alembic introuvable : {config_path}", file=sys.stderr)
         return 1
+
+    if downgrade_to is not None:
+        command.downgrade(Config(str(config_path)), downgrade_to)
+        print(f"Schema ramene a {downgrade_to}.")
+        return 0
 
     command.upgrade(Config(str(config_path)), "head")
     print("Migrations appliquées.")
