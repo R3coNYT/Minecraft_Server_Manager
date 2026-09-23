@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import ClassVar
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from msm.db.models import EventRun
+from msm.db.session import session_scope
+from msm.services import event_service
 from tests.integration.conftest import ApiClient, fake_server_payload
 
 pytestmark = pytest.mark.asyncio
@@ -333,6 +339,70 @@ class TestRuns:
             await admin.get(f"/api/v1/servers/{server['id']}/logs", params={"limit": 300})
         ).json()["lines"]
         assert not any("jamais atteint" in line["text"] for line in logs)
+
+        await admin.post(f"/api/v1/servers/{server['id']}/stop")
+
+    async def test_cancelling_during_a_progress_write_lets_it_finish(
+        self, admin: ApiClient, fake_server_dir: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Une annulation ne coupe pas l'écriture de l'avancement en cours.
+
+        Coupée au milieu d'une requête, la connexion garderait sa transaction
+        ouverte, donc le verrou d'écriture SQLite : les écritures suivantes
+        échoueraient sur « database is locked ». On ralentit ici l'écriture pour
+        que l'annulation tombe à coup sûr pendant celle-ci.
+        """
+        real_scope = event_service.session_scope
+        writing = asyncio.Event()
+
+        @asynccontextmanager
+        async def slow_scope() -> AsyncIterator[AsyncSession]:
+            async with real_scope() as session:
+                yield session
+                await session.flush()
+                writing.set()
+                await asyncio.sleep(0.5)
+
+        monkeypatch.setattr(event_service, "session_scope", slow_scope)
+
+        server = await _create_and_start(admin, fake_server_dir)
+        event_id = (
+            await admin.post(
+                f"/api/v1/servers/{server['id']}/events",
+                json={
+                    "name": "Interrompue en écrivant",
+                    "steps": [
+                        {"action": "say", "params": {"message": "un"}},
+                        {"action": "delay", "params": {"seconds": 3600}},
+                    ],
+                },
+            )
+        ).json()["id"]
+        run_id = (
+            await admin.post(f"/api/v1/servers/{server['id']}/events/{event_id}/run", json={})
+        ).json()["id"]
+
+        await asyncio.wait_for(writing.wait(), timeout=20)
+        # Annulation directe : passer par l'API attendrait le verrou d'écriture
+        # tenu par l'écriture en cours, et l'annulation tomberait après elle.
+        event_service._ACTIVE_RUNS[run_id].cancel()
+
+        status = None
+        for _ in range(100):
+            runs = (await admin.get(f"/api/v1/servers/{server['id']}/events/runs")).json()
+            status = next((run["status"] for run in runs if run["id"] == run_id), None)
+            if status == "CANCELLED":
+                break
+            await asyncio.sleep(0.1)
+        assert status == "CANCELLED"
+
+        async with session_scope() as session:
+            run = await session.get(EventRun, run_id)
+            assert run is not None
+            statuses = [entry["status"] for entry in run.log]
+        # L'étape en cours d'écriture au moment de l'annulation est bien consignée.
+        assert statuses[0] == "RUNNING"
+        assert statuses[-1] == "CANCELLED"
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 

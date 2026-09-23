@@ -396,22 +396,35 @@ async def _execute_run(
     progression.
     """
     topic = topics.server_topic(server_id, "event_run")
+    # Les écritures d'une exécution passent une à une, dans l'ordre : le compte
+    # rendu d'annulation ne doit pas écraser celui de l'étape encore en cours
+    # d'écriture.
+    write_lock = asyncio.Lock()
+
+    async def persist(progress: RunProgress) -> None:
+        async with write_lock:
+            try:
+                async with session_scope() as session:
+                    run = await session.get(EventRun, run_id)
+                    if run is None:  # pragma: no cover - supprimé entre-temps
+                        return
+                    run.current_step = progress.current_step
+                    run.log = [*(run.log or []), progress.to_dict()]
+                    if progress.status is not RunStatus.RUNNING:
+                        run.status = EventRunStatus(progress.status.value)
+                        run.finished_at = datetime.now(UTC)
+                        run.error = progress.error
+            except Exception as exc:
+                logger.warning("event_progress_persist_failed", run_id=run_id, error=str(exc))
 
     async def report(progress: RunProgress) -> None:
         bus.publish(topic, {"run_id": run_id, "server_id": server_id, **progress.to_dict()})
-        try:
-            async with session_scope() as session:
-                run = await session.get(EventRun, run_id)
-                if run is None:  # pragma: no cover - supprimé entre-temps
-                    return
-                run.current_step = progress.current_step
-                run.log = [*(run.log or []), progress.to_dict()]
-                if progress.status is not RunStatus.RUNNING:
-                    run.status = EventRunStatus(progress.status.value)
-                    run.finished_at = datetime.now(UTC)
-                    run.error = progress.error
-        except Exception as exc:
-            logger.warning("event_progress_persist_failed", run_id=run_id, error=str(exc))
+        # Une annulation tombant au milieu d'une requête abandonne la connexion
+        # avec sa transaction ouverte : le verrou d'écriture SQLite reste pris
+        # jusqu'au passage du ramasse-miettes, et toute autre écriture échoue
+        # entre-temps sur « database is locked ». L'écriture va donc au bout,
+        # l'annulation prend effet juste après.
+        await asyncio.shield(persist(progress))
 
     runtime = supervisor.find(server_id)
     if runtime is None:  # pragma: no cover - serveur retiré entre-temps
