@@ -12,6 +12,7 @@ import {
   Archive,
   CalendarClock,
   FileCog,
+  Link2,
   Package,
   Puzzle,
   Settings,
@@ -20,7 +21,13 @@ import {
   Timer,
   Users,
 } from 'lucide-react'
-import { hasPermission, useMe, useServer, useServerStatus } from '@/hooks/useApi'
+import {
+  hasPermission,
+  useLauncherLink,
+  useMe,
+  useServer,
+  useServerStatus,
+} from '@/hooks/useApi'
 import { useServerSubscription } from '@/hooks/useServerSubscription'
 import { formatUptime, formatMemory, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -28,6 +35,7 @@ import { LoadingBlock } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ServerStatusBadge } from '@/components/servers/ServerStatusBadge'
 import { ServerActions } from '@/components/servers/ServerActions'
+import { SyncCountdown } from '@/components/launcher/SyncCountdown'
 
 interface TabDefinition {
   to: string
@@ -50,6 +58,7 @@ const TABS: TabDefinition[] = [
   // qui n'a pas encore de monde — c'est justement le moment d'y penser.
   { to: 'backups', label: 'Sauvegardes', icon: Archive },
   { to: 'schedules', label: 'Planification', icon: Timer },
+  { to: 'launcher', label: 'Launcher', icon: Link2 },
 ]
 
 export function ServerLayout() {
@@ -58,6 +67,7 @@ export function ServerLayout() {
   const { data: server, isLoading, error } = useServer(serverId)
   const { data: me } = useMe()
   const status = useServerStatus(serverId, server?.status)
+  const { data: launcherLink } = useLauncherLink(serverId)
 
   useServerSubscription(serverId)
 
@@ -126,6 +136,17 @@ export function ServerLayout() {
             <dt className="text-slate-500">Joueurs</dt>
             <dd className="tabular-nums text-slate-300">{status?.players_online ?? 0}</dd>
           </div>
+          {launcherLink ? (
+            <div className="flex gap-1.5">
+              <dt className="text-slate-500">Synchro launcher</dt>
+              <dd className="text-slate-300">
+                <SyncCountdown serverId={serverId} link={launcherLink} />
+                {launcherLink.pending ? (
+                  <span className="ml-1.5 text-sky-300">· changements en attente</span>
+                ) : null}
+              </dd>
+            </div>
+          ) : null}
         </dl>
 
         <nav className="mt-4 flex gap-1 overflow-x-auto">

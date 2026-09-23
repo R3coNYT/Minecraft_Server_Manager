@@ -418,6 +418,26 @@ service. L'empreinte publiée est vérifiée avant d'installer, et l'hôte est
 revalidé juste avant la requête — une API compromise ne pourrait pas rediriger
 ailleurs.
 
+**Intégration launcher.** Un serveur peut être relié au serveur de fichiers d'un
+launcher personnalisé ([protocole](LAUNCHER_INTEGRATION.md)). Le partage des
+autorités est net : le serveur de fichiers décide du **contenu** du modpack, MSM
+de l'**activation** de chaque mod. Tout part de MSM — lecture du manifest, envoi
+de l'état par `PUT /msm/state` — pour qu'il n'ait jamais à être exposé.
+
+Le calcul (`launcher_sync.plan`) est pur : manifest, disque et fichiers déjà
+installés par MSM en entrée, liste d'opérations en sortie. C'est ce qui permet de
+l'examiner avant d'agir : bloquer une suppression massive, ou le mettre en attente
+quand le serveur tourne. MSM ne retire que ce qu'il a installé (table
+`launcher_files`) ; un mod posé à la main n'est jamais touché. Les mods client
+sont écartés d'après le manifest ou la lecture du JAR, avec forçage possible.
+
+Un plan en attente est appliqué par un **point d'accroche avant démarrage** du
+superviseur, après la vérification de l'état et avant le lancement de Java. Ce
+point s'exécute pendant la requête de démarrage, dont la transaction SQLite tient
+déjà le verrou d'écriture : il ne fait donc que lire en base, écrire sur le disque,
+et confie la tenue des registres à une tâche de fond. Si cette tâche échoue, la
+synchronisation suivante retrouve les fichiers en place et se rattrape.
+
 ---
 
 ## 13. Extensibilité

@@ -20,7 +20,7 @@ from msm.bus import EventBus, get_event_bus
 from msm.exceptions import ConflictError, NotFoundError
 from msm.logging_conf import get_logger
 from msm.runtime.backends import ProcessBackend
-from msm.runtime.server_runtime import ServerRuntime, ServerRuntimeConfig
+from msm.runtime.server_runtime import PreStartHook, ServerRuntime, ServerRuntimeConfig
 
 logger = get_logger(__name__)
 
@@ -37,6 +37,25 @@ class Supervisor:
         self._bus = bus or get_event_bus()
         self._backend = backend
         self._runtimes: dict[int, ServerRuntime] = {}
+        self._pre_start_hooks: list[PreStartHook] = []
+
+    # ------------------------------------------------------------------ #
+    #  Préparation avant démarrage
+    # ------------------------------------------------------------------ #
+    def add_pre_start_hook(self, hook: PreStartHook) -> None:
+        """Ajoute une préparation exécutée avant chaque démarrage de serveur.
+
+        Elle s'applique à tous les démarrages — manuel, automatique au lancement
+        de MSM, redémarrage après plantage — sans que chacun de ces chemins ait à
+        y penser.
+        """
+        self._pre_start_hooks.append(hook)
+
+    async def _run_pre_start_hooks(self, server_id: int) -> list[str]:
+        messages: list[str] = []
+        for hook in self._pre_start_hooks:
+            messages.extend(await hook(server_id))
+        return messages
 
     # ------------------------------------------------------------------ #
     #  Registre
@@ -49,7 +68,12 @@ class Supervisor:
                 cause=f"Un runtime existe déjà pour l'identifiant {config.id}.",
                 remediation="Recharger la configuration du serveur au lieu de l'enregistrer.",
             )
-        runtime = ServerRuntime(config, bus=self._bus, backend=self._backend)
+        runtime = ServerRuntime(
+            config,
+            bus=self._bus,
+            backend=self._backend,
+            pre_start=self._run_pre_start_hooks,
+        )
         self._runtimes[config.id] = runtime
         logger.info("server_registered", server_id=config.id, server=config.name)
         return runtime

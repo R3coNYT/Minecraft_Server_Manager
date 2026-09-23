@@ -32,6 +32,7 @@ from msm.runtime.stats import system_stats
 from msm.runtime.supervisor import Supervisor
 from msm.services.backup_service import BackupService
 from msm.services.event_service import EventService
+from msm.services.launcher_service import LauncherSyncer, make_pre_start_hook
 from msm.services.metrics_recorder import MetricsRecorder
 from msm.services.notifier import Notifier
 from msm.services.player_recorder import PlayerRecorder
@@ -67,6 +68,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     init_engine(settings)
     supervisor = Supervisor(bus=get_event_bus())
+    # Avant chaque démarrage : appliquer les mods synchronisés mis en attente.
+    supervisor.add_pre_start_hook(make_pre_start_hook(settings))
     app.state.supervisor = supervisor
     app.state.agent = LocalAgent(supervisor)
 
@@ -113,6 +116,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     scheduler.start()
     notifier = Notifier(get_event_bus(), load_notification_settings)
     notifier.start()
+    launcher_syncer = LauncherSyncer(supervisor, settings)
+    launcher_syncer.start()
+    app.state.launcher_syncer = launcher_syncer
 
     logger.info(
         "msm_started",
@@ -134,6 +140,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await metrics_recorder.stop()
         await scheduler.stop()
         await notifier.stop()
+        await launcher_syncer.stop()
         # Les serveurs Minecraft ne sont PAS arrêtés : redémarrer le panel ne doit
         # pas déconnecter les joueurs. Ils seront réadoptés au prochain démarrage.
         await supervisor.shutdown(stop_servers=False)

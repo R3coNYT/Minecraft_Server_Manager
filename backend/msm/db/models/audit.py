@@ -76,6 +76,10 @@ class AuditAction(str, Enum):
     SCHEDULE_UPDATED = "schedule.updated"
     SCHEDULE_RUN = "schedule.run"
 
+    # Intégration launcher
+    LAUNCHER_UPDATED = "launcher.updated"
+    LAUNCHER_SYNCED = "launcher.synced"
+
     # Administration
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api } from '@/lib/api'
 import { useRealtime } from '@/stores/realtime'
-import type { Me, Server, ServerStatus } from '@/lib/types'
+import type { LauncherLink, Me, Server, ServerStatus } from '@/lib/types'
 
 export const queryKeys = {
   me: ['me'] as const,
@@ -14,6 +14,7 @@ export const queryKeys = {
   audit: (params: Record<string, unknown>) => ['audit', params] as const,
   users: ['users'] as const,
   health: ['health'] as const,
+  launcherLink: (id: number) => ['launcher-link', id] as const,
 }
 
 /**
@@ -154,4 +155,18 @@ export function useLifecycleActions(serverId: number) {
 /** L'utilisateur possède-t-il cette permission ? */
 export function hasPermission(me: Me | null | undefined, permission: string): boolean {
   return me?.permissions.includes(permission) ?? false
+}
+
+/**
+ * Liaison avec le serveur de fichiers d'un launcher. `null` : aucune liaison.
+ *
+ * Relue régulièrement : les synchronisations se déroulent en tâche de fond, et
+ * le compte à rebours doit repartir dès que l'une d'elles s'est terminée.
+ */
+export function useLauncherLink(serverId: number) {
+  return useQuery<LauncherLink | null>({
+    queryKey: queryKeys.launcherLink(serverId),
+    queryFn: async () => (await api.launcherLink.get(serverId)) ?? null,
+    refetchInterval: 30_000,
+  })
 }

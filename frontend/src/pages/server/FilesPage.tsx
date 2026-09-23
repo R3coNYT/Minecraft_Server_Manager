@@ -8,13 +8,14 @@
  */
 
 import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Package, Trash2, Upload } from 'lucide-react'
+import { CloudDownload, Package, Trash2, Upload } from 'lucide-react'
 import { api } from '@/lib/api'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { hasPermission, useLauncherLink, useMe } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { formatBytes, formatRelative } from '@/lib/format'
-import type { ManagedFile } from '@/lib/types'
+import type { LauncherLink, ManagedFile } from '@/lib/types'
 import { useServerContext } from './context'
 import { Card, CardHeader, EmptyState, LoadingBlock } from '@/components/ui/primitives'
 import { Button } from '@/components/ui/Button'
@@ -42,6 +43,7 @@ export function FilesPage({ area, label }: FilesPageProps) {
   const canDelete = hasPermission(me, 'file:delete')
   const canToggle = hasPermission(me, 'file:toggle')
 
+  const { data: launcherLink } = useLauncherLink(server.id)
   const { data, isLoading, error } = useQuery({
     queryKey: ['files', server.id, area],
     queryFn: () => api.files.list(server.id, area),
@@ -106,6 +108,8 @@ export function FilesPage({ area, label }: FilesPageProps) {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-4 p-4 sm:p-6">
         <ErrorPanel error={error} />
+
+        {launcherLink ? <LauncherNotice area={area} link={launcherLink} /> : null}
 
         <Card>
           <CardHeader
@@ -239,6 +243,27 @@ export function FilesPage({ area, label }: FilesPageProps) {
         }
         onClose={() => setPendingOverwrite(null)}
       />
+    </div>
+  )
+}
+
+/** Rappelle que ce dossier est relié au launcher, et ce qui attend le redémarrage. */
+function LauncherNotice({ area, link }: { area: string; link: LauncherLink }) {
+  const synced = link.sync_paths.some((path) => path.startsWith(`${area}/`) || path === `${area}/`)
+  if (!synced || !link.enabled) return null
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-sky-900/60 bg-sky-950/30 px-4 py-3 text-sm text-sky-100">
+      <CloudDownload className="mt-0.5 size-4 shrink-0 text-sky-300" />
+      <span>
+        {link.pending
+          ? `Synchronisation launcher en attente : ${link.pending.installs} à installer, ${link.pending.removes} à retirer au prochain démarrage. `
+          : 'Dossier synchronisé avec le serveur de fichiers du launcher. '}
+        Activer ou désactiver un mod ici le fait aussi pour les joueurs
+        {link.push_configured ? '' : ' (dès qu’un jeton d’écriture sera configuré)'}.{' '}
+        <Link to="../launcher" relative="path" className="text-sky-300 underline-offset-2 hover:underline">
+          Voir la liaison
+        </Link>
+      </span>
     </div>
   )
 }

@@ -130,6 +130,11 @@ class Settings(BaseSettings):
     #: Retard au-delà duquel une exécution manquée n'est plus rattrapée.
     scheduler_grace_minutes: int = Field(default=60, ge=0, le=24 * 60)
 
+    # --- Intégration launcher -------------------------------------------
+    #: Fréquence de réveil de la boucle : synchronisations dues, changements en
+    #: attente d'un serveur arrêté, état à publier aux joueurs.
+    launcher_tick_s: float = Field(default=30.0, ge=1.0, le=600.0)
+
     # --- Métriques --------------------------------------------------------
     metrics_enabled: bool = True
     #: Un point par serveur et par intervalle ; 30 s = 2 880 points par jour.

@@ -20,6 +20,7 @@ import { PropertiesPage } from '@/pages/server/PropertiesPage'
 import { EventsPage } from '@/pages/server/EventsPage'
 import { BackupsPage } from '@/pages/server/BackupsPage'
 import { SchedulesPage } from '@/pages/server/SchedulesPage'
+import { LauncherPage } from '@/pages/server/LauncherPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 /**
@@ -77,6 +78,7 @@ export function App() {
           <Route path="events" element={<EventsPage />} />
           <Route path="backups" element={<BackupsPage />} />
           <Route path="schedules" element={<SchedulesPage />} />
+          <Route path="launcher" element={<LauncherPage />} />
         </Route>
       </Route>
 

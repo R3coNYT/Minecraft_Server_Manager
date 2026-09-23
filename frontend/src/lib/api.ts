@@ -21,6 +21,8 @@ import type {
   Detection,
   Health,
   LauncherInfo,
+  LauncherLink,
+  ModSide,
   ActionType,
   ConfigEntry,
   ConfigFile,
@@ -397,6 +399,28 @@ export const api = {
       }),
     run: (serverId: number, scheduleId: number) =>
       request<Schedule>(`/servers/${serverId}/schedules/${scheduleId}/run`, { method: 'POST' }),
+  },
+
+  launcherLink: {
+    /** `undefined` : aucun serveur de fichiers n'est relié à ce serveur (204). */
+    get: (serverId: number) =>
+      request<LauncherLink | undefined>(`/servers/${serverId}/launcher`),
+    configure: (serverId: number, payload: Record<string, unknown>) =>
+      request<LauncherLink>(`/servers/${serverId}/launcher`, { method: 'PUT', body: payload }),
+    remove: (serverId: number) =>
+      request<{ status: string }>(`/servers/${serverId}/launcher`, { method: 'DELETE' }),
+    sync: (serverId: number, allowMassDelete = false) =>
+      request<LauncherLink>(`/servers/${serverId}/launcher/sync`, {
+        method: 'POST',
+        body: { allow_mass_delete: allowMassDelete },
+      }),
+    publish: (serverId: number) =>
+      request<LauncherLink>(`/servers/${serverId}/launcher/publish`, { method: 'POST' }),
+    setSide: (serverId: number, path: string, side: ModSide | null) =>
+      request<LauncherLink>(`/servers/${serverId}/launcher/side`, {
+        method: 'PUT',
+        body: { path, side },
+      }),
   },
 
   notifications: {

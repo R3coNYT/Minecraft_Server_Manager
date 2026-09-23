@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Path, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Path, Query, Request, UploadFile, status
 
 from msm.api.deps import (
     AppSettings,
@@ -128,12 +128,21 @@ async def toggle_file(
     access: ServerAccess,
     service: FilesDep,
     ip: ClientIp,
+    request: Request,
 ) -> ManagedFileOut:
-    """Renomme le fichier plutôt que de le supprimer : le retour arrière reste possible."""
+    """Renomme le fichier plutôt que de le supprimer : le retour arrière reste possible.
+
+    Si le serveur est relié au serveur de fichiers d'un launcher, le nouvel état
+    lui est publié aussitôt, pour que les joueurs le reçoivent à leur prochaine
+    synchronisation.
+    """
     server, context = access
     result = await service.set_enabled(
         server, area, name, enabled=payload.enabled, context=context, ip_address=ip
     )
+    syncer = getattr(request.app.state, "launcher_syncer", None)
+    if syncer is not None:
+        syncer.notify_mods_changed(server.id)
     return ManagedFileOut(**result.to_dict())
 
 

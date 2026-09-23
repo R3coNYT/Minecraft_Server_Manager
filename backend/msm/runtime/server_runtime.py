@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -73,6 +74,11 @@ class ServerRuntimeConfig:
     restart_policy: RestartPolicy = field(default_factory=RestartPolicy)
 
 
+#: Préparation appelée juste avant de lancer le processus ; renvoie les
+#: messages à afficher dans la console.
+PreStartHook = Callable[[int], Awaitable[list[str]]]
+
+
 @dataclass(frozen=True, slots=True)
 class AdoptedProcess:
     """Un processus retrouvé vivant après un redémarrage de MSM.
@@ -96,10 +102,15 @@ class ServerRuntime:
         *,
         bus: EventBus | None = None,
         backend: ProcessBackend | None = None,
+        pre_start: PreStartHook | None = None,
     ) -> None:
         self._config = config
         self._bus = bus or get_event_bus()
         self._backend = backend
+        #: Préparation avant démarrage, fournie par le superviseur. Le runtime
+        #: l'appelle sans savoir ce qu'elle fait — aujourd'hui, appliquer les
+        #: mods synchronisés depuis le serveur de fichiers d'un launcher.
+        self._pre_start = pre_start
         #: Backend résolu, utilisé pour agir sur un processus réadopté.
         self._backend_ref = backend or get_backend()
 
@@ -271,6 +282,7 @@ class ServerRuntime:
         self._pipeline.emit_system(
             f"Démarrage du serveur « {self._config.name} » demandé par {actor or 'MSM'}."
         )
+        await self._run_pre_start()
 
         try:
             spec = self._build_spec()
@@ -342,6 +354,27 @@ class ServerRuntime:
             pid=spawned.pid,
             group_id=spawned.group_id,
         )
+
+    async def _run_pre_start(self) -> None:
+        """Exécute la préparation avant démarrage, sans jamais bloquer le démarrage.
+
+        Un échec est affiché dans la console puis ignoré : un serveur qui démarre
+        avec ses anciens mods vaut mieux qu'un serveur qui ne démarre pas.
+        """
+        if self._pre_start is None:
+            return
+        try:
+            messages = await self._pre_start(self.id)
+        except Exception as exc:
+            logger.warning("pre_start_failed", server_id=self.id, error=str(exc))
+            self._pipeline.emit_system(
+                f"Préparation avant démarrage échouée : {getattr(exc, 'message', exc)} "
+                "— démarrage avec les fichiers actuels.",
+                level=LogLevel.WARN,
+            )
+            return
+        for message in messages:
+            self._pipeline.emit_system(message)
 
     def _build_spec(self) -> Any:
         launcher = launcher_registry.get(self._config.launcher_key)

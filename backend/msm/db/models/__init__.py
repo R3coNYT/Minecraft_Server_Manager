@@ -5,6 +5,7 @@ c'est ce dont Alembic a besoin pour détecter les changements de schéma.
 """
 
 from msm.db.models.audit import AuditAction, AuditLog, AuditResult
+from msm.db.models.launcher import LauncherFile, LauncherIntegration, SyncStatus
 from msm.db.models.metrics import MetricSample
 from msm.db.models.misc import (
     AppSetting,
@@ -35,6 +36,8 @@ __all__ = [
     "EventDefinition",
     "EventRun",
     "EventRunStatus",
+    "LauncherFile",
+    "LauncherIntegration",
     "MetricSample",
     "Player",
     "Schedule",
@@ -45,6 +48,7 @@ __all__ = [
     "ServerRuntimeStateRow",
     "ServerSettings",
     "SkinCache",
+    "SyncStatus",
     "User",
     "UserSession",
 ]

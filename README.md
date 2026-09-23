@@ -25,7 +25,7 @@ sauvegardes et tâches programmées.
 - [x] **Phase 3** — fichiers : mods, plugins, éditeur de configurations, server.properties
 - [x] **Phase 4** — événements : actions immédiates, séquences enregistrées, exécution en tâche de fond annulable
 - [x] **Phase 5** — administration : sauvegardes (mondes et configurations, à chaud), restauration, historique des ressources
-- [x] **Phase 6** — extensions : planification, notifications Discord, installation de versions
+- [x] **Phase 6** — extensions : planification, notifications Discord, installation de versions, intégration avec un launcher personnalisé
 - [ ] **Phase 7** — agents : piloter des serveurs hébergés sur d'autres machines
 
 ## Installation sur un serveur Linux
@@ -42,6 +42,7 @@ compilée et servie par MSM lui-même. Détails et options : [docs/DEPLOY.md](do
 - [Architecture](docs/ARCHITECTURE.md) — conception complète, décisions techniques et justifications
 - [Déploiement](docs/DEPLOY.md) — installation, reverse proxy, sauvegarde, mise à jour
 - [Développement](docs/DEVELOPMENT.md) — installation locale, tests, conventions
+- [Intégration launcher](docs/LAUNCHER_INTEGRATION.md) — synchroniser les mods avec le serveur de fichiers d'un launcher, route à ajouter côté launcher
 
 ## Démarrage rapide (développement)
 

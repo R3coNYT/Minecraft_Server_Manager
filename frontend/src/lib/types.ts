@@ -480,3 +480,67 @@ export interface Health {
   process_backend: string
   servers_registered: number
 }
+
+// --- Intégration avec le serveur de fichiers d'un launcher -------------------
+
+export type LauncherSyncStatus =
+  | 'NEVER'
+  | 'UP_TO_DATE'
+  | 'APPLIED'
+  | 'PENDING_RESTART'
+  | 'BLOCKED'
+  | 'FAILED'
+
+export type ModSide = 'client' | 'server' | 'both'
+
+export interface LauncherLinkMod {
+  path: string
+  sha256: string
+  size: number
+  side: ModSide
+  /** D'où vient le côté retenu : forcé dans MSM, déclaré, détecté ou par défaut. */
+  side_source: 'override' | 'manifest' | 'detected' | 'default'
+  declared_side: ModSide | null
+  override: ModSide | null
+  disabled_upstream: boolean
+  on_server: 'enabled' | 'disabled' | 'absent'
+}
+
+export interface LauncherLink {
+  enabled: boolean
+  file_server_url: string
+  sync_paths: string[]
+  interval_minutes: number
+  push_configured: boolean
+  push_token_hint: string | null
+  push_token_unreadable: boolean
+  next_sync_at: string | null
+  last_sync_at: string | null
+  last_sync_status: LauncherSyncStatus
+  last_sync_error: string | null
+  last_sync_summary: {
+    installs?: number
+    removes?: number
+    adopted?: number
+    unchanged?: number
+    client_only?: number
+    download_bytes?: number
+    notes?: string[]
+  }
+  pack_version: string | null
+  pending: {
+    installs: number
+    removes: number
+    download_bytes: number
+    server_running: boolean
+  } | null
+  publish: {
+    state_revision: number
+    pushed_revision: number
+    up_to_date: boolean
+    disabled_files: string[]
+    last_push_at: string | null
+    last_push_error: string | null
+  }
+  mods: LauncherLinkMod[]
+}
