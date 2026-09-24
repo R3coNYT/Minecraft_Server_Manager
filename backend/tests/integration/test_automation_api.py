@@ -605,7 +605,7 @@ class TestDownloads:
 
         async def fake_resolve(source: str, version: str) -> DownloadTarget:
             return DownloadTarget(
-                url="https://api.papermc.io/paper.jar",
+                url="https://fill-data.papermc.io/paper.jar",
                 filename="paper-1.21.1-119.jar",
                 checksum=None,
                 algorithm=None,

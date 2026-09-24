@@ -384,3 +384,56 @@ class TestDownloadWithoutChecksum:
         assert (tmp_path / "x.jar").read_bytes() == body
         assert seen[-1] == (len(body), len(body))
         await client.aclose()
+
+
+@pytest.mark.asyncio
+class TestPaperFill:
+    """PaperMC a arrêté son API v2 ; l'API « Fill » v3 la remplace."""
+
+    async def test_versions_are_flattened_and_unstable_ones_set_aside(self) -> None:
+        body = {"versions": {"1.21": ["1.21.11", "1.21.11-rc3", "1.21.10"], "1.20": ["1.20.6"]}}
+        client = httpx.AsyncClient(
+            transport=transport({sources_module.PAPER_API: httpx.Response(200, json=body)})
+        )
+
+        versions = await list_versions("paper", client=client)
+
+        assert [(item.id, item.channel) for item in versions] == [
+            ("1.21.11", "release"),
+            ("1.21.11-rc3", "snapshot"),
+            ("1.21.10", "release"),
+            ("1.20.6", "release"),
+        ]
+        await client.aclose()
+
+    async def test_the_newest_stable_build_is_chosen_and_verified(self) -> None:
+        def build(number: int, channel: str) -> dict:
+            return {
+                "id": number,
+                "channel": channel,
+                "downloads": {
+                    "server:default": {
+                        "name": f"paper-1.21.1-{number}.jar",
+                        "checksums": {"sha256": str(number % 10) * 64},
+                        "size": 49_000_000,
+                        "url": f"https://fill-data.papermc.io/v1/objects/x/paper-1.21.1-{number}.jar",
+                    }
+                },
+            }
+
+        client = httpx.AsyncClient(
+            transport=transport(
+                {
+                    f"{sources_module.PAPER_API}/versions/1.21.1/builds": httpx.Response(
+                        200, json=[build(134, "BETA"), build(133, "STABLE"), build(132, "STABLE")]
+                    )
+                }
+            )
+        )
+
+        target = await resolve("paper", "1.21.1", client=client)
+
+        assert target.filename == "paper-1.21.1-133.jar"
+        assert (target.algorithm, target.checksum) == ("sha256", "3" * 64)
+        assert httpx.URL(target.url).host in ALLOWED_HOSTS
+        await client.aclose()

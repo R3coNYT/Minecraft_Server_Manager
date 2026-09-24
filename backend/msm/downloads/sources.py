@@ -36,8 +36,23 @@ logger = get_logger(__name__)
 
 REQUEST_TIMEOUT_S = 20.0
 
+#: PaperMC exige un `User-Agent` qui identifie le client et un moyen de contact ;
+#: les autres sources l'apprécient autant.
+USER_AGENT = "MinecraftServerManager (+https://github.com/R3coNYT/Minecraft_Server_Manager)"
+
+
+def new_client() -> httpx.AsyncClient:
+    """Client HTTP de MSM vers les sources officielles."""
+    return httpx.AsyncClient(
+        timeout=REQUEST_TIMEOUT_S,
+        follow_redirects=True,
+        headers={"User-Agent": USER_AGENT},
+    )
+
+
 MOJANG_MANIFEST = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
-PAPER_API = "https://api.papermc.io/v2/projects/paper"
+#: API « Fill » de PaperMC ; l'ancienne API v2 a été arrêtée (410 « sunset »).
+PAPER_API = "https://fill.papermc.io/v3/projects/paper"
 PURPUR_API = "https://api.purpurmc.org/v2/purpur"
 FABRIC_META = "https://meta.fabricmc.net/v2/versions"
 NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
@@ -51,7 +66,8 @@ ALLOWED_HOSTS: frozenset[str] = frozenset(
         "launchermeta.mojang.com",
         "piston-meta.mojang.com",
         "piston-data.mojang.com",
-        "api.papermc.io",
+        "fill.papermc.io",
+        "fill-data.papermc.io",
         "api.purpurmc.org",
         "meta.fabricmc.net",
         "maven.neoforged.net",
@@ -209,46 +225,49 @@ async def _vanilla_target(
 
 
 # --------------------------------------------------------------------------- #
-#  PaperMC
+#  PaperMC (API « Fill » v3)
 # --------------------------------------------------------------------------- #
 async def _paper_versions(client: httpx.AsyncClient) -> list[VersionInfo]:
     data = await _get_json(client, PAPER_API)
-    # L'API liste de la plus ancienne à la plus récente ; l'inverse est plus utile.
-    return [VersionInfo(id=str(version)) for version in reversed(data.get("versions", []))]
+    # Versions groupées par famille (« 1.21 » → [« 1.21.11 », …]), plus récentes
+    # d'abord ; les release candidates et pré-versions restent en retrait.
+    versions: list[VersionInfo] = []
+    for group in (data.get("versions") or {}).values():
+        for value in group:
+            unstable = "-rc" in value or "-pre" in value
+            versions.append(
+                VersionInfo(id=str(value), channel="snapshot" if unstable else "release")
+            )
+    return versions
 
 
 async def _paper_target(
     client: httpx.AsyncClient, version: str, build: str | None = None
 ) -> DownloadTarget:
     builds = await _get_json(client, f"{PAPER_API}/versions/{version}/builds")
-    stable = [
-        build
-        for build in builds.get("builds", [])
-        if build.get("channel") in (None, "default", "stable")
-    ]
-    chosen = (stable or builds.get("builds") or [None])[-1]
-    if not chosen:
+    if not isinstance(builds, list) or not builds:
         raise NotFoundError(
             tr("No build available."),
             cause=tr("PaperMC publishes no build for “{version}”.", version=version),
             remediation=tr("Choose another version."),
         )
+    # La liste arrive du plus récent au plus ancien : le premier stable l'emporte.
+    chosen = next((item for item in builds if item.get("channel") == "STABLE"), builds[0])
 
-    application = (chosen.get("downloads") or {}).get("application") or {}
-    name = application.get("name")
-    if not name or not application.get("sha256"):
+    download = (chosen.get("downloads") or {}).get("server:default") or {}
+    checksum = (download.get("checksums") or {}).get("sha256")
+    if not download.get("url") or not download.get("name") or not checksum:
         raise DownloadUnavailable(
             tr("Build without a downloadable file."),
             cause=tr("PaperMC has published no checksum for this build."),
             remediation=tr("Try again later, or choose another version."),
         )
-
-    number = chosen["build"]
     return DownloadTarget(
-        url=f"{PAPER_API}/versions/{version}/builds/{number}/downloads/{name}",
-        filename=str(name),
-        checksum=str(application["sha256"]),
+        url=str(download["url"]),
+        filename=str(download["name"]),
+        checksum=str(checksum),
         algorithm="sha256",
+        size_bytes=download.get("size"),
     )
 
 
@@ -563,7 +582,7 @@ async def list_versions(
     """Versions proposées par une source."""
     handler = _source(source)["versions"]
     owned = client is None
-    http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
+    http = client or new_client()
     try:
         return await handler(http)
     finally:
@@ -579,7 +598,7 @@ async def list_builds(
     if handler is None:
         return []
     owned = client is None
-    http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
+    http = client or new_client()
     try:
         return await handler(http, version)
     finally:
@@ -597,7 +616,7 @@ async def resolve(
     """Résout une version (et un build, sinon le plus récent stable) en URL vérifiable."""
     handler = _source(source)["target"]
     owned = client is None
-    http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
+    http = client or new_client()
     try:
         target = await handler(http, version, build)
     finally:

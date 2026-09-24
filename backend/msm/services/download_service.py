@@ -27,10 +27,10 @@ from msm.db.models.audit import AuditAction
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
 from msm.downloads.sources import (
-    REQUEST_TIMEOUT_S,
     SOURCES,
     DownloadTarget,
     list_versions,
+    new_client,
     resolve,
 )
 from msm.exceptions import ServerAlreadyRunning, ValidationError
@@ -167,7 +167,7 @@ async def download_file(
     partial = destination.with_name(destination.name + ".part")
     digest = hashlib.new(target.algorithm) if target.algorithm else None
     written = 0
-    http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
+    http = client or new_client()
 
     try:
         async with http.stream("GET", target.url) as response:
