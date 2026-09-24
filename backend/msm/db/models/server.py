@@ -1,4 +1,4 @@
-"""Serveurs Minecraft : identité, réglages, état persistant, droits par serveur."""
+"""Serveurs Minecraft : identité, propriétaire, réglages, état persistant, membres."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from msm.core.permissions import ServerRole
 from msm.core.restart_policy import AutoRestartMode
 from msm.core.states import ServerState
 from msm.db.base import Base, TimestampMixin
@@ -32,9 +33,17 @@ class Server(Base, TimestampMixin):
     """Un serveur Minecraft géré par le panel."""
 
     __tablename__ = "servers"
+    #: Deux comptes peuvent chacun avoir leur « Survie » : le nom est unique par
+    #: propriétaire, pas sur tout MSM.
+    __table_args__ = (UniqueConstraint("owner_id", "name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    #: Le compte qui a créé le serveur. Un compte ne peut pas être supprimé tant
+    #: qu'il possède des serveurs.
+    owner_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
     slug: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text)
 
@@ -61,7 +70,8 @@ class Server(Base, TimestampMixin):
     runtime_state: Mapped[ServerRuntimeStateRow] = relationship(
         back_populates="server", cascade="all, delete-orphan", uselist=False
     )
-    permissions: Mapped[list[ServerPermission]] = relationship(
+    owner: Mapped[User] = relationship(foreign_keys=[owner_id], lazy="joined")
+    members: Mapped[list[ServerMember]] = relationship(
         back_populates="server", cascade="all, delete-orphan"
     )
 
@@ -150,28 +160,26 @@ class ServerRuntimeStateRow(Base):
     server: Mapped[Server] = relationship(back_populates="runtime_state")
 
 
-class ServerPermission(Base, TimestampMixin):
-    """Surcharge de droits d'un utilisateur sur un serveur donné.
+class ServerMember(Base, TimestampMixin):
+    """Compte avec qui un serveur est partagé, et son rôle dessus.
 
-    Permet à un modérateur d'administrer certains serveurs et pas d'autres, sans
-    créer un rôle global par combinaison.
+    Le propriétaire n'y figure pas : il est porté par `servers.owner_id`.
     """
 
-    __tablename__ = "server_permissions"
-    __table_args__ = (UniqueConstraint("user_id", "server_id"),)
+    __tablename__ = "server_members"
+    __table_args__ = (UniqueConstraint("server_id", "user_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
     server_id: Mapped[int] = mapped_column(
         ForeignKey("servers.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    #: `ADMIN` ou `VIEWER` — jamais `OWNER`.
+    role: Mapped[ServerRole] = mapped_column(
+        Enum(ServerRole, native_enum=False, length=16), nullable=False, default=ServerRole.VIEWER
+    )
 
-    #: Permissions ajoutées au rôle, sous forme de valeurs de `Permission`.
-    granted: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    #: Permissions retirées. En cas de conflit, le refus l'emporte.
-    revoked: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-
-    user: Mapped[User] = relationship(back_populates="server_permissions")
-    server: Mapped[Server] = relationship(back_populates="permissions")
+    user: Mapped[User] = relationship(back_populates="memberships")
+    server: Mapped[Server] = relationship(back_populates="members")

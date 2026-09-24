@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from msm.bus import topics
 from msm.config import Settings
+from msm.core.permissions import Permission, sees_every_server
 from msm.core.restart_policy import AutoRestartMode, RestartPolicy
 from msm.core.states import ServerState
 from msm.db.models.audit import AuditAction
@@ -38,8 +39,15 @@ from msm.minecraft.types import ServerType
 from msm.runtime.orphans import find_server_process
 from msm.runtime.server_runtime import ServerRuntimeConfig
 from msm.runtime.supervisor import Supervisor
+from msm.security.rbac import AccessContext
 
 logger = get_logger(__name__)
+
+#: Réglages qui décident de ce qui s'exécute sur la machine : réservés aux admins
+#: de MSM, même sur un serveur dont on est propriétaire.
+LAUNCH_SETTINGS: frozenset[str] = frozenset(
+    {"java_path", "jar_path", "script_path", "custom_argv", "jvm_args", "extra_args", "env"}
+)
 
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
 
@@ -70,8 +78,25 @@ class ServerService:
     # ------------------------------------------------------------------ #
     #  Lecture
     # ------------------------------------------------------------------ #
-    async def list_servers(self) -> list[Server]:
-        return await self._servers.list_all()
+    async def list_servers(self, user: User) -> list[Server]:
+        """Serveurs visibles par ce compte, les siens en premier.
+
+        Un admin ou un modérateur voit tous les serveurs : les siens d'abord, puis
+        ceux des autres regroupés par propriétaire. Un user ne voit que les siens
+        et ceux qu'on lui a partagés.
+        """
+        if sees_every_server(user.role):
+            servers = await self._servers.list_all()
+        else:
+            servers = await self._servers.list_visible_to(user.id)
+        # Tri stable : l'ordre choisi (sort_order, nom) est conservé dans chaque groupe.
+        return sorted(
+            servers,
+            key=lambda server: (
+                server.owner_id != user.id,
+                server.owner.username.casefold() if server.owner_id != user.id else "",
+            ),
+        )
 
     async def get_server(self, server_id: int) -> Server:
         server = await self._servers.get(server_id)
@@ -117,10 +142,10 @@ class ServerService:
                 cause=tr("The name cannot be empty."),
                 remediation=tr("Enter a name for this server."),
             )
-        if await self._servers.get_by_name(clean_name) is not None:
+        if await self._servers.get_by_name(clean_name, owner_id=actor.id) is not None:
             raise ConflictError(
                 tr("This server name is already in use."),
-                cause=tr("A server named “{name}” already exists.", name=clean_name),
+                cause=tr("You already have a server named “{name}”.", name=clean_name),
                 remediation=tr("Choose another name."),
             )
 
@@ -135,6 +160,10 @@ class ServerService:
         launcher_registry.get(launcher_key)  # lève si la clé est inconnue
 
         server = Server(
+            owner_id=actor.id,
+            # Relation posée d'emblée : la réponse affiche le propriétaire, et un
+            # chargement paresseux est impossible en asynchrone.
+            owner=actor,
             name=clean_name,
             slug=await self._unique_slug(clean_name),
             description=description,
@@ -179,10 +208,46 @@ class ServerService:
         *,
         changes: dict[str, Any],
         settings_changes: dict[str, Any] | None = None,
+        context: AccessContext,
         actor: User,
         ip_address: str | None = None,
     ) -> Server:
-        """Modifie un serveur et resynchronise son runtime."""
+        """Modifie un serveur et resynchronise son runtime.
+
+        Chaque champ réellement modifié exige son droit : le dossier et les
+        réglages de lancement sont réservés aux admins de MSM, le démarrage avec
+        MSM aussi, le reste demande le droit de modifier le serveur. Un champ
+        renvoyé à l'identique n'exige rien — un formulaire complet reste
+        enregistrable par qui n'en modifie qu'une partie.
+        """
+        changes = self._actual_changes(server, changes)
+        settings_changes = self._actual_settings_changes(server, settings_changes or {})
+        for permission, action in self._required(changes, settings_changes):
+            context.require(permission, action=action)
+        if not changes and not settings_changes:
+            return server
+
+        # Le démarrage avec MSM n'est lu qu'au lancement de MSM : le changer ne
+        # touche pas au serveur en cours, et peut donc se faire à tout moment.
+        if not changes and set(settings_changes) == {"autostart_on_boot"}:
+            server.settings.autostart_on_boot = bool(settings_changes["autostart_on_boot"])
+            await self._servers.flush()
+            self._audit.record(
+                action=AuditAction.SERVER_UPDATED,
+                summary=tr(
+                    "Server “{name}”: starts with MSM set to {value}.",
+                    name=server.name,
+                    value=tr("yes") if server.settings.autostart_on_boot else tr("no"),
+                ),
+                actor_id=actor.id,
+                actor_username=actor.username,
+                actor_role=actor.role.value,
+                ip_address=ip_address,
+                server_id=server.id,
+                payload={"changes": [], "settings": ["autostart_on_boot"]},
+            )
+            return server
+
         if server.id in self._supervisor:
             runtime = self._supervisor.get(server.id)
             if runtime.state.is_running:
@@ -199,11 +264,11 @@ class ServerService:
         if changes.get("name"):
             new_name = str(changes["name"]).strip()
             if new_name.casefold() != server.name.casefold():
-                existing = await self._servers.get_by_name(new_name)
+                existing = await self._servers.get_by_name(new_name, owner_id=server.owner_id)
                 if existing is not None and existing.id != server.id:
                     raise ConflictError(
                         tr("This server name is already in use."),
-                        cause=tr("A server named “{name}” already exists.", name=new_name),
+                        cause=tr("Its owner already has a server named “{name}”.", name=new_name),
                         remediation=tr("Choose another name."),
                     )
                 server.slug = await self._unique_slug(new_name, exclude_id=server.id)
@@ -523,6 +588,63 @@ class ServerService:
         """Vérifie que la configuration permettra effectivement un démarrage."""
         config = self.build_runtime_config(server)
         launcher_registry.get(config.launcher_key).validate(config.launch)
+
+    @staticmethod
+    def _actual_changes(server: Server, changes: dict[str, Any]) -> dict[str, Any]:
+        """Les champs dont la valeur diffère vraiment de celle enregistrée."""
+        actual: dict[str, Any] = {}
+        for key, value in changes.items():
+            current = getattr(server, key, None)
+            if key == "name" and value is not None:
+                if str(value).strip() == server.name:
+                    continue
+            elif key == "directory" and value is not None:
+                if str(value).strip() == server.directory:
+                    continue
+            elif key == "server_type" and value is not None:
+                if ServerType(value) == server.server_type:
+                    continue
+            elif value == current:
+                continue
+            actual[key] = value
+        return actual
+
+    @staticmethod
+    def _actual_settings_changes(server: Server, changes: dict[str, Any]) -> dict[str, Any]:
+        settings = server.settings
+        actual: dict[str, Any] = {}
+        for key, value in changes.items():
+            current = getattr(settings, key, None) if settings is not None else None
+            if isinstance(current, (list, tuple)) and isinstance(value, (list, tuple)):
+                if list(current) == list(value):
+                    continue
+            elif key == "auto_restart" and value is not None and current is not None:
+                if AutoRestartMode(value) == current:
+                    continue
+            elif value == current:
+                continue
+            actual[key] = value
+        return actual
+
+    @staticmethod
+    def _required(
+        changes: dict[str, Any], settings_changes: dict[str, Any]
+    ) -> list[tuple[Permission, str]]:
+        """Droits exigés par une modification, avec l'action à nommer en cas de refus."""
+        required: list[tuple[Permission, str]] = []
+        ordinary = set(changes) - {"directory", "launcher_key"}
+        ordinary |= set(settings_changes) - LAUNCH_SETTINGS - {"autostart_on_boot"}
+        if ordinary:
+            required.append((Permission.SERVER_EDIT, tr("edit this server")))
+        if "directory" in changes:
+            required.append((Permission.SERVER_EDIT, tr("edit this server")))
+            required.append((Permission.SERVER_REGISTER, tr("change the server's folder")))
+        if "launcher_key" in changes or set(settings_changes) & LAUNCH_SETTINGS:
+            required.append((Permission.SERVER_EDIT, tr("edit this server")))
+            required.append((Permission.SERVER_LAUNCH, tr("change how the server is launched")))
+        if "autostart_on_boot" in settings_changes:
+            required.append((Permission.SERVER_AUTOSTART, tr("choose whether it starts with MSM")))
+        return required
 
     @staticmethod
     def _apply_settings(settings: ServerSettings, changes: dict[str, Any]) -> None:

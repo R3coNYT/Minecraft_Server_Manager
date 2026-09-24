@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -413,10 +413,21 @@ class TestPermissions:
         )
         assert write.status_code == 403
 
-    async def test_viewer_can_read(
+    async def test_a_viewer_member_sees_no_file(
+        self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
+    ) -> None:
+        """Un membre en lecture seule n'a que la vue d'ensemble."""
+        server = await _create(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
+
+        assert (await viewer.get(f"/api/v1/servers/{server['id']}/files/mods")).status_code == 403
+        assert (await viewer.get(f"/api/v1/servers/{server['id']}/configs")).status_code == 403
+
+    async def test_a_server_admin_reads_files(
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "ADMIN")
 
         assert (await viewer.get(f"/api/v1/servers/{server['id']}/files/mods")).status_code == 200
         assert (await viewer.get(f"/api/v1/servers/{server['id']}/configs")).status_code == 200

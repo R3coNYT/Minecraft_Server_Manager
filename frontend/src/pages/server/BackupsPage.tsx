@@ -23,7 +23,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { ApiError, api } from '@/lib/api'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { can } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { useRealtime } from '@/stores/realtime'
 import { formatBytes, formatDateTime, formatPercent, formatRelative } from '@/lib/format'
@@ -139,12 +139,11 @@ function ManifestDialog({
 export function BackupsPage() {
   const { server, status } = useServerContext()
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const push = useToasts((state) => state.push)
   const pushError = useToasts((state) => state.pushError)
 
-  const canBackup = hasPermission(me, 'backup:create')
-  const canRestore = hasPermission(me, 'backup:restore')
+  const canBackup = can(server, 'backup:create')
+  const canRestore = can(server, 'backup:restore')
   const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
 
   const [toRestore, setToRestore] = useState<Backup | null>(null)

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from msm.core.permissions import Permission, ServerRole
 from msm.core.restart_policy import AutoRestartMode
 from msm.minecraft.types import ServerType
 
@@ -113,6 +114,17 @@ class ServerOut(BaseModel):
     #: Instantané du runtime ; ``None`` si le serveur n'est pas sous supervision.
     status: dict[str, Any] | None = None
 
+    owner_id: int
+    owner_username: str
+    #: Rôle du compte courant sur ce serveur ; ``None`` pour un admin ou un
+    #: modérateur de MSM qui le voit sans en être membre.
+    access: ServerRole | None = None
+    #: Partagé avec le compte courant par quelqu'un d'autre.
+    shared: bool = False
+    #: Droits effectifs du compte courant sur ce serveur : l'interface n'affiche
+    #: que ce qu'il peut faire.
+    permissions: list[Permission] = Field(default_factory=list)
+
 
 class JarCandidateOut(BaseModel):
     name: str
@@ -149,4 +161,17 @@ class DashboardOut(BaseModel):
 
     summary: dict[str, Any]
     servers: list[ServerOut]
-    system: dict[str, Any]
+    #: Ressources de la machine ; ``None`` pour qui n'a pas à les voir.
+    system: dict[str, Any] | None = None
+
+
+class MemberOut(BaseModel):
+    user_id: int
+    username: str
+    role: ServerRole
+    added_at: Any
+
+
+class MemberRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    role: ServerRole = ServerRole.VIEWER

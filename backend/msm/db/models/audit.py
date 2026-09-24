@@ -39,6 +39,9 @@ class AuditAction(str, Enum):
     SERVER_STOPPED = "server.stopped"
     SERVER_RESTARTED = "server.restarted"
     SERVER_KILLED = "server.killed"
+    MEMBER_ADDED = "server.member_added"
+    MEMBER_UPDATED = "server.member_updated"
+    MEMBER_REMOVED = "server.member_removed"
 
     # Console
     COMMAND_SENT = "console.command"
@@ -84,6 +87,8 @@ class AuditAction(str, Enum):
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
     USER_DELETED = "user.deleted"
+    #: Ancien réglage fin des droits par serveur, remplacé par les membres.
+    #: Conservé pour relire les entrées existantes du journal.
     PERMISSIONS_UPDATED = "user.permissions_updated"
     SETTINGS_UPDATED = "settings.updated"
 

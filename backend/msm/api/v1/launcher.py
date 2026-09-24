@@ -20,7 +20,9 @@ from msm.api.schemas.launcher import (
     SideRequest,
     SyncRequest,
 )
+from msm.core.permissions import Permission
 from msm.db.models.launcher import LauncherIntegration
+from msm.i18n import tr
 from msm.runtime.supervisor import Supervisor
 from msm.services.launcher_service import LauncherService, describe
 
@@ -57,7 +59,8 @@ def _out(integration: LauncherIntegration, supervisor: Supervisor) -> LauncherOu
 async def get_integration(
     access: ServerAccess, service: LauncherDep, supervisor: SupervisorDep
 ) -> LauncherOut | Response:
-    server, _ = access
+    server, context = access
+    context.require(Permission.SERVER_EDIT, action=tr("view the launcher integration"))
     integration = await service.get(server)
     if integration is None:
         # Pas une erreur : la plupart des serveurs n'ont pas de launcher dédié.

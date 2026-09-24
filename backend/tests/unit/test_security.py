@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from msm.core.permissions import Permission, Role
+from msm.core.permissions import Permission, Role, ServerRole
 from msm.exceptions import PermissionDenied, ValidationError
 from msm.security.password import (
     MIN_PASSWORD_LENGTH,
@@ -12,7 +12,7 @@ from msm.security.password import (
     validate_password_strength,
     verify_password,
 )
-from msm.security.rbac import AccessContext, build_context
+from msm.security.rbac import AccessContext, build_context, build_server_context
 from msm.security.tokens import generate_token, hash_token, tokens_equal
 
 
@@ -87,7 +87,7 @@ class TestAccessContext:
         context = AccessContext(
             user_id=2,
             username="lecteur",
-            role=Role.VIEWER,
+            role=Role.USER,
             permissions=frozenset({Permission.SERVER_VIEW}),
             server_id=3,
         )
@@ -100,35 +100,51 @@ class TestAccessContext:
         assert error.cause and "server:start" in error.cause
         assert error.remediation
 
-    def test_unknown_stored_permission_is_ignored(self) -> None:
-        """Une permission retirée du code ne doit pas bloquer la connexion."""
-
-        class FakeOverride:
-            granted = ("console:write", "permission:qui:nexiste:plus")
-            revoked = ()
-
+    def test_server_context_combines_both_roles(self) -> None:
         class FakeUser:
             id = 5
             username = "moderateur"
             role = Role.MODERATOR
 
-        context = build_context(FakeUser(), server_id=1, override=FakeOverride())  # type: ignore[arg-type]
+        class FakeServer:
+            id = 1
+            owner_id = 9
 
+        context = build_server_context(
+            FakeUser(),  # type: ignore[arg-type]
+            FakeServer(),  # type: ignore[arg-type]
+            member_role=ServerRole.ADMIN,
+        )
+
+        assert context.server_role is ServerRole.ADMIN
         assert context.has(Permission.CONSOLE_WRITE)
+        assert not context.has(Permission.SERVER_DELETE)
 
-    def test_revocation_beats_grant(self) -> None:
-        class FakeOverride:
-            granted = ("console:write",)
-            revoked = ("console:write",)
+    def test_the_owner_is_recognised_whatever_the_membership(self) -> None:
+        class FakeUser:
+            id = 9
+            username = "proprio"
+            role = Role.USER
 
+        class FakeServer:
+            id = 1
+            owner_id = 9
+
+        context = build_server_context(FakeUser(), FakeServer())  # type: ignore[arg-type]
+
+        assert context.server_role is ServerRole.OWNER
+        assert context.has(Permission.SERVER_MEMBERS)
+
+    def test_global_context_ignores_servers(self) -> None:
         class FakeUser:
             id = 5
-            username = "moderateur"
-            role = Role.MODERATOR
+            username = "joueur"
+            role = Role.USER
 
-        context = build_context(FakeUser(), server_id=1, override=FakeOverride())  # type: ignore[arg-type]
+        context = build_context(FakeUser())  # type: ignore[arg-type]
 
-        assert not context.has(Permission.CONSOLE_WRITE)
+        assert context.server_id is None
+        assert context.permissions == frozenset({Permission.SERVER_CREATE})
 
 
 class TestSecretEncryption:

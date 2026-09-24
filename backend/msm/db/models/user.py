@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import secrets
+import string
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -13,7 +15,17 @@ from msm.db.base import Base, TimestampMixin
 from msm.db.types import UtcDateTime
 
 if TYPE_CHECKING:
-    from msm.db.models.server import ServerPermission
+    from msm.db.models.server import ServerMember
+
+
+#: Alphabet des identifiants de stockage : sans ambiguïté dans un chemin.
+_STORAGE_ALPHABET = string.ascii_lowercase + string.digits
+STORAGE_ID_LENGTH = 10
+
+
+def new_storage_id() -> str:
+    """Identifiant court, aléatoire et immuable d'un compte (nom de son dossier)."""
+    return "".join(secrets.choice(_STORAGE_ALPHABET) for _ in range(STORAGE_ID_LENGTH))
 
 
 class User(Base, TimestampMixin):
@@ -26,12 +38,17 @@ class User(Base, TimestampMixin):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    #: Nom du dossier du compte sur le disque. Contrairement au pseudo, il ne
+    #: change jamais : renommer son compte ne déplace aucun fichier.
+    storage_id: Mapped[str] = mapped_column(
+        String(16), unique=True, nullable=False, default=new_storage_id
+    )
     display_name: Mapped[str | None] = mapped_column(String(128))
     email: Mapped[str | None] = mapped_column(String(255))
 
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(
-        Enum(Role, native_enum=False, length=16), nullable=False, default=Role.VIEWER
+        Enum(Role, native_enum=False, length=16), nullable=False, default=Role.USER
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -46,7 +63,7 @@ class User(Base, TimestampMixin):
     sessions: Mapped[list[UserSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
-    server_permissions: Mapped[list[ServerPermission]] = relationship(
+    memberships: Mapped[list[ServerMember]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 

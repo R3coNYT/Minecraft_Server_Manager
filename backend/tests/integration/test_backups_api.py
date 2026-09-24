@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -254,6 +254,7 @@ class TestPermissions:
         """Une archive emporte tout le monde : la lire n'est pas anodin."""
         server = await _create_server(admin, fake_server_dir)
         backup = await _backup_now(admin, server["id"])
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
         response = await viewer.get(
             f"/api/v1/servers/{server['id']}/backups/{backup['id']}/download"

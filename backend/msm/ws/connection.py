@@ -27,14 +27,15 @@ from msm.bus import EventBus, Subscription
 from msm.bus import topics as bus_topics
 from msm.config import Settings
 from msm.core.log_line import LogLine
-from msm.core.permissions import Permission
-from msm.db.repositories import ServerPermissionRepository, UserRepository
+from msm.core.permissions import Permission, global_permissions
+from msm.db.repositories import ServerRepository, UserRepository
 from msm.db.session import session_scope
 from msm.exceptions import MsmError, PermissionDenied
 from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
-from msm.security.rbac import AccessContext, build_context
+from msm.security.access import server_not_found, visible_server_context
+from msm.security.rbac import AccessContext
 from msm.ws.messages import CHANNELS, TOPIC_TO_MESSAGE, MessageType, envelope, error_payload
 
 logger = get_logger(__name__)
@@ -74,9 +75,12 @@ class WebSocketConnection:
     # ------------------------------------------------------------------ #
     async def run(self) -> None:
         """Boucle principale : lecture des messages client, émission en parallèle."""
-        # Les événements globaux sont toujours suivis ; les serveurs s'ajoutent
-        # à la demande via `subscribe`.
-        self._subscription = self._bus.subscribe("system.", maxsize=4000)
+        # Les événements de la machine (ressources, créations…) ne vont qu'à qui
+        # peut les voir ; les serveurs s'ajoutent à la demande via `subscribe`.
+        # Le bus exige un sujet : sans accès à la machine, la connexion part d'un
+        # sujet privé que personne n'alimente, et ne suit que ses serveurs.
+        initial = "system." if await self._sees_system() else f"ws.{id(self)}.idle"
+        self._subscription = self._bus.subscribe(initial, maxsize=4000)
         writer = asyncio.create_task(self._writer(), name=f"ws-writer-{self._user_id}")
 
         await self._send(MessageType.READY, {"user": self._username})
@@ -227,6 +231,11 @@ class WebSocketConnection:
         self._log_cursor.pop(server_id, None)
         await self._send(MessageType.UNSUBSCRIBED, {"server_id": server_id}, server_id=server_id)
 
+    async def _sees_system(self) -> bool:
+        async with session_scope() as session:
+            user = await UserRepository(session).get(self._user_id)
+            return user is not None and Permission.SYSTEM_VIEW in global_permissions(user.role)
+
     async def _authorize(self, server_id: int) -> AccessContext:
         """Recalcule les droits à partir de la base, à chaque abonnement."""
         async with session_scope() as session:
@@ -237,8 +246,10 @@ class WebSocketConnection:
                     cause=tr("The account behind this connection is no longer active."),
                     remediation=tr("Sign in to the panel again."),
                 )
-            override = await ServerPermissionRepository(session).get(user.id, server_id)
-            return build_context(user, server_id=server_id, override=override)
+            server = await ServerRepository(session).get(server_id)
+            if server is None:
+                raise server_not_found(server_id)
+            return await visible_server_context(session, user, server)
 
     # ------------------------------------------------------------------ #
     #  Émission

@@ -18,7 +18,7 @@ propres serveurs Minecraft.
 
 | Étape | Contenu | État |
 | --- | --- | --- |
-| 1 | Modèle d'accès : rôles, propriétaires, membres, filtrage (backend) | à faire |
+| 1 | Modèle d'accès : rôles, propriétaires, membres, filtrage (backend) | terminée |
 | 2 | Comptes : inscription, profil, pseudo, avatar, bannissement (backend) | à faire |
 | 3 | Création par utilisateur : dossiers, quotas, ports (backend) | à faire |
 | 4 | Interface : inscription, profil, dashboard user, membres, panel admin | à faire |

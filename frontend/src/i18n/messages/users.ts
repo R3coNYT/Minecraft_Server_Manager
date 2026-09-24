@@ -3,8 +3,8 @@ import { section } from '../section'
 export const users = section({
   en: {
     "users.hint.ADMIN": "All rights, including sensitive commands and account management.",
-    "users.hint.MODERATOR": "Start, stop, console, kick and ban. No configuration.",
-    "users.hint.VIEWER": "Read only: states, console and players.",
+    "users.hint.MODERATOR": "Moderates the platform: sees every server and the audit log, can stop a server and ban users.",
+    "users.hint.USER": "Manages their own servers and the ones shared with them.",
     "users.created": "Account “{name}” created",
     "users.updated": "Account updated",
     "users.deleted": "Account deleted",
@@ -27,8 +27,8 @@ export const users = section({
   },
   fr: {
     "users.hint.ADMIN": "Tous les droits, y compris les commandes sensibles et la gestion des comptes.",
-    "users.hint.MODERATOR": "Démarrage, arrêt, console, kick et bannissement. Pas de configuration.",
-    "users.hint.VIEWER": "Consultation seule : états, console et joueurs.",
+    "users.hint.MODERATOR": "Modère la plateforme : voit tous les serveurs et l'audit, peut arrêter un serveur et bannir des users.",
+    "users.hint.USER": "Gère ses propres serveurs et ceux qu'on lui partage.",
     "users.created": "Compte « {name} » créé",
     "users.updated": "Compte modifié",
     "users.deleted": "Compte supprimé",

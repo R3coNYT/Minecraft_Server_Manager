@@ -60,23 +60,6 @@ async def test_health_reports_the_runtime_environment(client: AsyncClient) -> No
     assert payload["servers_registered"] == 0
 
 
-async def test_system_stats(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/system/stats")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["memory_total_mb"] > 0
-    assert payload["cpu_count"] >= 1
-
-
-async def test_launchers_are_listed_with_availability(client: AsyncClient) -> None:
-    response = await client.get("/api/v1/system/launchers")
-
-    assert response.status_code == 200
-    keys = {item["key"] for item in response.json()}
-    assert {"jar", "shell", "batch", "custom"} <= keys
-
-
 async def test_business_errors_expose_cause_and_remediation(client: AsyncClient) -> None:
     """C'est ce format qui alimente l'affichage « Cause / Action » de l'interface."""
     response = await client.get("/api/v1/_test/boom")

@@ -1,10 +1,10 @@
-/** Gestion des comptes du panneau (administrateurs uniquement). */
+/** Comptes du panneau : consultés par l'équipe de MSM, gérés par les admins. */
 
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { queryKeys, useMe } from '@/hooks/useApi'
+import { hasPermission, queryKeys, useMe } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { formatDateTime } from '@/lib/format'
 import type { Role, User } from '@/lib/types'
@@ -15,7 +15,7 @@ import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { t, tn } from '@/i18n'
 
-const ROLES: Role[] = ['ADMIN', 'MODERATOR', 'VIEWER']
+const ROLES: Role[] = ['ADMIN', 'MODERATOR', 'USER']
 
 export function UsersPage() {
   const queryClient = useQueryClient()
@@ -26,7 +26,7 @@ export function UsersPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<Role>('VIEWER')
+  const [role, setRole] = useState<Role>('USER')
   const [toDelete, setToDelete] = useState<User | null>(null)
 
   const { data: users, isLoading, error } = useQuery({
@@ -44,7 +44,7 @@ export function UsersPage() {
       setCreateOpen(false)
       setUsername('')
       setPassword('')
-      setRole('VIEWER')
+      setRole('USER')
     },
   })
 
@@ -70,6 +70,9 @@ export function UsersPage() {
 
   if (isLoading) return <LoadingBlock />
 
+  // Un modérateur consulte la liste ; seuls les admins créent, modifient, suppriment.
+  const canManage = hasPermission(me, 'user:manage')
+
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-4 sm:p-6">
       <div className="flex items-center justify-between gap-3">
@@ -79,9 +82,11 @@ export function UsersPage() {
             {t('users.subtitle')}
           </p>
         </div>
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-          {t('users.new')}
-        </Button>
+        {canManage ? (
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
+            {t('users.new')}
+          </Button>
+        ) : null}
       </div>
 
       <ErrorPanel error={error} />
@@ -111,7 +116,7 @@ export function UsersPage() {
                     <Select
                       className="h-8 w-44 py-0 text-xs"
                       value={user.role}
-                      disabled={isSelf || update.isPending}
+                      disabled={!canManage || isSelf || update.isPending}
                       onChange={(event) =>
                         update.mutate({ id: user.id, payload: { role: event.target.value } })
                       }
@@ -131,7 +136,7 @@ export function UsersPage() {
                       type="checkbox"
                       className="size-4 rounded border-slate-600 bg-slate-900 text-emerald-600"
                       checked={user.is_active}
-                      disabled={isSelf || update.isPending}
+                      disabled={!canManage || isSelf || update.isPending}
                       onChange={(event) =>
                         update.mutate({
                           id: user.id,
@@ -145,7 +150,7 @@ export function UsersPage() {
                       size="sm"
                       variant="ghost"
                       icon={<Trash2 className="size-3.5" />}
-                      disabled={isSelf}
+                      disabled={!canManage || isSelf}
                       onClick={() => setToDelete(user)}
                     >
                       <span className="sr-only">{t('common.delete')}</span>

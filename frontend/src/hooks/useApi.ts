@@ -157,16 +157,23 @@ export function hasPermission(me: Me | null | undefined, permission: string): bo
   return me?.permissions.includes(permission) ?? false
 }
 
+/** Droit du compte courant sur un serveur précis (propriétaire, membre, admin de MSM…). */
+export function can(server: { permissions: string[] } | null | undefined, permission: string): boolean {
+  return server?.permissions.includes(permission) ?? false
+}
+
 /**
  * Liaison avec le serveur de fichiers d'un launcher. `null` : aucune liaison.
  *
  * Relue régulièrement : les synchronisations se déroulent en tâche de fond, et
  * le compte à rebours doit repartir dès que l'une d'elles s'est terminée.
  */
-export function useLauncherLink(serverId: number) {
+export function useLauncherLink(serverId: number, enabled = true) {
   return useQuery<LauncherLink | null>({
     queryKey: queryKeys.launcherLink(serverId),
     queryFn: async () => (await api.launcherLink.get(serverId)) ?? null,
     refetchInterval: 30_000,
+    // Réservée à qui peut modifier le serveur : un simple membre ne la voit pas.
+    enabled,
   })
 }

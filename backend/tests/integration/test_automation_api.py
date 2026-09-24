@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -243,6 +243,7 @@ class TestScheduleExecution:
         from msm.services.schedule_service import run_schedule
 
         server = await _create_server(admin, fake_server_dir)
+        await share(admin, server["id"], "moderateur", "ADMIN")
         await admin.post(f"/api/v1/servers/{server['id']}/start")
         created = (
             await moderator.post(
@@ -293,6 +294,7 @@ class TestSchedulePermissions:
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create_server(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
         response = await viewer.post(
             f"/api/v1/servers/{server['id']}/schedules",
@@ -492,6 +494,7 @@ class TestServerNotifications:
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create_server(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
         url = f"/api/v1/servers/{server['id']}/notifications"
 
         assert (await viewer.get(url)).status_code == 403

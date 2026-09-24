@@ -13,7 +13,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CalendarClock, Pencil, Play, Plus, Send, Square, Trash2 } from 'lucide-react'
 import { ApiError, api } from '@/lib/api'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { can } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { useRealtime } from '@/stores/realtime'
 import { formatRelative } from '@/lib/format'
@@ -38,13 +38,12 @@ const RUN_STYLES: Record<string, string> = {
 export function EventsPage() {
   const { server, status } = useServerContext()
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const push = useToasts((state) => state.push)
   const pushError = useToasts((state) => state.pushError)
 
   const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
-  const canRun = hasPermission(me, 'event:run')
-  const canEdit = hasPermission(me, 'event:edit')
+  const canRun = can(server, 'event:run')
+  const canEdit = can(server, 'event:edit')
 
   const [quickKey, setQuickKey] = useState('say')
   const [quickParams, setQuickParams] = useState<Record<string, unknown>>({})

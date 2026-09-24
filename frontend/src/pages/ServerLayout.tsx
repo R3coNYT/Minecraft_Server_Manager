@@ -22,13 +22,7 @@ import {
   Timer,
   Users,
 } from 'lucide-react'
-import {
-  hasPermission,
-  useLauncherLink,
-  useMe,
-  useServer,
-  useServerStatus,
-} from '@/hooks/useApi'
+import { can, hasPermission, useLauncherLink, useMe, useServer, useServerStatus } from '@/hooks/useApi'
 import { useServerSubscription } from '@/hooks/useServerSubscription'
 import { formatUptime, formatMemory, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -51,18 +45,18 @@ interface TabDefinition {
 
 const TABS: TabDefinition[] = [
   { to: '', label: 'tab.overview', icon: Settings, end: true },
-  { to: 'console', label: 'tab.console', icon: Terminal, capability: 'console' },
-  { to: 'players', label: 'tab.players', icon: Users, capability: 'players' },
-  { to: 'mods', label: 'tab.mods', icon: Package, capability: 'mods' },
-  { to: 'plugins', label: 'tab.plugins', icon: Puzzle, capability: 'plugins' },
-  { to: 'properties', label: 'tab.properties', icon: Settings2, capability: 'properties' },
-  { to: 'configs', label: 'tab.configs', icon: FileCog, capability: 'configs' },
-  { to: 'events', label: 'tab.events', icon: CalendarClock, capability: 'events' },
+  { to: 'console', label: 'tab.console', icon: Terminal, capability: 'console', permission: 'console:read' },
+  { to: 'players', label: 'tab.players', icon: Users, capability: 'players', permission: 'player:view' },
+  { to: 'mods', label: 'tab.mods', icon: Package, capability: 'mods', permission: 'file:read' },
+  { to: 'plugins', label: 'tab.plugins', icon: Puzzle, capability: 'plugins', permission: 'file:read' },
+  { to: 'properties', label: 'tab.properties', icon: Settings2, capability: 'properties', permission: 'config:read' },
+  { to: 'configs', label: 'tab.configs', icon: FileCog, capability: 'configs', permission: 'config:read' },
+  { to: 'events', label: 'tab.events', icon: CalendarClock, capability: 'events', permission: 'event:run' },
   // Pas de capacité conditionnelle : tout serveur se sauvegarde, y compris celui
   // qui n'a pas encore de monde — c'est justement le moment d'y penser.
-  { to: 'backups', label: 'tab.backups', icon: Archive },
-  { to: 'schedules', label: 'tab.schedules', icon: Timer },
-  { to: 'launcher', label: 'tab.launcher', icon: Link2 },
+  { to: 'backups', label: 'tab.backups', icon: Archive, permission: 'backup:create' },
+  { to: 'schedules', label: 'tab.schedules', icon: Timer, permission: 'server:edit' },
+  { to: 'launcher', label: 'tab.launcher', icon: Link2, permission: 'server:edit' },
   { to: 'notifications', label: 'tab.notifications', icon: Bell, permission: 'server:edit' },
 ]
 
@@ -72,7 +66,7 @@ export function ServerLayout() {
   const { data: server, isLoading, error } = useServer(serverId)
   const { data: me } = useMe()
   const status = useServerStatus(serverId, server?.status)
-  const { data: launcherLink } = useLauncherLink(serverId)
+  const { data: launcherLink } = useLauncherLink(serverId, can(server, 'server:edit'))
 
   useServerSubscription(serverId)
 
@@ -104,10 +98,10 @@ export function ServerLayout() {
             serverId={serverId}
             serverName={server.name}
             state={state}
-            canStart={hasPermission(me, 'server:start')}
-            canStop={hasPermission(me, 'server:stop')}
-            canRestart={hasPermission(me, 'server:restart')}
-            canKill={hasPermission(me, 'server:kill')}
+            canStart={can(server, 'server:start')}
+            canStop={can(server, 'server:stop')}
+            canRestart={can(server, 'server:restart')}
+            canKill={can(server, 'server:kill')}
           />
         </div>
 

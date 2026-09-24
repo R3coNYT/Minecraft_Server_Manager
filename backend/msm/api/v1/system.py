@@ -6,11 +6,13 @@ import platform
 import sys
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from msm import __version__
+from msm.api.deps import CurrentUser, require_permission
 from msm.api.schemas import LanguageOut
+from msm.core.permissions import Permission
 from msm.i18n import SUPPORTED_LANGUAGES, current_language
 from msm.launchers import registry as launcher_registry
 from msm.runtime.backends import get_backend
@@ -44,14 +46,18 @@ async def health(request: Request) -> HealthResponse:
     )
 
 
-@router.get("/system/stats", summary="Host resources")
+@router.get(
+    "/system/stats",
+    summary="Host resources",
+    dependencies=[Depends(require_permission(Permission.SYSTEM_VIEW))],
+)
 async def host_stats() -> dict[str, Any]:
-    """CPU, mémoire et disque de la machine, pour le tableau de bord."""
+    """CPU, mémoire et disque de la machine, pour le tableau de bord des admins."""
     return system_stats()
 
 
 @router.get("/system/launchers", summary="Available start methods")
-async def launchers() -> list[dict[str, str | None]]:
+async def launchers(_: CurrentUser) -> list[dict[str, str | None]]:
     """Liste les launchers, avec la raison d'indisponibilité le cas échéant.
 
     Permet à l'interface de griser les options impossibles sur cette machine

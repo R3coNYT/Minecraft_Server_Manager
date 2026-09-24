@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -190,17 +190,19 @@ class TestPermissions:
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
         response = await viewer.post(f"/api/v1/servers/{server['id']}/start")
         assert response.status_code == 403
 
-    async def test_moderator_cannot_force_kill(
-        self, admin: ApiClient, moderator: ApiClient, fake_server_dir: Path
+    async def test_a_viewer_member_cannot_force_kill(
+        self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
-        """L'arrêt forcé ne sauvegarde pas le monde : réservé aux administrateurs."""
+        """L'arrêt forcé ne sauvegarde pas le monde : il faut gérer le serveur."""
         server = await _create(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
-        response = await moderator.post(f"/api/v1/servers/{server['id']}/kill")
+        response = await viewer.post(f"/api/v1/servers/{server['id']}/kill")
         assert response.status_code == 403
 
     async def test_unauthenticated_access_is_refused(self, client) -> None:
@@ -238,7 +240,11 @@ class TestUserManagement:
         assert response.json()["role"] == "MODERATOR"
 
     async def test_moderator_cannot_manage_users(self, moderator: ApiClient) -> None:
-        assert (await moderator.get("/api/v1/users")).status_code == 403
+        assert (await moderator.get("/api/v1/users")).status_code == 200
+        created = await moderator.post(
+            "/api/v1/users", json={"username": "x", "password": "p" * 12, "role": "USER"}
+        )
+        assert created.status_code == 403
 
     async def test_admin_cannot_lock_themselves_out(self, admin: ApiClient) -> None:
         """Se désactiver soi-même pourrait laisser le panel sans administrateur."""

@@ -22,25 +22,34 @@ from msm.api.schemas import (
     DashboardOut,
     DetectionOut,
     DetectRequest,
+    MemberOut,
+    MemberRequest,
     ServerCreateRequest,
     ServerOut,
     ServerUpdateRequest,
     StopOut,
 )
-from msm.core.permissions import Permission
+from msm.core.permissions import Permission, ServerRole
 from msm.db.models.server import Server
+from msm.db.models.user import User
+from msm.db.repositories import ServerMemberRepository
 from msm.i18n import tr
 from msm.runtime.stats import system_stats
-from msm.security.rbac import AccessContext
+from msm.security.access import server_context
+from msm.security.rbac import AccessContext, build_server_context
 from msm.services.lifecycle_service import LifecycleService
+from msm.services.member_service import MemberService
 
 router = APIRouter(prefix="/servers", tags=["servers"])
 
 
 async def _to_out(
-    server: Server, service: ServerServiceDep, supervisor: SupervisorDep
+    server: Server,
+    service: ServerServiceDep,
+    supervisor: SupervisorDep,
+    context: AccessContext,
 ) -> ServerOut:
-    """Assemble la vue d'un serveur : configuration + capacités + état runtime."""
+    """Assemble la vue d'un serveur : configuration, capacités, état, accès du compte."""
     runtime = supervisor.find(server.id)
     return ServerOut.model_validate(
         {
@@ -63,8 +72,43 @@ async def _to_out(
             "settings": server.settings,
             "capabilities": await service.capabilities(server),
             "status": runtime.snapshot() if runtime else None,
+            "owner_id": server.owner_id,
+            "owner_username": server.owner.username,
+            "access": context.server_role,
+            "shared": context.server_role not in (None, ServerRole.OWNER),
+            "permissions": sorted(context.permissions, key=lambda item: item.value),
         }
     )
+
+
+async def _visible(
+    user: User, session: DbSession, service: ServerServiceDep, supervisor: SupervisorDep
+) -> list[ServerOut]:
+    """Les serveurs que ce compte voit, chacun avec ses droits dessus."""
+    roles = await ServerMemberRepository(session).roles_for_user(user.id)
+    return [
+        await _to_out(
+            server,
+            service,
+            supervisor,
+            build_server_context(user, server, member_role=roles.get(server.id)),
+        )
+        for server in await service.list_servers(user)
+    ]
+
+
+def _summary(servers: list[ServerOut], supervisor: SupervisorDep) -> dict[str, Any]:
+    """Agrégats du tableau de bord, calculés sur les seuls serveurs visibles."""
+    runtimes = [runtime for server in servers if (runtime := supervisor.find(server.id))]
+    online = [runtime for runtime in runtimes if runtime.state.is_running]
+    return {
+        "servers_total": len(servers),
+        "servers_online": len(online),
+        "servers_offline": len(servers) - len(online),
+        "players_online": sum(len(runtime.online_players) for runtime in online),
+        "cpu_percent": round(sum(runtime.stats.cpu_percent for runtime in online), 1),
+        "memory_mb": round(sum(runtime.stats.memory_mb for runtime in online), 1),
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -72,30 +116,29 @@ async def _to_out(
 # --------------------------------------------------------------------------- #
 @router.get("", response_model=list[ServerOut], summary="List servers")
 async def list_servers(
+    user: CurrentUser,
+    session: DbSession,
     service: ServerServiceDep,
     supervisor: SupervisorDep,
-    context: GlobalContext,
 ) -> list[ServerOut]:
-    """Serveurs visibles par l'utilisateur."""
-    context.require(Permission.SERVER_VIEW, action=tr("view servers"))
-    return [await _to_out(server, service, supervisor) for server in await service.list_servers()]
+    """Serveurs visibles par l'utilisateur, les siens en premier."""
+    return await _visible(user, session, service, supervisor)
 
 
 @router.get("/dashboard", response_model=DashboardOut, summary="Dashboard")
 async def dashboard(
+    user: CurrentUser,
+    session: DbSession,
     service: ServerServiceDep,
     supervisor: SupervisorDep,
     context: GlobalContext,
 ) -> DashboardOut:
-    """Vue d'ensemble : agrégats, serveurs et ressources de la machine."""
-    context.require(Permission.SERVER_VIEW, action=tr("view the dashboard"))
-    servers = [
-        await _to_out(server, service, supervisor) for server in await service.list_servers()
-    ]
+    """Vue d'ensemble : agrégats et serveurs visibles, ressources de la machine pour l'admin."""
+    servers = await _visible(user, session, service, supervisor)
     return DashboardOut(
-        summary=supervisor.summary(),
+        summary=_summary(servers, supervisor),
         servers=servers,
-        system=system_stats(),
+        system=system_stats() if context.has(Permission.SYSTEM_VIEW) else None,
     )
 
 
@@ -108,7 +151,7 @@ async def dashboard(
 async def detect_directory(
     payload: DetectRequest,
     service: ServerServiceDep,
-    _: Annotated[AccessContext, Depends(require_permission(Permission.SERVER_CREATE))],
+    _: Annotated[AccessContext, Depends(require_permission(Permission.SERVER_REGISTER))],
 ) -> DetectionOut:
     """Propose une configuration à partir du contenu d'un dossier.
 
@@ -146,8 +189,8 @@ async def detect_directory(
 async def get_server(
     access: ServerAccess, service: ServerServiceDep, supervisor: SupervisorDep
 ) -> ServerOut:
-    server, _ = access
-    return await _to_out(server, service, supervisor)
+    server, context = access
+    return await _to_out(server, service, supervisor, context)
 
 
 @router.get("/{server_id}/status", summary="Server status")
@@ -172,10 +215,12 @@ async def create_server(
     payload: ServerCreateRequest,
     service: ServerServiceDep,
     supervisor: SupervisorDep,
+    session: DbSession,
     user: CurrentUser,
     ip: ClientIp,
-    _: Annotated[AccessContext, Depends(require_permission(Permission.SERVER_CREATE))],
+    _: Annotated[AccessContext, Depends(require_permission(Permission.SERVER_REGISTER))],
 ) -> ServerOut:
+    """Enregistre un dossier existant de la machine : réservé aux admins de MSM."""
     server = await service.create_server(
         name=payload.name,
         directory=payload.directory,
@@ -189,7 +234,7 @@ async def create_server(
         actor=user,
         ip_address=ip,
     )
-    return await _to_out(server, service, supervisor)
+    return await _to_out(server, service, supervisor, await server_context(session, user, server))
 
 
 @router.put(
@@ -200,25 +245,25 @@ async def create_server(
 )
 async def update_server(
     payload: ServerUpdateRequest,
-    access: Annotated[
-        tuple[Server, AccessContext], Depends(require_server_permission(Permission.SERVER_EDIT))
-    ],
+    access: ServerAccess,
     service: ServerServiceDep,
     supervisor: SupervisorDep,
     user: CurrentUser,
     ip: ClientIp,
 ) -> ServerOut:
-    server, _ = access
+    """Chaque champ modifié exige son propre droit (voir `ServerService.update_server`)."""
+    server, context = access
     changes = payload.model_dump(exclude_unset=True, exclude={"settings"})
     settings_changes = payload.settings.model_dump(exclude_none=True) if payload.settings else None
     server = await service.update_server(
         server,
         changes=changes,
         settings_changes=settings_changes,
+        context=context,
         actor=user,
         ip_address=ip,
     )
-    return await _to_out(server, service, supervisor)
+    return await _to_out(server, service, supervisor, context)
 
 
 @router.delete(
@@ -290,6 +335,77 @@ async def kill_server(
     """Terminaison immédiate du processus : le monde n'est pas sauvegardé."""
     server, context = access
     return await lifecycle.kill(server, context=context, ip_address=ip)
+
+
+# --------------------------------------------------------------------------- #
+#  Membres — partage du serveur
+# --------------------------------------------------------------------------- #
+def _members(session: DbSession) -> MemberService:
+    return MemberService(session)
+
+
+MembersDep = Annotated[MemberService, Depends(_members)]
+
+
+def _member_out(member: Any) -> MemberOut:
+    return MemberOut(
+        user_id=member.user_id,
+        username=member.user.username,
+        role=member.role,
+        added_at=member.created_at,
+    )
+
+
+@router.get("/{server_id}/members", response_model=list[MemberOut], summary="Members")
+async def list_members(access: ServerAccess, members: MembersDep) -> list[MemberOut]:
+    """Comptes avec qui le serveur est partagé. Réservé au propriétaire."""
+    server, context = access
+    return [_member_out(member) for member in await members.list(server, context=context)]
+
+
+@router.put(
+    "/{server_id}/members",
+    response_model=MemberOut,
+    summary="Share the server",
+    dependencies=[CsrfProtected],
+)
+async def share_server(
+    payload: MemberRequest,
+    access: ServerAccess,
+    members: MembersDep,
+    session: DbSession,
+    user: CurrentUser,
+    ip: ClientIp,
+) -> MemberOut:
+    """Partage le serveur avec un compte, ou change son rôle s'il y est déjà."""
+    server, context = access
+    member = await members.share(
+        server,
+        username=payload.username,
+        role=payload.role,
+        context=context,
+        actor=user,
+        ip_address=ip,
+    )
+    await session.refresh(member, ["user", "created_at"])
+    return _member_out(member)
+
+
+@router.delete(
+    "/{server_id}/members/{user_id}",
+    summary="Stop sharing the server with an account",
+    dependencies=[CsrfProtected],
+)
+async def remove_member(
+    user_id: int,
+    access: ServerAccess,
+    members: MembersDep,
+    user: CurrentUser,
+    ip: ClientIp,
+) -> dict[str, str]:
+    server, context = access
+    await members.remove(server, user_id=user_id, context=context, actor=user, ip_address=ip)
+    return {"status": "removed"}
 
 
 @router.get("/{server_id}/capabilities", summary="Available features")

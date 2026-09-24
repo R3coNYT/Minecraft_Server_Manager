@@ -15,7 +15,7 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { RotateCw, Save, Settings2 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { can } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import type { ServerProperty } from '@/lib/types'
 import { useServerContext } from './context'
@@ -80,11 +80,10 @@ function PropertyField({
 export function PropertiesPage() {
   const { server, status } = useServerContext()
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const push = useToasts((state) => state.push)
 
   const [changes, setChanges] = useState<Record<string, string>>({})
-  const canWrite = hasPermission(me, 'properties:write')
+  const canWrite = can(server, 'properties:write')
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['properties', server.id],

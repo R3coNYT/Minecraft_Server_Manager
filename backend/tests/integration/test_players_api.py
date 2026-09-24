@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -211,28 +211,33 @@ class TestModeration:
 
 
 class TestPermissions:
-    async def test_moderator_can_kick_but_not_op(
+    async def test_a_moderator_does_not_moderate_players_of_other_servers(
         self, admin: ApiClient, moderator: ApiClient, fake_server_dir: Path
     ) -> None:
+        """Modérer MSM n'est pas modérer les joueurs d'un serveur dont on n'est pas membre."""
         server = await _create_and_start(admin, fake_server_dir)
 
+        refused = await moderator.post(
+            f"/api/v1/servers/{server['id']}/players/Flavien/kick", json={}
+        )
+        assert refused.status_code == 403
+        assert refused.json()["remediation"]
+
+        await share(admin, server["id"], "moderateur", "ADMIN")
         allowed = await moderator.post(
             f"/api/v1/servers/{server['id']}/players/Flavien/kick", json={}
         )
         assert allowed.status_code == 200
 
-        refused = await moderator.post(f"/api/v1/servers/{server['id']}/players/Flavien/op")
-        assert refused.status_code == 403
-        assert refused.json()["remediation"]
-
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 
-    async def test_viewer_can_only_read(
+    async def test_a_viewer_member_sees_no_player(
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create_and_start(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
-        assert (await viewer.get(f"/api/v1/servers/{server['id']}/players")).status_code == 200
+        assert (await viewer.get(f"/api/v1/servers/{server['id']}/players")).status_code == 403
         assert (
             await viewer.post(f"/api/v1/servers/{server['id']}/players/Flavien/kick", json={})
         ).status_code == 403

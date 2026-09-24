@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -198,21 +198,30 @@ class TestDangerousCommands:
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 
-    async def test_moderator_cannot_run_sensitive_commands(
+    async def test_a_viewer_member_cannot_send_any_command(
+        self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
+    ) -> None:
+        server = await _create_and_start(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
+
+        for command in ("say bonjour", "op Flavien"):
+            refused = await viewer.post(
+                f"/api/v1/servers/{server['id']}/command",
+                json={"command": command, "confirm": True},
+            )
+            assert refused.status_code == 403
+
+    async def test_a_server_admin_can_run_sensitive_commands(
         self, admin: ApiClient, moderator: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create_and_start(admin, fake_server_dir)
+        await share(admin, server["id"], "moderateur", "ADMIN")
 
         allowed = await moderator.post(
-            f"/api/v1/servers/{server['id']}/command", json={"command": "say bonjour"}
-        )
-        assert allowed.status_code == 200
-
-        refused = await moderator.post(
             f"/api/v1/servers/{server['id']}/command",
             json={"command": "op Flavien", "confirm": True},
         )
-        assert refused.status_code == 403
+        assert allowed.status_code == 200, allowed.text
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 

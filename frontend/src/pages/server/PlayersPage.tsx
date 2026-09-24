@@ -182,6 +182,7 @@ export function PlayersPage() {
                           serverId={server.id}
                           player={player}
                           serverRunning={Boolean(running)}
+                          permissions={server.permissions}
                         />
                       </td>
                     </tr>

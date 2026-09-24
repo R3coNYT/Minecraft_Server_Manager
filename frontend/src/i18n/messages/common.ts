@@ -58,7 +58,7 @@ export const common = section({
 
     'role.ADMIN': 'Administrator',
     'role.MODERATOR': 'Moderator',
-    'role.VIEWER': 'Read only',
+    'role.USER': 'User',
 
     'api.unexpected': 'Unexpected error',
     'api.networkMessage': 'The panel is not responding.',
@@ -122,7 +122,7 @@ export const common = section({
 
     'role.ADMIN': 'Administrateur',
     'role.MODERATOR': 'Modérateur',
-    'role.VIEWER': 'Lecture seule',
+    'role.USER': 'Utilisateur',
 
     'api.unexpected': 'Erreur inattendue',
     'api.networkMessage': 'Le panneau ne répond pas.',

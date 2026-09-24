@@ -47,7 +47,7 @@ def ws_client(api_settings: Settings) -> Iterator[TestClient]:
             await auth.create_user(
                 username=ADMIN_USERNAME, password=ADMIN_PASSWORD, role=Role.ADMIN
             )
-            await auth.create_user(username="lecteur", password=ADMIN_PASSWORD, role=Role.VIEWER)
+            await auth.create_user(username="lecteur", password=ADMIN_PASSWORD, role=Role.USER)
         # Libéré pour que le `lifespan` recrée le moteur dans la boucle du client.
         await dispose_engine()
 
@@ -195,17 +195,26 @@ class TestLiveLogs:
 
 
 class TestPermissions:
-    def test_viewer_can_follow_the_console(
-        self, ws_client: TestClient, fake_server_dir: Path
-    ) -> None:
-        """Le rôle VIEWER a le droit de lire la console, pas d'y écrire."""
+    @staticmethod
+    def _server_as_admin(ws_client: TestClient, directory: Path) -> int:
         _login(ws_client)
         created = ws_client.post(
             "/api/v1/servers",
-            json=fake_server_payload("survie", fake_server_dir),
+            json=fake_server_payload("survie", directory),
             headers=_csrf(ws_client),
         )
-        server_id = created.json()["id"]
+        return int(created.json()["id"])
+
+    def test_a_server_admin_can_follow_the_console(
+        self, ws_client: TestClient, fake_server_dir: Path
+    ) -> None:
+        server_id = self._server_as_admin(ws_client, fake_server_dir)
+        shared = ws_client.put(
+            f"/api/v1/servers/{server_id}/members",
+            json={"username": "lecteur", "role": "ADMIN"},
+            headers=_csrf(ws_client),
+        )
+        assert shared.status_code == 200, shared.text
 
         ws_client.post("/api/v1/auth/logout", headers=_csrf(ws_client))
         _login(ws_client, "lecteur")
@@ -218,6 +227,21 @@ class TestPermissions:
             subscribed = _collect(websocket, "subscribed")
 
         assert "logs" in subscribed["d"]["channels"]
+
+    def test_a_stranger_cannot_even_learn_the_server_exists(
+        self, ws_client: TestClient, fake_server_dir: Path
+    ) -> None:
+        server_id = self._server_as_admin(ws_client, fake_server_dir)
+
+        ws_client.post("/api/v1/auth/logout", headers=_csrf(ws_client))
+        _login(ws_client, "lecteur")
+
+        with ws_client.websocket_connect("/ws") as websocket:
+            websocket.receive_json()
+            websocket.send_json({"t": "subscribe", "d": {"server_id": server_id}})
+            error = _collect(websocket, "error")
+
+        assert error["d"]["code"] == "NOT_FOUND"
 
 
 def test_fake_server_fixture_exists() -> None:

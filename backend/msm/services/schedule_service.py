@@ -35,7 +35,7 @@ from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction
 from msm.db.models.misc import EventDefinition
 from msm.db.models.schedule import Schedule, ScheduleAction, ScheduleStatus
-from msm.db.models.server import Server, ServerPermission
+from msm.db.models.server import Server
 from msm.db.models.user import User
 from msm.db.repositories import AuditRepository
 from msm.db.session import session_scope
@@ -44,7 +44,8 @@ from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.schedule.rules import Rule, describe, next_occurrence, parse_rule
-from msm.security.rbac import AccessContext, build_context
+from msm.security.access import server_context
+from msm.security.rbac import AccessContext
 
 logger = get_logger(__name__)
 
@@ -319,15 +320,14 @@ async def _context_for(session: AsyncSession, schedule: Schedule) -> AccessConte
             remediation=tr("Recreate the task from an active account."),
         )
 
-    override = (
-        await session.execute(
-            select(ServerPermission).where(
-                ServerPermission.user_id == user.id,
-                ServerPermission.server_id == schedule.server_id,
-            )
+    server = await session.get(Server, schedule.server_id)
+    if server is None:  # pragma: no cover - la tâche est supprimée avec son serveur
+        raise PermissionDenied(
+            tr("Server not found."),
+            cause=tr("No server has the identifier {server_id}.", server_id=schedule.server_id),
+            remediation=tr("Refresh the server list."),
         )
-    ).scalar_one_or_none()
-    return build_context(user, server_id=schedule.server_id, override=override)
+    return await server_context(session, user, server)
 
 
 async def _perform(

@@ -21,7 +21,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -161,6 +161,7 @@ class TestConfiguration:
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _server(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
         response = await viewer.put(
             f"/api/v1/servers/{server['id']}/launcher", json={"file_server_url": BASE}

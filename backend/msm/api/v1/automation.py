@@ -26,6 +26,7 @@ from msm.api.schemas import (
     ScheduleUpdateRequest,
     VersionOut,
 )
+from msm.core.permissions import Permission
 from msm.db.models.schedule import Schedule, ScheduleAction
 from msm.exceptions import ValidationError
 from msm.i18n import SUPPORTED_LANGUAGES, tr
@@ -96,7 +97,8 @@ def _action(value: str) -> ScheduleAction:
     summary="List scheduled tasks",
 )
 async def list_schedules(access: ServerAccess, service: SchedulesDep) -> list[ScheduleOut]:
-    server, _ = access
+    server, context = access
+    context.require(Permission.SERVER_EDIT, action=tr("view scheduled tasks"))
     return [_to_out(item) for item in await service.list_schedules(server)]
 
 

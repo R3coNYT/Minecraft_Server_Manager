@@ -14,7 +14,10 @@ export type ServerState =
   | 'CRASHED'
   | 'UNKNOWN'
 
-export type Role = 'ADMIN' | 'MODERATOR' | 'VIEWER'
+export type Role = 'ADMIN' | 'MODERATOR' | 'USER'
+
+/** Rôle d'un compte sur un serveur. */
+export type ServerRole = 'OWNER' | 'ADMIN' | 'VIEWER'
 
 export type LogLevel = 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL' | 'RAW'
 
@@ -35,6 +38,8 @@ export interface User {
   email: string | null
   role: Role
   is_active: boolean
+  /** Nom du dossier du compte sur le disque ; ne change jamais. */
+  storage_id: string
   last_login_at: string | null
   created_at: string
 }
@@ -109,6 +114,21 @@ export interface Server {
   settings: ServerSettings | null
   capabilities: string[]
   status: ServerStatus | null
+  owner_id: number
+  owner_username: string
+  /** Rôle du compte courant sur ce serveur ; `null` pour un admin qui le voit sans en être membre. */
+  access: ServerRole | null
+  /** Partagé avec le compte courant par quelqu'un d'autre. */
+  shared: boolean
+  /** Droits effectifs du compte courant sur ce serveur. */
+  permissions: string[]
+}
+
+export interface ServerMember {
+  user_id: number
+  username: string
+  role: ServerRole
+  added_at: string
 }
 
 export interface Player {
@@ -381,7 +401,8 @@ export interface DashboardSummary {
 export interface Dashboard {
   summary: DashboardSummary
   servers: Server[]
-  system: SystemStats
+  /** Ressources de la machine : réservées aux admins de MSM. */
+  system: SystemStats | null
 }
 
 export interface LogLine {

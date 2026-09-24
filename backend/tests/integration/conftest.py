@@ -56,7 +56,7 @@ async def app(api_settings: Settings) -> AsyncIterator[FastAPI]:
         auth = AuthService(session, api_settings)
         await auth.create_user(username=ADMIN_USERNAME, password=ADMIN_PASSWORD, role=Role.ADMIN)
         await auth.create_user(username="moderateur", password=ADMIN_PASSWORD, role=Role.MODERATOR)
-        await auth.create_user(username="lecteur", password=ADMIN_PASSWORD, role=Role.VIEWER)
+        await auth.create_user(username="lecteur", password=ADMIN_PASSWORD, role=Role.USER)
 
     async with application.router.lifespan_context(application):
         yield application
@@ -119,7 +119,7 @@ async def admin(client: AsyncClient) -> ApiClient:
 
 @pytest.fixture
 async def moderator(app: FastAPI) -> AsyncIterator[ApiClient]:
-    """Client connecté en tant que modérateur (droits restreints)."""
+    """Client connecté en tant que modérateur de MSM : il voit et arrête, sans gérer."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http_client:
         api = ApiClient(http_client)
@@ -130,7 +130,10 @@ async def moderator(app: FastAPI) -> AsyncIterator[ApiClient]:
 
 @pytest.fixture
 async def viewer(app: FastAPI) -> AsyncIterator[ApiClient]:
-    """Client connecté en lecture seule."""
+    """Client connecté avec un compte user (« lecteur »), sans aucun serveur à lui.
+
+    Il ne voit un serveur que si on le lui partage : voir :func:`share`.
+    """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as http_client:
         api = ApiClient(http_client)
@@ -144,6 +147,14 @@ def fake_server_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "minecraft"
     directory.mkdir()
     return directory
+
+
+async def share(owner: ApiClient, server_id: int, username: str, role: str = "VIEWER") -> None:
+    """Partage un serveur avec un compte (rôle `VIEWER` ou `ADMIN` sur ce serveur)."""
+    response = await owner.put(
+        f"/api/v1/servers/{server_id}/members", json={"username": username, "role": role}
+    )
+    assert response.status_code == 200, response.text
 
 
 def fake_server_payload(name: str, directory: Path, *extra_args: str) -> dict[str, Any]:

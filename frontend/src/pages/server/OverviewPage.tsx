@@ -7,7 +7,7 @@ import { autoRestartLabel, capabilityLabel, formatMemory, formatRelative } from 
 import { Badge, Card, CardHeader } from '@/components/ui/primitives'
 import { ResourcePanel } from '@/components/metrics/ResourcePanel'
 import { VersionInstaller } from '@/components/servers/VersionInstaller'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { can } from '@/hooks/useApi'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useToasts } from '@/stores/toasts'
@@ -25,10 +25,8 @@ function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
 export function OverviewPage() {
   const { server, status } = useServerContext()
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const settings = server.settings
   const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
-  const canEdit = hasPermission(me, 'server:edit')
   const push = useToasts((state) => state.push)
   const pushError = useToasts((state) => state.pushError)
 
@@ -150,7 +148,7 @@ export function OverviewPage() {
                     type="checkbox"
                     className="size-4 rounded border-slate-600 bg-slate-900 text-emerald-600 focus:ring-emerald-600"
                     checked={settings?.autostart_on_boot ?? false}
-                    disabled={!canEdit || autostart.isPending}
+                    disabled={!can(server, 'server:autostart') || autostart.isPending}
                     onChange={(event) => autostart.mutate(event.target.checked)}
                   />
                   {settings?.autostart_on_boot ? t('common.yes') : t('common.no')}
@@ -162,7 +160,7 @@ export function OverviewPage() {
 
         <ResourcePanel serverId={server.id} />
 
-        {hasPermission(me, 'server:edit') ? (
+        {can(server, 'server:edit') ? (
           <VersionInstaller
             serverId={server.id}
             serverName={server.name}

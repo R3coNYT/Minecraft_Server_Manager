@@ -141,12 +141,9 @@ class TestChoices:
         assert Path(body["directory"]) == servers_root / "mini-jeux-ete"
         assert body["port"] == 25565
 
-    async def test_a_viewer_cannot_create_servers(
-        self, viewer: ApiClient, servers_root: Path
-    ) -> None:
-        assert (await viewer.get("/api/v1/provisioning/distributions")).status_code == 403
-        response = await viewer.post("/api/v1/provisioning", json=_payload(servers_root / "survie"))
-        assert response.status_code == 403
+    async def test_every_account_may_create_servers(self, viewer: ApiClient) -> None:
+        """Créer ses serveurs est le cœur du rôle user."""
+        assert (await viewer.get("/api/v1/provisioning/distributions")).status_code == 200
 
 
 class TestCreation:

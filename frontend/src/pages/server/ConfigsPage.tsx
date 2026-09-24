@@ -12,7 +12,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, FileCode, Folder, FolderOpen, Save } from 'lucide-react'
 import { api } from '@/lib/api'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { can } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { formatBytes, formatRelative } from '@/lib/format'
 import { useServerContext } from './context'
@@ -54,14 +54,13 @@ function Breadcrumb({
 export function ConfigsPage() {
   const { server } = useServerContext()
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const push = useToasts((state) => state.push)
 
   const [directory, setDirectory] = useState('')
   const [selected, setSelected] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
-  const canWrite = hasPermission(me, 'config:write')
+  const canWrite = can(server, 'config:write')
 
   const tree = useQuery({
     queryKey: ['configs', server.id, directory],

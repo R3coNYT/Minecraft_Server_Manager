@@ -33,7 +33,8 @@ from msm.provisioning import files
 from msm.provisioning.installer import find_java, run_installer
 from msm.provisioning.jobs import JobRegistry, ProvisioningJob, Step, StepKey, StepStatus
 from msm.runtime.supervisor import Supervisor
-from msm.security.rbac import AccessContext, build_context
+from msm.security.access import server_context
+from msm.security.rbac import AccessContext
 from msm.services.download_service import download_file
 from msm.services.lifecycle_service import LifecycleService
 from msm.services.server_service import ServerService, slugify
@@ -112,7 +113,7 @@ class ProvisioningService:
         ip_address: str | None = None,
     ) -> ProvisioningJob:
         context.require(Permission.SERVER_CREATE, action=tr("create a server"))
-        directory = await self._validate(request)
+        directory = await self._validate(request, owner_id=actor.id)
 
         installer = SOURCES[request.distribution]["kind"] == "installer"
         steps = [Step(StepKey.FOLDER), Step(StepKey.DOWNLOAD)]
@@ -154,7 +155,8 @@ class ProvisioningService:
     def get(self, job_id: str, *, context: AccessContext) -> ProvisioningJob:
         context.require(Permission.SERVER_CREATE, action=tr("create a server"))
         job = self._registry.get(job_id)
-        if job is None:
+        # Chacun ne suit que ses propres créations.
+        if job is None or job.created_by != context.user_id:
             raise NotFoundError(
                 tr("Creation not found."),
                 cause=tr("No server creation has the identifier {id}.", id=job_id),
@@ -162,7 +164,7 @@ class ProvisioningService:
             )
         return job
 
-    async def _validate(self, request: ProvisioningRequest) -> Path:
+    async def _validate(self, request: ProvisioningRequest, *, owner_id: int) -> Path:
         name = request.name.strip()
         if not name:
             raise ValidationError(
@@ -170,12 +172,12 @@ class ProvisioningService:
                 cause=tr("The name cannot be empty."),
                 remediation=tr("Enter a name for this server."),
             )
-        if await self._servers.get_by_name(name) is not None or any(
-            job.name == name for job in self._registry.running()
+        if await self._servers.get_by_name(name, owner_id=owner_id) is not None or any(
+            job.name == name and job.created_by == owner_id for job in self._registry.running()
         ):
             raise ConflictError(
                 tr("This server name is already in use."),
-                cause=tr("A server named “{name}” already exists.", name=name),
+                cause=tr("You already have a server named “{name}”.", name=name),
                 remediation=tr("Choose another name."),
             )
 
@@ -360,7 +362,7 @@ async def _start(
                 return
             await LifecycleService(session, supervisor).start(
                 server,
-                context=build_context(actor, server_id=server_id),
+                context=await server_context(session, actor, server),
                 ip_address=ip_address,
             )
         job.finish(StepKey.START)

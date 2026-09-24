@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CloudDownload, Package, Trash2, Upload } from 'lucide-react'
 import { api } from '@/lib/api'
-import { hasPermission, useLauncherLink, useMe } from '@/hooks/useApi'
+import { can, useLauncherLink } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { formatBytes, formatRelative } from '@/lib/format'
 import type { LauncherLink, ManagedFile } from '@/lib/types'
@@ -31,7 +31,6 @@ interface FilesPageProps {
 export function FilesPage({ area }: FilesPageProps) {
   const { server } = useServerContext()
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const push = useToasts((state) => state.push)
   const pushError = useToasts((state) => state.pushError)
 
@@ -39,9 +38,9 @@ export function FilesPage({ area }: FilesPageProps) {
   const [toDelete, setToDelete] = useState<ManagedFile | null>(null)
   const [pendingOverwrite, setPendingOverwrite] = useState<File | null>(null)
 
-  const canUpload = hasPermission(me, 'file:upload')
-  const canDelete = hasPermission(me, 'file:delete')
-  const canToggle = hasPermission(me, 'file:toggle')
+  const canUpload = can(server, 'file:upload')
+  const canDelete = can(server, 'file:delete')
+  const canToggle = can(server, 'file:toggle')
 
   const { data: launcherLink } = useLauncherLink(server.id)
   const { data, isLoading, error } = useQuery({

@@ -10,7 +10,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ban, Gift, MoreHorizontal, Shield, ShieldOff, Skull, UserMinus, UserCheck } from 'lucide-react'
 import { api } from '@/lib/api'
-import { hasPermission, useMe } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import type { Player } from '@/lib/types'
 import { Button } from '@/components/ui/Button'
@@ -27,11 +26,17 @@ interface PlayerActionsMenuProps {
   serverId: number
   player: Player
   serverRunning: boolean
+  /** Droits du compte courant sur ce serveur. */
+  permissions: string[]
 }
 
-export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerActionsMenuProps) {
+export function PlayerActionsMenu({
+  serverId,
+  player,
+  serverRunning,
+  permissions,
+}: PlayerActionsMenuProps) {
   const queryClient = useQueryClient()
-  const { data: me } = useMe()
   const push = useToasts((state) => state.push)
   const pushError = useToasts((state) => state.pushError)
 
@@ -84,11 +89,11 @@ export function PlayerActionsMenu({ serverId, player, serverRunning }: PlayerAct
   })
 
   const can = {
-    op: hasPermission(me, 'player:op'),
-    kick: hasPermission(me, 'player:kick'),
-    ban: hasPermission(me, 'player:ban'),
-    kill: hasPermission(me, 'player:kill'),
-    give: hasPermission(me, 'player:give'),
+    op: permissions.includes('player:op'),
+    kick: permissions.includes('player:kick'),
+    ban: permissions.includes('player:ban'),
+    kill: permissions.includes('player:kill'),
+    give: permissions.includes('player:give'),
   }
 
   const entries: { key: ActionKey; label: string; icon: typeof Shield; allowed: boolean; show: boolean }[] = [

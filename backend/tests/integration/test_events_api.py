@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from msm.db.models import EventRun
 from msm.db.session import session_scope
 from msm.services import event_service
-from tests.integration.conftest import ApiClient, fake_server_payload
+from tests.integration.conftest import ApiClient, fake_server_payload, share
 
 pytestmark = pytest.mark.asyncio
 
@@ -433,10 +433,11 @@ class TestRuns:
 
 
 class TestPermissions:
-    async def test_moderator_can_run_but_not_edit(
+    async def test_a_server_admin_runs_and_edits_events(
         self, admin: ApiClient, moderator: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create_and_start(admin, fake_server_dir)
+        await share(admin, server["id"], "moderateur", "ADMIN")
 
         allowed = await moderator.post(
             f"/api/v1/servers/{server['id']}/events/quick",
@@ -444,11 +445,11 @@ class TestPermissions:
         )
         assert allowed.status_code == 200
 
-        refused = await moderator.post(
+        created = await moderator.post(
             f"/api/v1/servers/{server['id']}/events",
-            json={"name": "Interdit", "steps": [{"action": "say", "params": {"message": "x"}}]},
+            json={"name": "Annonce", "steps": [{"action": "say", "params": {"message": "x"}}]},
         )
-        assert refused.status_code == 403
+        assert created.status_code == 201, created.text
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
 
@@ -471,6 +472,7 @@ class TestPermissions:
         self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
     ) -> None:
         server = await _create_and_start(admin, fake_server_dir)
+        await share(admin, server["id"], "lecteur", "VIEWER")
 
         response = await viewer.post(
             f"/api/v1/servers/{server['id']}/events/quick",

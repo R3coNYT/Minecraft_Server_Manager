@@ -17,11 +17,11 @@ from msm.config import Settings, get_settings
 from msm.core.permissions import Permission
 from msm.db.models.server import Server
 from msm.db.models.user import User
-from msm.db.repositories import ServerPermissionRepository
 from msm.db.session import session_scope
 from msm.exceptions import AuthenticationError, PermissionDenied
 from msm.i18n import tr
 from msm.runtime.supervisor import Supervisor
+from msm.security.access import visible_server_context
 from msm.security.rbac import AccessContext, build_context
 from msm.security.tokens import tokens_equal
 from msm.services.auth_service import AuthService
@@ -160,13 +160,13 @@ async def get_server_and_context(
     session: DbSession,
     service: ServerServiceDep,
 ) -> tuple[Server, AccessContext]:
-    """Charge un serveur **et** les droits de l'utilisateur sur ce serveur."""
+    """Charge un serveur **et** les droits de l'utilisateur sur ce serveur.
+
+    Un serveur que l'utilisateur ne voit pas répond « introuvable », exactement
+    comme un serveur qui n'existe pas : son existence ne doit pas fuiter.
+    """
     server = await service.get_server(server_id)
-    override = await ServerPermissionRepository(session).get(user.id, server_id)
-    context = build_context(user, server_id=server_id, override=override)
-    # Ne pas révéler l'existence d'un serveur auquel l'utilisateur n'a pas accès.
-    context.require(Permission.SERVER_VIEW, action=tr("view this server"))
-    return server, context
+    return server, await visible_server_context(session, user, server)
 
 
 ServerAccess = Annotated[tuple[Server, AccessContext], Depends(get_server_and_context)]

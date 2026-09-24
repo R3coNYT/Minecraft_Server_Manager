@@ -11,7 +11,7 @@ import {
   Server as ServerIcon,
   Users,
 } from 'lucide-react'
-import { hasPermission, useDashboard, useMe } from '@/hooks/useApi'
+import { can, hasPermission, useDashboard, useMe } from '@/hooks/useApi'
 import { useRealtime } from '@/stores/realtime'
 import { formatMemory, formatPercent, formatUptime } from '@/lib/format'
 import type { Server } from '@/lib/types'
@@ -25,7 +25,6 @@ import { NewServerDialog } from '@/components/servers/NewServerDialog'
 import { t, tn } from '@/i18n'
 
 function ServerCard({ server }: { server: Server }) {
-  const { data: me } = useMe()
   const live = useRealtime((state) => state.statuses[server.id])
   const status = live ?? server.status
 
@@ -85,10 +84,10 @@ function ServerCard({ server }: { server: Server }) {
           serverName={server.name}
           state={state}
           size="sm"
-          canStart={hasPermission(me, 'server:start')}
-          canStop={hasPermission(me, 'server:stop')}
-          canRestart={hasPermission(me, 'server:restart')}
-          canKill={hasPermission(me, 'server:kill')}
+          canStart={can(server, 'server:start')}
+          canStop={can(server, 'server:stop')}
+          canRestart={can(server, 'server:restart')}
+          canKill={can(server, 'server:kill')}
         />
         <Link
           to={`/servers/${server.id}/console`}
@@ -161,21 +160,39 @@ export function DashboardPage() {
           value={playersOnline}
           icon={<Users className="size-4" />}
         />
-        <StatTile
-          label={t('dashboard.cpu')}
-          value={formatPercent(system.cpu_percent)}
-          detail={t('dashboard.cores', { count: system.cpu_count })}
-          icon={<Cpu className="size-4" />}
-        />
-        <StatTile
-          label={t('dashboard.memory')}
-          value={formatPercent(system.memory_percent)}
-          detail={`${formatMemory(system.memory_used_mb)} / ${formatMemory(system.memory_total_mb)}`}
-          icon={<MemoryStick className="size-4" />}
-        />
+        {system ? (
+          <>
+            <StatTile
+              label={t('dashboard.cpu')}
+              value={formatPercent(system.cpu_percent)}
+              detail={t('dashboard.cores', { count: system.cpu_count })}
+              icon={<Cpu className="size-4" />}
+            />
+            <StatTile
+              label={t('dashboard.memory')}
+              value={formatPercent(system.memory_percent)}
+              detail={`${formatMemory(system.memory_used_mb)} / ${formatMemory(system.memory_total_mb)}`}
+              icon={<MemoryStick className="size-4" />}
+            />
+          </>
+        ) : (
+          // Sans accès à la machine : la consommation de ses propres serveurs.
+          <>
+            <StatTile
+              label={t('dashboard.serversCpu')}
+              value={formatPercent(data.summary.cpu_percent)}
+              icon={<Cpu className="size-4" />}
+            />
+            <StatTile
+              label={t('dashboard.serversMemory')}
+              value={formatMemory(data.summary.memory_mb)}
+              icon={<MemoryStick className="size-4" />}
+            />
+          </>
+        )}
       </div>
 
-      {system.disk_percent !== undefined ? (
+      {system && system.disk_percent !== undefined ? (
         <Card className="flex items-center gap-4 px-5 py-3.5">
           <HardDrive className="size-4 shrink-0 text-slate-600" />
           <div className="min-w-0 flex-1">

@@ -1,4 +1,4 @@
-"""Gestion des comptes et des droits par serveur (réservée aux administrateurs)."""
+"""Gestion des comptes : consultation par l'équipe de MSM, gestion par les admins."""
 
 from __future__ import annotations
 
@@ -15,9 +15,9 @@ from msm.api.deps import (
     require_permission,
 )
 from msm.api.schemas import UserCreateRequest, UserOut, UserUpdateRequest
-from msm.core.permissions import Permission
+from msm.core.permissions import Permission, Role
 from msm.db.models.audit import AuditAction
-from msm.db.repositories import AuditRepository, ServerPermissionRepository
+from msm.db.repositories import AuditRepository, ServerRepository
 from msm.exceptions import ConflictError, NotFoundError, ValidationError
 from msm.i18n import tr
 from msm.security.rbac import AccessContext
@@ -25,11 +25,19 @@ from msm.security.rbac import AccessContext
 router = APIRouter(prefix="/users", tags=["users"])
 
 AdminOnly = Annotated[AccessContext, Depends(require_permission(Permission.USER_MANAGE))]
+StaffOnly = Annotated[AccessContext, Depends(require_permission(Permission.USER_VIEW))]
+
+#: Ordre d'affichage : les admins d'abord, puis les modérateurs, puis les users.
+_ROLE_ORDER = {Role.ADMIN: 0, Role.MODERATOR: 1, Role.USER: 2}
 
 
 @router.get("", response_model=list[UserOut], summary="List accounts")
-async def list_users(auth: AuthServiceDep, _: AdminOnly) -> list[UserOut]:
-    return [UserOut.model_validate(user) for user in await auth.list_users()]
+async def list_users(auth: AuthServiceDep, _: StaffOnly) -> list[UserOut]:
+    users = sorted(
+        await auth.list_users(),
+        key=lambda user: (_ROLE_ORDER.get(user.role, 9), user.username.casefold()),
+    )
+    return [UserOut.model_validate(user) for user in users]
 
 
 @router.post(
@@ -144,6 +152,18 @@ async def delete_user(
             cause=tr("You are signed in with this account."),
             remediation=tr("Ask another administrator to do this."),
         )
+    owned = await ServerRepository(session).list_owned_by(user.id)
+    if owned:
+        raise ConflictError(
+            tr("This account still owns servers."),
+            cause=tr(
+                "{username} owns {count} server(s): {names}.",
+                username=user.username,
+                count=len(owned),
+                names=", ".join(server.name for server in owned),
+            ),
+            remediation=tr("Delete its servers first."),
+        )
 
     username = user.username
     await session.delete(user)
@@ -159,55 +179,3 @@ async def delete_user(
         target_id=str(user_id),
     )
     return {"status": "deleted"}
-
-
-@router.put(
-    "/{user_id}/servers/{server_id}/permissions",
-    summary="A user's permissions on a server",
-    dependencies=[CsrfProtected],
-)
-async def set_server_permissions(
-    user_id: int,
-    server_id: int,
-    granted: list[str],
-    revoked: list[str],
-    session: DbSession,
-    actor: CurrentUser,
-    ip: ClientIp,
-    _: AdminOnly,
-) -> dict[str, list[str]]:
-    """Définit les permissions ajoutées ou retirées sur un serveur précis.
-
-    En cas de conflit, une permission à la fois accordée et révoquée est refusée :
-    en sécurité, le refus l'emporte.
-    """
-    valid = {permission.value for permission in Permission}
-    unknown = sorted((set(granted) | set(revoked)) - valid)
-    if unknown:
-        raise ValidationError(
-            tr("Unknown permission."),
-            cause=tr("Unrecognised values: {values}.", values=", ".join(unknown)),
-            remediation=tr("Use the permission identifiers listed by the API."),
-        )
-
-    record = await ServerPermissionRepository(session).upsert(
-        user_id=user_id, server_id=server_id, granted=granted, revoked=revoked
-    )
-
-    AuditRepository(session).record(
-        action=AuditAction.PERMISSIONS_UPDATED,
-        summary=tr(
-            "Permissions of account #{user_id} changed on server #{server_id}.",
-            user_id=user_id,
-            server_id=server_id,
-        ),
-        actor_id=actor.id,
-        actor_username=actor.username,
-        actor_role=actor.role.value,
-        ip_address=ip,
-        server_id=server_id,
-        target_type="user",
-        target_id=str(user_id),
-        payload={"granted": granted, "revoked": revoked},
-    )
-    return {"granted": record.granted, "revoked": record.revoked}

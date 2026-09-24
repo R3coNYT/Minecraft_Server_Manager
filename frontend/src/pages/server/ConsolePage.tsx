@@ -8,7 +8,7 @@
 
 import { useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { hasPermission, useMe } from '@/hooks/useApi'
+import { can } from '@/hooks/useApi'
 import { api } from '@/lib/api'
 import { useRealtime } from '@/stores/realtime'
 import { useServerContext } from './context'
@@ -20,7 +20,6 @@ import { t } from '@/i18n'
 
 export function ConsolePage() {
   const { server, status } = useServerContext()
-  const { data: me } = useMe()
 
   const lines = useRealtime((state) => state.logs[server.id]) ?? []
   const missed = useRealtime((state) => state.missedLines[server.id]) ?? 0
@@ -41,7 +40,7 @@ export function ConsolePage() {
     if (initial?.lines?.length) appendLogs(server.id, initial.lines)
   }, [initial, server.id, appendLogs])
 
-  const canWrite = hasPermission(me, 'console:write')
+  const canWrite = can(server, 'console:write')
   const writable = status?.console_writable ?? false
   const running = status?.state === 'ONLINE' || status?.state === 'STARTING'
 

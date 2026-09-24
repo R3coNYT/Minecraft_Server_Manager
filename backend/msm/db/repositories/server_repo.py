@@ -1,17 +1,18 @@
-"""Accès aux serveurs, à leurs réglages et aux droits qui les concernent."""
+"""Accès aux serveurs, à leurs réglages et à leurs membres."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from msm.core.permissions import ServerRole
 from msm.core.states import ServerState
 from msm.db.models.server import (
     Server,
-    ServerPermission,
+    ServerMember,
     ServerRuntimeStateRow,
     ServerSettings,
 )
@@ -41,8 +42,11 @@ class ServerRepository:
         statement = select(Server).where(Server.slug == slug).options(*self._loaded())  # type: ignore[arg-type]
         return (await self._session.execute(statement)).scalar_one_or_none()
 
-    async def get_by_name(self, name: str) -> Server | None:
-        statement = select(Server).where(Server.name.ilike(name.strip()))
+    async def get_by_name(self, name: str, *, owner_id: int) -> Server | None:
+        """Serveur de ce nom chez ce propriétaire (le nom est unique par propriétaire)."""
+        statement = select(Server).where(
+            Server.owner_id == owner_id, Server.name.ilike(name.strip())
+        )
         return (await self._session.execute(statement)).scalar_one_or_none()
 
     async def get_by_directory(self, directory: str) -> Server | None:
@@ -54,6 +58,21 @@ class ServerRepository:
         if only_enabled:
             statement = statement.where(Server.enabled.is_(True))
         statement = statement.order_by(Server.sort_order, Server.name)
+        return list((await self._session.execute(statement)).scalars())
+
+    async def list_visible_to(self, user_id: int) -> list[Server]:
+        """Serveurs possédés par ce compte ou partagés avec lui."""
+        shared = select(ServerMember.server_id).where(ServerMember.user_id == user_id)
+        statement = (
+            select(Server)
+            .options(*self._loaded())  # type: ignore[arg-type]
+            .where(or_(Server.owner_id == user_id, Server.id.in_(shared)))
+            .order_by(Server.sort_order, Server.name)
+        )
+        return list((await self._session.execute(statement)).scalars())
+
+    async def list_owned_by(self, user_id: int) -> list[Server]:
+        statement = select(Server).where(Server.owner_id == user_id).order_by(Server.name)
         return list((await self._session.execute(statement)).scalars())
 
     def add(self, server: Server) -> None:
@@ -110,39 +129,51 @@ class ServerRepository:
         return row
 
 
-class ServerPermissionRepository:
-    """Surcharges de droits par serveur."""
+class ServerMemberRepository:
+    """Comptes avec qui un serveur est partagé."""
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def get(self, user_id: int, server_id: int) -> ServerPermission | None:
-        statement = select(ServerPermission).where(
-            ServerPermission.user_id == user_id,
-            ServerPermission.server_id == server_id,
+    async def get(self, user_id: int, server_id: int) -> ServerMember | None:
+        statement = select(ServerMember).where(
+            ServerMember.user_id == user_id,
+            ServerMember.server_id == server_id,
         )
         return (await self._session.execute(statement)).scalar_one_or_none()
 
-    async def list_for_user(self, user_id: int) -> list[ServerPermission]:
-        statement = select(ServerPermission).where(ServerPermission.user_id == user_id)
+    async def role_of(self, user_id: int, server_id: int) -> ServerRole | None:
+        member = await self.get(user_id, server_id)
+        return member.role if member else None
+
+    async def roles_for_user(self, user_id: int) -> dict[int, ServerRole]:
+        """Rôle de ce compte sur chaque serveur partagé avec lui."""
+        statement = select(ServerMember.server_id, ServerMember.role).where(
+            ServerMember.user_id == user_id
+        )
+        return {row.server_id: row.role for row in await self._session.execute(statement)}
+
+    async def list_for_server(self, server_id: int) -> list[ServerMember]:
+        statement = (
+            select(ServerMember)
+            .options(selectinload(ServerMember.user))
+            .where(ServerMember.server_id == server_id)
+            .order_by(ServerMember.created_at)
+        )
         return list((await self._session.execute(statement)).scalars())
 
-    async def upsert(
-        self,
-        *,
-        user_id: int,
-        server_id: int,
-        granted: list[str],
-        revoked: list[str],
-    ) -> ServerPermission:
-        record = await self.get(user_id, server_id)
-        if record is None:
-            record = ServerPermission(user_id=user_id, server_id=server_id)
-            self._session.add(record)
-        record.granted = granted
-        record.revoked = revoked
+    async def upsert(self, *, user_id: int, server_id: int, role: ServerRole) -> ServerMember:
+        member = await self.get(user_id, server_id)
+        if member is None:
+            member = ServerMember(user_id=user_id, server_id=server_id)
+            self._session.add(member)
+        member.role = role
         await self._session.flush()
-        return record
+        return member
+
+    async def delete(self, member: ServerMember) -> None:
+        await self._session.delete(member)
+        await self._session.flush()
 
 
 def build_settings(**overrides: object) -> ServerSettings:

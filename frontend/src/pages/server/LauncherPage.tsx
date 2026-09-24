@@ -23,7 +23,7 @@ import {
   Wrench,
 } from 'lucide-react'
 import { api } from '@/lib/api'
-import { hasPermission, queryKeys, useLauncherLink, useMe } from '@/hooks/useApi'
+import { can, queryKeys, useLauncherLink } from '@/hooks/useApi'
 import { useToasts } from '@/stores/toasts'
 import { formatBytes, formatRelative } from '@/lib/format'
 import type { LauncherLink, LauncherLinkMod, LauncherSyncStatus, ModSide } from '@/lib/types'
@@ -137,8 +137,7 @@ async function copyText(text: string): Promise<boolean> {
 
 export function LauncherPage() {
   const { server } = useServerContext()
-  const { data: me } = useMe()
-  const canEdit = hasPermission(me, 'server:edit')
+  const canEdit = can(server, 'server:edit')
   const queryClient = useQueryClient()
   const push = useToasts((state) => state.push)
   const pushError = useToasts((state) => state.pushError)

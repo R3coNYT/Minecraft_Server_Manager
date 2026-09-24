@@ -78,7 +78,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {t('shell.audit')}
           </NavLink>
         ) : null}
-        {hasPermission(me, 'user:manage') ? (
+        {hasPermission(me, 'user:view') ? (
           <NavLink to="/users" className={linkClass} onClick={onNavigate}>
             <Users className="size-4" />
             {t('shell.users')}

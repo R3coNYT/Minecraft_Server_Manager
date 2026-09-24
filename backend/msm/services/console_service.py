@@ -24,7 +24,7 @@ from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction, AuditResult
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository
-from msm.exceptions import ConfirmationRequired
+from msm.exceptions import ConfirmationRequired, PermissionDenied
 from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
@@ -54,27 +54,28 @@ class ConsoleService:
         command = sanitize_command(raw_command)
         level = classify(command)
 
-        context.require(Permission.CONSOLE_WRITE, action=tr("send a command"))
-        if level is not DangerLevel.SAFE:
-            try:
+        # Toute tentative refusée laisse une trace : c'est tout l'intérêt de l'audit.
+        try:
+            context.require(Permission.CONSOLE_WRITE, action=tr("send a command"))
+            if level is not DangerLevel.SAFE:
                 context.require(Permission.CONSOLE_DANGEROUS, action=tr("run this command"))
-            except Exception:
-                self._audit.record(
-                    action=AuditAction.COMMAND_SENT,
-                    summary=tr(
-                        "Command refused on “{name}”: {command}", name=server.name, command=command
-                    ),
-                    actor_id=context.user_id,
-                    actor_username=context.username,
-                    actor_role=context.role.value,
-                    ip_address=ip_address,
-                    server_id=server.id,
-                    result=AuditResult.DENIED,
-                    payload={"command": command, "danger": level.name},
-                )
-                # Validé avant de relever : sinon le rejet annulerait sa propre trace.
-                await self._session.commit()
-                raise
+        except PermissionDenied:
+            self._audit.record(
+                action=AuditAction.COMMAND_SENT,
+                summary=tr(
+                    "Command refused on “{name}”: {command}", name=server.name, command=command
+                ),
+                actor_id=context.user_id,
+                actor_username=context.username,
+                actor_role=context.role.value,
+                ip_address=ip_address,
+                server_id=server.id,
+                result=AuditResult.DENIED,
+                payload={"command": command, "danger": level.name},
+            )
+            # Validé avant de relever : sinon le rejet annulerait sa propre trace.
+            await self._session.commit()
+            raise
 
         if level is not DangerLevel.SAFE and not confirm:
             # Le refus n'est pas une erreur : le client doit simplement rejouer
