@@ -317,6 +317,8 @@ export interface GameVersion {
   id: string
   channel: string
   minecraft_version: string
+  /** Recommandée par l'éditeur comme la plus stable (Mohist) : proposée par défaut. */
+  recommended?: boolean
 }
 
 export interface InstallResult {

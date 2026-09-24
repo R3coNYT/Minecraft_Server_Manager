@@ -92,12 +92,15 @@ class VersionInfo:
     channel: str = "release"
     #: Version de Minecraft, quand elle diffère de l'identifiant (builds Paper).
     minecraft_version: str | None = None
+    #: Recommandée par l'éditeur comme la plus stable ; proposée par défaut.
+    recommended: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "channel": self.channel,
             "minecraft_version": self.minecraft_version or self.id,
+            "recommended": self.recommended,
         }
 
 
@@ -457,11 +460,39 @@ async def _neoforge_target(
 # --------------------------------------------------------------------------- #
 #  MohistMC — Mohist (Forge) et Youer (NeoForge)
 # --------------------------------------------------------------------------- #
-def _mohist_source(project: str, label: str) -> dict[str, Any]:
+#: Versions que MohistMC recommande comme les plus stables (note aux hébergeurs
+#: de https://mohistmc.com/mohistmc-api) ; les autres restent proposées.
+MOHIST_RECOMMENDED: frozenset[str] = frozenset({"1.12.2", "1.16.5", "1.20.1"})
+
+
+def _mohist_loader(project: str, entry: dict[str, Any]) -> str | None:
+    """Loader embarqué par un build : Forge pour Mohist, NeoForge pour Youer."""
+    loader = entry.get("loader") or {}
+    preferred = (
+        ("neoforge_version", "forge_version")
+        if project == "youer"
+        else (
+            "forge_version",
+            "neoforge_version",
+        )
+    )
+    names = {"forge_version": "Forge", "neoforge_version": "NeoForge"}
+    for key in (*preferred, "fabric_version"):
+        if loader.get(key):
+            return f"{names.get(key, 'Fabric')} {loader[key]}"
+    return None
+
+
+def _mohist_source(
+    project: str, label: str, recommended: frozenset[str] = frozenset()
+) -> dict[str, Any]:
     async def versions(client: httpx.AsyncClient) -> list[VersionInfo]:
         data = await _get_json(client, f"{MOHIST_API}/{project}/versions")
         names = [str(entry["name"]) for entry in data if entry.get("name")]
-        return [VersionInfo(id=name) for name in sorted(names, key=version_key, reverse=True)]
+        return [
+            VersionInfo(id=name, recommended=name in recommended)
+            for name in sorted(names, key=version_key, reverse=True)
+        ]
 
     async def raw_builds(client: httpx.AsyncClient, version: str) -> list[dict[str, Any]]:
         data = await _get_json(client, f"{MOHIST_API}/{project}/{version}/builds")
@@ -469,13 +500,17 @@ def _mohist_source(project: str, label: str) -> dict[str, Any]:
         return sorted(entries, key=lambda entry: int(entry["id"]), reverse=True)
 
     async def builds(client: httpx.AsyncClient, version: str) -> list[BuildInfo]:
-        return [
-            BuildInfo(
-                id=str(entry["id"]),
-                label=f"#{entry['id']} · {str(entry.get('build_date') or '')[:10]}".rstrip(" ·"),
+        builds = []
+        for entry in await raw_builds(client, version):
+            parts = [
+                f"#{entry['id']}",
+                _mohist_loader(project, entry),
+                str(entry.get("build_date") or "")[:10],
+            ]
+            builds.append(
+                BuildInfo(id=str(entry["id"]), label=" · ".join(part for part in parts if part))
             )
-            for entry in await raw_builds(client, version)
-        ]
+        return builds
 
     async def target(
         client: httpx.AsyncClient, version: str, build: str | None = None
@@ -554,7 +589,7 @@ SOURCES: dict[str, dict[str, Any]] = {
         "label": "Mohist (Forge)",
         "server_type": ServerType.MOHIST,
         "kind": "jar",
-        **_mohist_source("mohist", "Mohist"),
+        **_mohist_source("mohist", "Mohist", MOHIST_RECOMMENDED),
     },
     "youer": {
         "label": "Youer (NeoForge)",

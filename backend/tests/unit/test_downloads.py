@@ -331,7 +331,12 @@ class TestNewSources:
         api = sources_module.MOHIST_API
         body = [
             {"id": 424, "file_sha256": "b" * 64, "build_date": "2025-12-26T10:19:05Z"},
-            {"id": 471, "file_sha256": "c" * 64, "build_date": "2026-01-16T13:01:42Z"},
+            {
+                "id": 471,
+                "file_sha256": "c" * 64,
+                "build_date": "2026-01-16T13:01:42Z",
+                "loader": {"forge_version": "47.4.13", "neoforge_version": "47.1.106"},
+            },
         ]
         client = httpx.AsyncClient(
             transport=transport({f"{api}/mohist/1.20.1/builds": httpx.Response(200, json=body)})
@@ -342,6 +347,9 @@ class TestNewSources:
         chosen = await resolve("mohist", "1.20.1", "424", client=client)
 
         assert [item.id for item in builds] == ["471", "424"]
+        # Le loader embarqué se lit dans le libellé : Forge pour Mohist.
+        assert builds[0].label == "#471 · Forge 47.4.13 · 2026-01-16"
+        assert builds[1].label == "#424 · 2025-12-26"
         assert latest.url == f"{api}/mohist/1.20.1/builds/471/download"
         assert latest.checksum == "c" * 64
         assert chosen.checksum == "b" * 64
@@ -436,4 +444,38 @@ class TestPaperFill:
         assert target.filename == "paper-1.21.1-133.jar"
         assert (target.algorithm, target.checksum) == ("sha256", "3" * 64)
         assert httpx.URL(target.url).host in ALLOWED_HOSTS
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+class TestMohistRecommendations:
+    async def test_the_stable_versions_advised_by_mohistmc_are_flagged(self) -> None:
+        api = sources_module.MOHIST_API
+        body = [{"name": name} for name in ("1.20.1", "1.21.4", "1.12.2", "1.7.10", "1.16.5")]
+        client = httpx.AsyncClient(
+            transport=transport({f"{api}/mohist/versions": httpx.Response(200, json=body)})
+        )
+
+        versions = await list_versions("mohist", client=client)
+
+        assert [item.id for item in versions if item.recommended] == ["1.20.1", "1.16.5", "1.12.2"]
+        assert versions[0].id == "1.21.4"  # toujours listées de la plus récente à la plus ancienne
+        await client.aclose()
+
+    async def test_youer_builds_name_their_neoforge(self) -> None:
+        api = sources_module.MOHIST_API
+        body = [
+            {
+                "id": 915,
+                "build_date": "2026-09-21T08:53:15Z",
+                "loader": {"neoforge_version": "21.1.251"},
+            }
+        ]
+        client = httpx.AsyncClient(
+            transport=transport({f"{api}/youer/1.21.1/builds": httpx.Response(200, json=body)})
+        )
+
+        builds = await list_builds("youer", "1.21.1", client=client)
+
+        assert builds[0].label == "#915 · NeoForge 21.1.251 · 2026-09-21"
         await client.aclose()

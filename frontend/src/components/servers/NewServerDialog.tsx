@@ -138,10 +138,12 @@ function FormDialog({
     if (!portEdited && defaults.data) setPort(String(defaults.data.port))
   }, [defaults.data, portEdited])
 
-  // La version la plus récente de la liste, puis son build stable le plus récent.
+  // La version recommandée par l'éditeur s'il en désigne (Mohist), sinon la plus
+  // récente ; puis son build stable le plus récent.
+  const hasRecommended = shownVersions.some((item) => item.recommended)
   useEffect(() => {
     if (shownVersions.length && !shownVersions.some((item) => item.id === version)) {
-      setVersion(shownVersions[0]!.id)
+      setVersion((shownVersions.find((item) => item.recommended) ?? shownVersions[0]!).id)
     }
   }, [shownVersions, version])
   useEffect(() => {
@@ -270,7 +272,10 @@ function FormDialog({
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label={t('provision.version')}>
+          <Field
+            label={t('provision.version')}
+            hint={hasRecommended ? t('provision.recommendedHint') : undefined}
+          >
             <Select
               value={version}
               disabled={versions.isLoading}
@@ -282,7 +287,7 @@ function FormDialog({
               {versions.isLoading ? <option>{t('provision.loadingVersions')}</option> : null}
               {shownVersions.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.id}
+                  {item.recommended ? t('provision.recommended', { version: item.id }) : item.id}
                 </option>
               ))}
             </Select>

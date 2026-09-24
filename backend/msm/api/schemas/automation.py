@@ -101,6 +101,8 @@ class VersionOut(BaseModel):
     id: str
     channel: str
     minecraft_version: str
+    #: Recommandée par l'éditeur comme la plus stable (Mohist) ; proposée par défaut.
+    recommended: bool = False
 
 
 class InstallRequest(BaseModel):
