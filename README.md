@@ -142,6 +142,7 @@ The detailed documentation is in French.
 - [x] **Phase 4** — events: immediate actions, recorded sequences, cancellable background runs
 - [x] **Phase 5** — administration: hot backups of worlds and configurations, restore, resource history
 - [x] **Phase 6** — extensions: scheduling, Discord notifications, version downloads, custom launcher integration
+- [ ] **Public opening** — sign-up (password or Google), per-user servers, sharing, admin panel ([plan](docs/PLAN_OUVERTURE_PUBLIC.md), in French)
 - [ ] **Phase 7** — agents: manage servers hosted on other machines
 
 ## License
