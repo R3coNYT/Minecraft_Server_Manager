@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
-  Boxes,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -20,6 +19,7 @@ import { useRealtime } from '@/stores/realtime'
 import { cn } from '@/lib/cn'
 import { StatusDot } from '@/components/servers/ServerStatusBadge'
 import { Button } from '@/components/ui/Button'
+import { MsmLogo } from '@/components/brand/MsmLogo'
 import { t, type MessageKey } from '@/i18n'
 
 function ConnectionIndicator() {
@@ -60,7 +60,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2.5 px-4 py-4">
-        <Boxes className="size-5 text-emerald-500" />
+        <MsmLogo className="size-7 shrink-0 text-emerald-500" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-slate-100">Minecraft</p>
           <p className="truncate text-xs text-slate-500">Server Manager</p>

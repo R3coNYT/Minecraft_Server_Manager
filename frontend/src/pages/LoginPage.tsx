@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
-import { Boxes } from 'lucide-react'
+import { MsmLogo } from '@/components/brand/MsmLogo'
 import { useLogin, useMe } from '@/hooks/useApi'
 import { Button } from '@/components/ui/Button'
 import { Card, Field, Input, LoadingBlock } from '@/components/ui/primitives'
@@ -25,7 +25,7 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <Boxes className="size-8 text-emerald-500" />
+          <MsmLogo className="size-14 text-emerald-500" />
           <h1 className="text-lg font-semibold text-slate-100">Minecraft Server Manager</h1>
           <p className="text-sm text-slate-500">{t('login.subtitle')}</p>
         </div>

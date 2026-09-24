@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/branding/msm-logo.svg">
+    <img src="docs/branding/msm-logo-light.svg" alt="MSM — Minecraft Server Manager" width="420">
+  </picture>
+</p>
+
 # Minecraft Server Manager (MSM) 2.0
 
 A self-hosted web panel to run **several Minecraft servers** from a single interface:
