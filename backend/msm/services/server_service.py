@@ -10,8 +10,10 @@ permet de le tester avec un faux serveur, sans base.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import unicodedata
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,7 @@ from msm.logging_conf import get_logger
 from msm.minecraft import detector
 from msm.minecraft.capabilities import detect_capabilities
 from msm.minecraft.types import ServerType
+from msm.runtime.orphans import find_server_process
 from msm.runtime.server_runtime import ServerRuntimeConfig
 from msm.runtime.supervisor import Supervisor
 
@@ -351,26 +354,50 @@ class ServerService:
         for server in await self._servers.list_all(only_enabled=True):
             state = server.runtime_state
             runtime = self._supervisor.find(server.id)
-            if runtime is None or state is None:
+            if runtime is None:
                 continue
 
-            if state.pid is None or not state.state.is_running:
-                continue
-
-            if await runtime.adopt(
-                state.pid,
-                group_id=state.group_id,
-                create_time=state.process_create_time,
-                started_at=state.started_at,
+            recorded = state if state is not None and state.state.is_running else None
+            if (
+                recorded is not None
+                and recorded.pid is not None
+                and await runtime.adopt(
+                    recorded.pid,
+                    group_id=recorded.group_id,
+                    create_time=recorded.process_create_time,
+                    started_at=recorded.started_at,
+                )
             ):
                 adopted += 1
                 logger.info(
                     "server_readopted",
                     server_id=server.id,
                     server=server.name,
-                    pid=state.pid,
+                    pid=recorded.pid,
                 )
-            else:
+                continue
+
+            # Filet de sécurité : sans PID exploitable (MSM arrêté en plein
+            # démarrage, base restaurée…), le serveur peut tourner quand même.
+            # Il se retrouve par son dossier — sinon il resterait orphelin, et
+            # sa prochaine relance échouerait sur le verrou du monde.
+            found = await asyncio.to_thread(find_server_process, Path(server.directory))
+            if found is not None and await runtime.adopt(
+                found.pid,
+                group_id=found.group_id,
+                create_time=found.create_time,
+                started_at=datetime.fromtimestamp(found.create_time, UTC),
+            ):
+                adopted += 1
+                logger.warning(
+                    "server_readopted_by_directory",
+                    server_id=server.id,
+                    server=server.name,
+                    pid=found.pid,
+                )
+                continue
+
+            if recorded is not None:
                 # Le processus a disparu, ou son PID a été réattribué à un
                 # programme sans rapport : l'état persistant est périmé.
                 await self._servers.save_runtime_state(server.id, state=ServerState.OFFLINE)

@@ -3,6 +3,8 @@
 MESSAGES: dict[str, str] = {
     "Server “{name}” is already running.": "Le serveur « {name} » est déjà en cours d'exécution.",
     "A process (PID {pid}) that survived an MSM restart is still alive.": "Un processus (PID {pid}) survivant à un redémarrage de MSM est toujours actif.",
+    "A Java process (PID {pid}) is running in the server folder: an instance MSM lost track of, which still holds the world.": "Un processus Java (PID {pid}) tourne dans le dossier du serveur : une instance que MSM a perdue de vue, et qui tient toujours le monde.",
+    "Restart MSM so it re-adopts it (sudo systemctl restart minecraft-server-manager), or stop it cleanly with: kill {pid}": "Redémarrez MSM pour qu'il la réadopte (sudo systemctl restart minecraft-server-manager), ou arrêtez-la proprement avec : kill {pid}",
     "Stop this server before starting it again.": "Arrêter ce serveur avant de le relancer.",
     "Its current state is {state}.": "Son état actuel est {state}.",
     "Use “Restart” to start it again.": "Utiliser « Redémarrer » pour le relancer.",

@@ -39,6 +39,7 @@ from msm.minecraft import eula as eula_module
 from msm.runtime.backends import ProcessBackend, get_backend
 from msm.runtime.log_pipeline import LogPipeline
 from msm.runtime.log_tailer import LogTailer, default_log_path
+from msm.runtime.orphans import find_server_process
 from msm.runtime.process_handle import ProcessHandle, StopOutcome, StopStage
 from msm.runtime.ring_buffer import RingBuffer
 from msm.runtime.stats import EMPTY_STATS, ProcessStats, StatsCollector
@@ -276,6 +277,25 @@ class ServerRuntime:
                 remediation=tr("Use “Restart” to start it again."),
             )
 
+        # Une instance que MSM a perdue de vue tient encore le monde : la
+        # relancer échouerait sur son verrou (`session.lock`), après une minute
+        # de chargement et sans dire pourquoi. Autant le dire tout de suite.
+        orphan = await asyncio.to_thread(find_server_process, self._config.directory)
+        if orphan is not None:
+            raise ServerAlreadyRunning(
+                tr("Server “{name}” is already running.", name=self._config.name),
+                cause=tr(
+                    "A Java process (PID {pid}) is running in the server folder: an instance "
+                    "MSM lost track of, which still holds the world.",
+                    pid=orphan.pid,
+                ),
+                remediation=tr(
+                    "Restart MSM so it re-adopts it (sudo systemctl restart "
+                    "minecraft-server-manager), or stop it cleanly with: kill {pid}",
+                    pid=orphan.pid,
+                ),
+            )
+
         self._cancel_pending_restart()
         self._stop_requested = False
         self._last_error = None
@@ -342,6 +362,10 @@ class ServerRuntime:
         self._stats_collector = StatsCollector(spawned.pid)
         self._online_players.clear()
         self._pending_uuids.clear()
+        # Le PID est publié dès maintenant, sans attendre « en ligne » : il est
+        # enregistré en base, et c'est lui qui permet de réadopter le serveur si
+        # MSM redémarre pendant un long chargement (un modpack met des minutes).
+        self._publish_status()
 
         self._reader_task = asyncio.create_task(
             self._pump_output(handle), name=f"msm-logs-{self.id}"
@@ -970,6 +994,9 @@ class ServerRuntime:
             state=target.value,
             reason=reason,
         )
+        self._publish_status()
+
+    def _publish_status(self) -> None:
         self._bus.publish(topics.server_topic(self.id, topics.STATUS), self.snapshot())
 
     def _publish_line(self, line: LogLine) -> None:
