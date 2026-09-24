@@ -153,18 +153,22 @@ function FormDialog({
     }
   }, [builds.data, build])
 
+  const locked = defaults.data?.directory_locked ?? false
+  const portLocked = defaults.data?.port_locked ?? false
+  const maxMemory = defaults.data?.max_memory_mb ?? null
+
   const queryClient = useQueryClient()
   const create = useMutation({
     mutationFn: () =>
       api.provisioning.create({
         name: name.trim(),
-        directory: directory.trim(),
+        directory: locked ? null : directory.trim(),
         distribution,
         version,
         build: current?.has_builds ? build : null,
         memory_min_mb: Number(memoryMin),
         memory_max_mb: Number(memoryMax),
-        port: Number(port),
+        port: portLocked ? null : Number(port),
         accept_eula: acceptEula,
         start_after: acceptEula && startAfter,
       }),
@@ -188,9 +192,11 @@ function FormDialog({
     create.reset()
   }
 
+  const tooMuchMemory = maxMemory !== null && Number(memoryMax) > maxMemory
   const ready =
     Boolean(name.trim() && directory.trim() && version && port) &&
-    (!current?.has_builds || Boolean(build))
+    (!current?.has_builds || Boolean(build)) &&
+    !tooMuchMemory
 
   return (
     <Dialog
@@ -255,13 +261,17 @@ function FormDialog({
         <Field
           label={t('provision.directory')}
           hint={
-            defaults.data?.roots.length
-              ? t('provision.directoryRoots', { roots: defaults.data.roots.join(', ') })
-              : t('provision.directoryHint')
+            locked
+              ? t('provision.directoryLocked')
+              : defaults.data?.roots.length
+                ? t('provision.directoryRoots', { roots: defaults.data.roots.join(', ') })
+                : t('provision.directoryHint')
           }
         >
           <Input
             value={directory}
+            readOnly={locked}
+            className={locked ? 'text-slate-500' : undefined}
             onChange={(event) => {
               setDirectoryEdited(true)
               setDirectory(event.target.value)
@@ -347,21 +357,31 @@ function FormDialog({
               onChange={(event) => setMemoryMin(event.target.value)}
             />
           </Field>
-          <Field label={t('provision.memoryMax')}>
+          <Field
+            label={t('provision.memoryMax')}
+            hint={maxMemory !== null ? t('provision.memoryLimit', { limit: maxMemory }) : undefined}
+            error={tooMuchMemory ? t('provision.memoryLimit', { limit: maxMemory ?? 0 }) : undefined}
+          >
             <Input
               type="number"
               min={512}
+              max={maxMemory ?? undefined}
               step={512}
               value={memoryMax}
               onChange={(event) => setMemoryMax(event.target.value)}
             />
           </Field>
-          <Field label={t('provision.port')}>
+          <Field
+            label={t('provision.port')}
+            hint={portLocked ? t('provision.portLocked') : undefined}
+          >
             <Input
               type="number"
               min={1}
               max={65535}
               value={port}
+              readOnly={portLocked}
+              className={portLocked ? 'text-slate-500' : undefined}
               onChange={(event) => {
                 setPortEdited(true)
                 setPort(event.target.value)

@@ -28,6 +28,21 @@ class UserRepository:
         statement = select(User).where(User.username.ilike(username.strip()))
         return (await self._session.execute(statement)).scalar_one_or_none()
 
+    async def search(self, prefix: str, *, limit: int = 8) -> list[User]:
+        """Comptes actifs, non bannis, dont le pseudo commence par `prefix`."""
+        escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        statement = (
+            select(User)
+            .where(
+                User.username.ilike(f"{escaped}%", escape="\\"),
+                User.is_active.is_(True),
+                User.banned_at.is_(None),
+            )
+            .order_by(User.username)
+            .limit(limit)
+        )
+        return list((await self._session.execute(statement)).scalars())
+
     async def list_all(self) -> list[User]:
         statement = select(User).order_by(User.username)
         return list((await self._session.execute(statement)).scalars())

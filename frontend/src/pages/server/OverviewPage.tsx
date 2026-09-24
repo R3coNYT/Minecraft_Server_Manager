@@ -136,6 +136,7 @@ export function OverviewPage() {
                 label={t('overview.autoEula')}
                 value={settings?.auto_accept_eula ? t('common.yes') : t('common.no')}
               />
+              {can(server, 'server:autostart') ? (
               <div className="flex items-start justify-between gap-4 px-5 py-2.5">
                 <div className="min-w-0">
                   <p className="text-sm text-slate-500">{t('overview.startWithMsm')}</p>
@@ -148,12 +149,13 @@ export function OverviewPage() {
                     type="checkbox"
                     className="size-4 rounded border-slate-600 bg-slate-900 text-emerald-600 focus:ring-emerald-600"
                     checked={settings?.autostart_on_boot ?? false}
-                    disabled={!can(server, 'server:autostart') || autostart.isPending}
+                    disabled={autostart.isPending}
                     onChange={(event) => autostart.mutate(event.target.checked)}
                   />
                   {settings?.autostart_on_boot ? t('common.yes') : t('common.no')}
                 </label>
               </div>
+              ) : null}
             </dl>
           </Card>
         </div>

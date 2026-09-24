@@ -1,7 +1,7 @@
 /** Ossature de l'application : barre latérale, en-tête, zone de contenu. */
 
 import { useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   LogOut,
@@ -20,6 +20,8 @@ import { cn } from '@/lib/cn'
 import { StatusDot } from '@/components/servers/ServerStatusBadge'
 import { Button } from '@/components/ui/Button'
 import { MsmLogo } from '@/components/brand/MsmLogo'
+import { Avatar } from '@/components/common/Avatar'
+import { groupServers } from '@/lib/serverGroups'
 import { t, type MessageKey } from '@/i18n'
 
 function ConnectionIndicator() {
@@ -50,6 +52,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { data: me } = useMe()
   const { data: servers } = useServers()
   const statuses = useRealtime((state) => state.statuses)
+  const groups = groupServers(servers ?? [], me?.id)
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -84,32 +87,38 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             {t('shell.users')}
           </NavLink>
         ) : null}
-        {hasPermission(me, 'settings:manage') ? (
-          <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
-            <SlidersHorizontal className="size-4" />
-            {t('shell.settings')}
-          </NavLink>
-        ) : null}
+        {/* Tout le monde a des réglages : au moins sa langue. */}
+        <NavLink to="/settings" className={linkClass} onClick={onNavigate}>
+          <SlidersHorizontal className="size-4" />
+          {t('shell.settings')}
+        </NavLink>
       </nav>
 
       <div className="mt-6 px-4 text-xs font-medium uppercase tracking-wide text-slate-600">
         {t('shell.servers')}
       </div>
       <nav className="mt-2 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-4">
-        {(servers ?? []).map((server) => {
-          const state = statuses[server.id]?.state ?? server.status?.state ?? 'UNKNOWN'
-          return (
-            <NavLink
-              key={server.id}
-              to={`/servers/${server.id}`}
-              className={linkClass}
-              onClick={onNavigate}
-            >
-              <StatusDot state={state} />
-              <span className="truncate">{server.name}</span>
-            </NavLink>
-          )
-        })}
+        {groups.map((group) => (
+          <div key={group.key} className="flex flex-col gap-0.5">
+            {groups.length > 1 ? (
+              <p className="truncate px-3 pb-0.5 pt-2 text-[11px] text-slate-600">{group.title}</p>
+            ) : null}
+            {group.servers.map((server) => {
+              const state = statuses[server.id]?.state ?? server.status?.state ?? 'UNKNOWN'
+              return (
+                <NavLink
+                  key={server.id}
+                  to={`/servers/${server.id}`}
+                  className={linkClass}
+                  onClick={onNavigate}
+                >
+                  <StatusDot state={state} />
+                  <span className="truncate">{server.name}</span>
+                </NavLink>
+              )
+            })}
+          </div>
+        ))}
         {servers?.length === 0 ? (
           <p className="px-3 py-2 text-xs text-slate-600">{t('shell.noServers')}</p>
         ) : null}
@@ -163,12 +172,19 @@ export function AppShell() {
 
           <ConnectionIndicator />
 
-          <div className="hidden items-center gap-2 border-l border-slate-800 pl-3 sm:flex">
-            <div className="text-right">
-              <p className="text-xs font-medium text-slate-200">{me?.username}</p>
-              <p className="text-[11px] text-slate-500">{me ? t(`role.${me.role}` as MessageKey) : ''}</p>
-            </div>
-          </div>
+          {me ? (
+            <Link
+              to="/profile"
+              className="flex items-center gap-2 rounded-lg border-l border-slate-800 py-1 pl-3 pr-1 hover:bg-slate-800/60"
+              title={t('shell.profile')}
+            >
+              <div className="hidden text-right sm:block">
+                <p className="text-xs font-medium text-slate-200">{me.username}</p>
+                <p className="text-[11px] text-slate-500">{t(`role.${me.role}` as MessageKey)}</p>
+              </div>
+              <Avatar url={me.avatar_url} name={me.username} />
+            </Link>
+          ) : null}
 
           <Button
             size="sm"

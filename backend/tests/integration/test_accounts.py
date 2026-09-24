@@ -374,3 +374,27 @@ class TestAccountDetails:
         details = (await moderator.get(f"/api/v1/users/{user_id}")).json()
         assert [server["name"] for server in details["servers_owned"]] == ["sien"]
         assert [(s["name"], s["role"]) for s in details["servers_shared"]] == [("partage", "ADMIN")]
+
+
+class TestLookup:
+    async def test_any_account_finds_others_by_username_prefix(
+        self, admin: ApiClient, viewer: ApiClient
+    ) -> None:
+        found = await viewer.get("/api/v1/users/lookup", params={"q": "mod"})
+        assert found.status_code == 200
+        assert [item["username"] for item in found.json()] == ["moderateur"]
+        # Pseudo et avatar seulement : ni e-mail, ni rôle.
+        assert set(found.json()[0]) == {"id", "username", "avatar_url"}
+
+    async def test_banned_accounts_are_not_suggested(
+        self, admin: ApiClient, viewer: ApiClient
+    ) -> None:
+        users = (await admin.get("/api/v1/users")).json()
+        moderator_id = next(user["id"] for user in users if user["username"] == "moderateur")
+        await admin.post(f"/api/v1/users/{moderator_id}/ban", json={"reason": "Abus"})
+
+        assert (await viewer.get("/api/v1/users/lookup", params={"q": "mod"})).json() == []
+
+    async def test_wildcards_are_taken_literally(self, viewer: ApiClient) -> None:
+        response = await viewer.get("/api/v1/users/lookup", params={"q": "%%"})
+        assert response.json() == []

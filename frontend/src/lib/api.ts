@@ -51,6 +51,17 @@ import type {
   User,
   UiSettings,
   ApiErrorBody,
+  HostingSettings,
+  Invitation,
+  InvitationCreated,
+  MyQuota,
+  Quota,
+  RegistrationInfo,
+  RegistrationMode,
+  ServerMember,
+  ServerRole,
+  UserDetail,
+  UserLookup,
 } from './types'
 import { t } from '@/i18n'
 
@@ -165,7 +176,11 @@ function safeParse(text: string): unknown {
   }
 }
 
-async function sendForm<T>(path: string, form: FormData): Promise<T> {
+async function sendForm<T>(
+  path: string,
+  form: FormData,
+  method: 'POST' | 'PUT' = 'POST',
+): Promise<T> {
   const headers: Record<string, string> = {}
   const csrf = readCookie('msm_csrf')
   if (csrf) headers['X-CSRF-Token'] = csrf
@@ -173,7 +188,7 @@ async function sendForm<T>(path: string, form: FormData): Promise<T> {
   let response: Response
   try {
     response = await fetch(`${BASE}${path}`, {
-      method: 'POST',
+      method,
       headers,
       credentials: 'same-origin',
       body: form,
@@ -217,6 +232,30 @@ export const api = {
         method: 'POST',
         body: { current_password: currentPassword, new_password: newPassword },
       }),
+    /** Public : l'écran de connexion propose l'inscription si elle est possible. */
+    registration: () => request<RegistrationInfo>('/auth/registration'),
+    register: (payload: {
+      email: string
+      username: string
+      password: string
+      accept_terms: boolean
+      invitation?: string | null
+    }) => request<Me>('/auth/register', { method: 'POST', body: payload }),
+    /** `language: null` : revenir à la langue du panneau. */
+    updateProfile: (payload: { username?: string; language?: string | null }) =>
+      request<Me>('/auth/me', { method: 'PUT', body: payload }),
+    changeEmail: (email: string, currentPassword: string) =>
+      request<Me>('/auth/me/email', {
+        method: 'PUT',
+        body: { email, current_password: currentPassword },
+      }),
+    uploadAvatar: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return sendForm<Me>('/auth/me/avatar', form, 'PUT')
+    },
+    removeAvatar: () => request<Me>('/auth/me/avatar', { method: 'DELETE' }),
+    quota: () => request<MyQuota>('/auth/me/quota'),
   },
 
   servers: {
@@ -228,6 +267,14 @@ export const api = {
       request<Server>('/servers', { method: 'POST', body: payload }),
     update: (id: number, payload: Record<string, unknown>) =>
       request<Server>(`/servers/${id}`, { method: 'PUT', body: payload }),
+    members: (id: number) => request<ServerMember[]>(`/servers/${id}/members`),
+    share: (id: number, username: string, role: Exclude<ServerRole, 'OWNER'>) =>
+      request<ServerMember>(`/servers/${id}/members`, {
+        method: 'PUT',
+        body: { username, role },
+      }),
+    unshare: (id: number, userId: number) =>
+      request<{ status: string }>(`/servers/${id}/members/${userId}`, { method: 'DELETE' }),
     remove: (id: number) =>
       request<{ status: string; detail: string }>(`/servers/${id}`, { method: 'DELETE' }),
     detect: (directory: string) =>
@@ -435,6 +482,19 @@ export const api = {
       request<UiSettings>('/settings/language', { method: 'PUT', body: { language } }),
   },
 
+  /** Réglages de l'ouverture au public : inscriptions, hébergement des comptes. */
+  platform: {
+    registration: () => request<{ mode: RegistrationMode }>('/settings/registration'),
+    setRegistration: (mode: RegistrationMode) =>
+      request<{ mode: RegistrationMode }>('/settings/registration', {
+        method: 'PUT',
+        body: { mode },
+      }),
+    hosting: () => request<HostingSettings>('/settings/hosting'),
+    setHosting: (payload: HostingSettings) =>
+      request<HostingSettings>('/settings/hosting', { method: 'PUT', body: payload }),
+  },
+
   /** Salon global : création et suppression de serveurs. */
   notifications: {
     get: () => request<NotificationSettings>('/notifications'),
@@ -489,6 +549,19 @@ export const api = {
     update: (id: number, payload: Record<string, unknown>) =>
       request<User>(`/users/${id}`, { method: 'PUT', body: payload }),
     remove: (id: number) => request<{ status: string }>(`/users/${id}`, { method: 'DELETE' }),
+    get: (id: number) => request<UserDetail>(`/users/${id}`),
+    ban: (id: number, reason: string) =>
+      request<User>(`/users/${id}/ban`, { method: 'POST', body: { reason } }),
+    unban: (id: number) => request<User>(`/users/${id}/unban`, { method: 'POST' }),
+    /** Champs envoyés seulement ; `{}` rétablit les quotas par défaut. */
+    setQuota: (id: number, overrides: Partial<Quota>) =>
+      request<User>(`/users/${id}/quota`, { method: 'PUT', body: overrides }),
+    lookup: (query: string) => request<UserLookup[]>('/users/lookup', { params: { q: query } }),
+    invitations: () => request<Invitation[]>('/users/invitations'),
+    invite: (note: string, days: number) =>
+      request<InvitationCreated>('/users/invitations', { method: 'POST', body: { note, days } }),
+    revokeInvitation: (id: number) =>
+      request<{ status: string }>(`/users/invitations/${id}`, { method: 'DELETE' }),
   },
 
   audit: {

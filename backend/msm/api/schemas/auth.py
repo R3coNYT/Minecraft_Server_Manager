@@ -141,6 +141,14 @@ class AccountBanRequest(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class UserLookupOut(BaseModel):
+    """Ce qu'un compte voit d'un autre pour le partager : son pseudo, son avatar."""
+
+    id: int
+    username: str
+    avatar_url: str | None = None
+
+
 class InvitationCreateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=128)
     days: int = Field(default=7, ge=1, le=30)

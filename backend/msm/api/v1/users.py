@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import FileResponse
 
 from msm.api.deps import (
@@ -26,6 +26,7 @@ from msm.api.schemas import (
     ServerRefOut,
     UserCreateRequest,
     UserDetailOut,
+    UserLookupOut,
     UsernameChangeOut,
     UserOut,
     UserUpdateRequest,
@@ -34,7 +35,7 @@ from msm.api.schemas.hosting import QuotaModel
 from msm.api.v1.auth import quota_report
 from msm.core.permissions import Permission, Role
 from msm.db.models.audit import AuditAction
-from msm.db.repositories import AuditRepository, ServerRepository
+from msm.db.repositories import AuditRepository, ServerRepository, UserRepository
 from msm.exceptions import ConflictError, NotFoundError, ValidationError
 from msm.i18n import tr
 from msm.security.rbac import AccessContext
@@ -58,6 +59,24 @@ async def list_users(auth: AuthServiceDep, _: StaffOnly) -> list[UserOut]:
         key=lambda user: (_ROLE_ORDER.get(user.role, 9), user.username.casefold()),
     )
     return [UserOut.model_validate(user) for user in users]
+
+
+# --------------------------------------------------------------------------- #
+#  Recherche — déclarée avant `/{user_id}`, qui la capturerait sinon.
+# --------------------------------------------------------------------------- #
+@router.get("/lookup", response_model=list[UserLookupOut], summary="Find accounts by username")
+async def lookup_users(
+    session: DbSession, _: CurrentUser, q: Annotated[str, Query(min_length=2, max_length=64)]
+) -> list[UserLookupOut]:
+    """Pour partager un serveur : pseudo et avatar seulement, jamais l'e-mail ni le rôle."""
+    return [
+        UserLookupOut(
+            id=user.id,
+            username=user.username,
+            avatar_url=UserOut.model_validate(user).avatar_url,
+        )
+        for user in await UserRepository(session).search(q.strip())
+    ]
 
 
 # --------------------------------------------------------------------------- #

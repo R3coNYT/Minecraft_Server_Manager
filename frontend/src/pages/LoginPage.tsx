@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { api } from '@/lib/api'
 import { MsmLogo } from '@/components/brand/MsmLogo'
 import { useLogin, useMe } from '@/hooks/useApi'
 import { Button } from '@/components/ui/Button'
@@ -12,6 +14,10 @@ export function LoginPage() {
   const login = useLogin()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const registration = useQuery({
+    queryKey: ['registration'],
+    queryFn: () => api.auth.registration(),
+  })
 
   if (isLoading) return <LoadingBlock />
   if (me) return <Navigate to="/" replace />
@@ -67,12 +73,24 @@ export function LoginPage() {
           </form>
         </Card>
 
-        <p className="mt-4 text-center text-xs text-slate-600">
-          {t('login.firstRun')}{' '}
-          <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono">
-            msm createadmin
-          </code>
-        </p>
+        {registration.data?.mode === 'open' ? (
+          <p className="mt-4 text-center text-sm text-slate-500">
+            {t('login.noAccount')}{' '}
+            <Link to="/register" className="text-emerald-400 hover:text-emerald-300">
+              {t('login.createAccount')}
+            </Link>
+          </p>
+        ) : null}
+
+        {/* Indice pour l'administrateur qui installe MSM, inutile à un visiteur. */}
+        {registration.data && registration.data.mode !== 'open' ? (
+          <p className="mt-4 text-center text-xs text-slate-600">
+            {t('login.firstRun')}{' '}
+            <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono">
+              msm createadmin
+            </code>
+          </p>
+        ) : null}
       </div>
     </div>
   )

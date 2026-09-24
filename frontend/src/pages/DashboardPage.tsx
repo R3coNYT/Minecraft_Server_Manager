@@ -22,6 +22,8 @@ import { ServerActions } from '@/components/servers/ServerActions'
 import { Button } from '@/components/ui/Button'
 import { CreateServerDialog } from '@/components/servers/CreateServerDialog'
 import { NewServerDialog } from '@/components/servers/NewServerDialog'
+import { AccessBadge } from '@/components/servers/AccessBadge'
+import { groupServers } from '@/lib/serverGroups'
 import { t, tn } from '@/i18n'
 
 function ServerCard({ server }: { server: Server }) {
@@ -46,7 +48,10 @@ function ServerCard({ server }: { server: Server }) {
             {server.minecraft_version ? ` · Minecraft ${server.minecraft_version}` : ''}
           </p>
         </div>
-        <ServerStatusBadge state={state} />
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <ServerStatusBadge state={state} />
+          <AccessBadge server={server} compact />
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-px border-y border-slate-800 bg-slate-800">
@@ -113,7 +118,9 @@ export function DashboardPage() {
   if (error) return <div className="p-6"><ErrorPanel error={error} /></div>
   if (!data) return null
 
-  const system = liveSystem ?? data.system
+  // Sans accès aux ressources de la machine, le flux temps réel ne les envoie pas.
+  const system = data.system ? (liveSystem ?? data.system) : null
+  const groups = groupServers(data.servers, me?.id)
   // Les compteurs vivants priment sur l'instantané REST, qui peut dater.
   const onlineCount = data.servers.filter((server) => {
     const state = statuses[server.id]?.state ?? server.status?.state
@@ -135,13 +142,15 @@ export function DashboardPage() {
         </div>
         {hasPermission(me, 'server:create') ? (
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="secondary"
-              icon={<FolderInput className="size-4" />}
-              onClick={() => setCreateOpen(true)}
-            >
-              {t('dashboard.addServer')}
-            </Button>
+            {hasPermission(me, 'server:register') ? (
+              <Button
+                variant="secondary"
+                icon={<FolderInput className="size-4" />}
+                onClick={() => setCreateOpen(true)}
+              >
+                {t('dashboard.addServer')}
+              </Button>
+            ) : null}
             <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setNewOpen(true)}>
               {t('dashboard.createServer')}
             </Button>
@@ -217,17 +226,23 @@ export function DashboardPage() {
           <EmptyState
             icon={<ServerIcon className="size-8" />}
             title={t('dashboard.emptyTitle')}
-            description={t('dashboard.emptyDescription')}
+            description={
+              hasPermission(me, 'server:register')
+                ? t('dashboard.emptyDescription')
+                : t('dashboard.emptyDescriptionUser')
+            }
             action={
               hasPermission(me, 'server:create') ? (
                 <div className="flex flex-wrap justify-center gap-2">
-                  <Button
-                    variant="secondary"
-                    icon={<FolderInput className="size-4" />}
-                    onClick={() => setCreateOpen(true)}
-                  >
-                    {t('dashboard.addServer')}
-                  </Button>
+                  {hasPermission(me, 'server:register') ? (
+                    <Button
+                      variant="secondary"
+                      icon={<FolderInput className="size-4" />}
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      {t('dashboard.addServer')}
+                    </Button>
+                  ) : null}
                   <Button
                     variant="primary"
                     icon={<Plus className="size-4" />}
@@ -241,9 +256,18 @@ export function DashboardPage() {
           />
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {data.servers.map((server) => (
-            <ServerCard key={server.id} server={server} />
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.key} className="space-y-3">
+              {groups.length > 1 ? (
+                <h2 className="text-sm font-medium text-slate-400">{group.title}</h2>
+              ) : null}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {group.servers.map((server) => (
+                  <ServerCard key={server.id} server={server} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}

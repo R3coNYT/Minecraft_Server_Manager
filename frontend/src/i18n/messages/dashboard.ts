@@ -22,6 +22,7 @@ export const dashboard = section({
     "dashboard.diskUsage": "{used} GB / {total} GB",
     "dashboard.emptyTitle": "No server registered",
     "dashboard.emptyDescription": "Create a server from scratch, or add one already on this machine: MSM analyses its folder and suggests a start configuration.",
+    "dashboard.emptyDescriptionUser": "Create your first server: MSM downloads it and prepares it in your own folder. Servers shared with you also appear here.",
   },
   fr: {
     "dashboard.unknownType": "Type inconnu",
@@ -44,5 +45,6 @@ export const dashboard = section({
     "dashboard.diskUsage": "{used} Go / {total} Go",
     "dashboard.emptyTitle": "Aucun serveur enregistré",
     "dashboard.emptyDescription": "Créer un serveur de zéro, ou ajouter un serveur déjà présent sur cette machine : MSM analyse son dossier et propose une configuration de démarrage.",
+    "dashboard.emptyDescriptionUser": "Créez votre premier serveur : MSM le télécharge et le prépare dans votre propre dossier. Les serveurs partagés avec vous apparaissent aussi ici.",
   },
 })

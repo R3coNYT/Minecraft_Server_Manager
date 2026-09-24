@@ -22,6 +22,10 @@ import { BackupsPage } from '@/pages/server/BackupsPage'
 import { SchedulesPage } from '@/pages/server/SchedulesPage'
 import { LauncherPage } from '@/pages/server/LauncherPage'
 import { NotificationsPage } from '@/pages/server/NotificationsPage'
+import { MembersPage } from '@/pages/server/MembersPage'
+import { RegisterPage } from '@/pages/RegisterPage'
+import { ProfilePage } from '@/pages/ProfilePage'
+import { UserDetailPage } from '@/pages/UserDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 /**
@@ -55,6 +59,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       <Route
         element={
@@ -66,6 +71,8 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="audit" element={<AuditPage />} />
         <Route path="users" element={<UsersPage />} />
+        <Route path="users/:userId" element={<UserDetailPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route path="settings" element={<SettingsPage />} />
 
         <Route path="servers/:serverId" element={<ServerLayout />}>
@@ -81,6 +88,7 @@ export function App() {
           <Route path="schedules" element={<SchedulesPage />} />
           <Route path="launcher" element={<LauncherPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="members" element={<MembersPage />} />
         </Route>
       </Route>
 

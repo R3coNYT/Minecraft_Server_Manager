@@ -27,5 +27,9 @@ import { provision } from './messages/provision'
 import { actions } from './messages/actions'
 import { dashboard } from './messages/dashboard'
 import { shell } from './messages/shell'
+import { account } from './messages/account'
+import { members } from './messages/members'
+import { people } from './messages/people'
+import { platform } from './messages/platform'
 
-export const SECTIONS = [common, shell, dashboard, actions, createServer, provision, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage] as const
+export const SECTIONS = [common, shell, dashboard, actions, createServer, provision, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage, account, members, people, platform] as const

@@ -638,3 +638,72 @@ export interface ProvisioningJob {
   finished_at: string | null
 }
 
+// --------------------------------------------------------------------------- //
+//  Comptes, partage, hébergement (ouverture au public)
+// --------------------------------------------------------------------------- //
+export type RegistrationMode = 'closed' | 'invite' | 'open'
+
+export interface RegistrationInfo {
+  mode: RegistrationMode
+}
+
+/** Ce qu'un compte voit d'un autre pour lui partager un serveur. */
+export interface UserLookup {
+  id: number
+  username: string
+  avatar_url: string | null
+}
+
+export interface Quota {
+  max_servers: number | null
+  max_memory_per_server_mb: number | null
+  max_memory_total_mb: number | null
+  max_disk_mb: number | null
+}
+
+export interface Usage {
+  servers: number
+  memory_online_mb: number
+  disk_mb: number
+}
+
+export interface MyQuota {
+  /** `null` : pas de limite (admin de MSM). */
+  quota: Quota | null
+  usage: Usage
+}
+
+export interface ServerRef {
+  id: number
+  name: string
+  role: ServerRole | null
+}
+
+export interface UserDetail extends User {
+  username_history: { username: string; changed_at: string }[]
+  servers_owned: ServerRef[]
+  servers_shared: ServerRef[]
+  quota_overrides: Partial<Quota> | null
+  limits: MyQuota
+}
+
+export interface Invitation {
+  id: number
+  note: string | null
+  created_at: string
+  expires_at: string
+  used_at: string | null
+}
+
+export interface InvitationCreated extends Invitation {
+  /** Montré une seule fois. */
+  token: string
+}
+
+export interface HostingSettings {
+  users_root: string | null
+  port_min: number
+  port_max: number
+  quota: Quota
+  users_root_effective?: string | null
+}

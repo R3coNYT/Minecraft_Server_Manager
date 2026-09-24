@@ -20,9 +20,10 @@ import {
   Settings2,
   Terminal,
   Timer,
+  UserPlus,
   Users,
 } from 'lucide-react'
-import { can, hasPermission, useLauncherLink, useMe, useServer, useServerStatus } from '@/hooks/useApi'
+import { can, useLauncherLink, useServer, useServerStatus } from '@/hooks/useApi'
 import { useServerSubscription } from '@/hooks/useServerSubscription'
 import { formatUptime, formatMemory, formatPercent } from '@/lib/format'
 import { cn } from '@/lib/cn'
@@ -31,6 +32,7 @@ import { ErrorPanel } from '@/components/common/ErrorPanel'
 import { ServerStatusBadge } from '@/components/servers/ServerStatusBadge'
 import { ServerActions } from '@/components/servers/ServerActions'
 import { SyncCountdown } from '@/components/launcher/SyncCountdown'
+import { AccessBadge } from '@/components/servers/AccessBadge'
 import { t, type MessageKey } from '@/i18n'
 
 interface TabDefinition {
@@ -58,13 +60,13 @@ const TABS: TabDefinition[] = [
   { to: 'schedules', label: 'tab.schedules', icon: Timer, permission: 'server:edit' },
   { to: 'launcher', label: 'tab.launcher', icon: Link2, permission: 'server:edit' },
   { to: 'notifications', label: 'tab.notifications', icon: Bell, permission: 'server:edit' },
+  { to: 'members', label: 'tab.members', icon: UserPlus, permission: 'server:members' },
 ]
 
 export function ServerLayout() {
   const params = useParams<{ serverId: string }>()
   const serverId = Number(params.serverId)
   const { data: server, isLoading, error } = useServer(serverId)
-  const { data: me } = useMe()
   const status = useServerStatus(serverId, server?.status)
   const { data: launcherLink } = useLauncherLink(serverId, can(server, 'server:edit'))
 
@@ -79,7 +81,7 @@ export function ServerLayout() {
   const tabs = TABS.filter(
     (tab) =>
       (!tab.capability || capabilities.has(tab.capability)) &&
-      (!tab.permission || hasPermission(me, tab.permission)),
+      (!tab.permission || can(server, tab.permission)),
   )
 
   return (
@@ -90,6 +92,7 @@ export function ServerLayout() {
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="truncate text-lg font-semibold text-slate-100">{server.name}</h1>
               <ServerStatusBadge state={state} />
+              <AccessBadge server={server} />
             </div>
             <p className="mt-1 truncate font-mono text-xs text-slate-500">{server.directory}</p>
           </div>
