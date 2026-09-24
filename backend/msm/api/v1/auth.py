@@ -47,6 +47,7 @@ from msm.security.rbac import AccessContext, build_context
 from msm.security.tokens import generate_token
 from msm.services.account_service import AccountService
 from msm.services.avatar_service import MAX_UPLOAD_BYTES, delete_avatar, save_avatar
+from msm.services.google_service import enabled as google_enabled
 from msm.services.hosting_service import HostingService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -177,7 +178,7 @@ async def change_password(
 async def registration_info(session: DbSession, settings: AppSettings) -> RegistrationInfoOut:
     """Public : l'écran de connexion n'affiche « créer un compte » que si c'est possible."""
     mode = await AccountService(session, settings).registration_mode()
-    return RegistrationInfoOut(mode=mode.value)
+    return RegistrationInfoOut(mode=mode.value, google=google_enabled(settings))
 
 
 @router.post(

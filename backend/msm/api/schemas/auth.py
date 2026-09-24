@@ -35,6 +35,9 @@ class UserOut(BaseModel):
     banned_at: datetime | None = None
     ban_reason: str | None = None
     avatar_updated_at: datetime | None = None
+    #: Compte lié à Google ; sans mot de passe, il ne se connecte que par Google.
+    google_linked: bool = False
+    has_password: bool = True
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -67,7 +70,8 @@ class UserUpdateRequest(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    current_password: str = Field(min_length=1, max_length=1024)
+    #: Vide pour un compte sans mot de passe (créé avec Google) qui en définit un.
+    current_password: str = Field(default="", max_length=1024)
     new_password: str = Field(min_length=1, max_length=1024)
 
 
@@ -82,6 +86,22 @@ class RegistrationInfoOut(BaseModel):
     """Public : l'écran de connexion propose l'inscription si elle est possible."""
 
     mode: str
+    #: La connexion avec Google est-elle configurée ?
+    google: bool = False
+
+
+class GoogleSignupOut(BaseModel):
+    """Ce que Google a transmis, pour que l'écran du pseudo le montre."""
+
+    email: str
+    name: str | None = None
+    picture: str | None = None
+    suggested_username: str
+
+
+class GoogleSignupRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    accept_terms: bool = False
 
 
 class RegisterRequest(BaseModel):
@@ -103,7 +123,8 @@ class ProfileUpdateRequest(BaseModel):
 
 class EmailChangeRequest(BaseModel):
     email: str = Field(min_length=3, max_length=255)
-    current_password: str = Field(min_length=1, max_length=1024)
+    #: Vide pour un compte sans mot de passe (créé avec Google).
+    current_password: str = Field(default="", max_length=1024)
 
 
 class RegistrationSettings(BaseModel):

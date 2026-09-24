@@ -91,6 +91,13 @@ class Settings(BaseSettings):
     login_lockout_minutes: int = Field(default=15, ge=1)
     #: Inscriptions acceptées par adresse IP et par heure, contre les robots.
     registration_limit_per_hour: int = Field(default=5, ge=1)
+    #: Adresse publique du panneau (https://msm.exemple.fr) : l'adresse de retour
+    #: déclarée chez Google en dépend. Vide : celle de la requête.
+    public_url: str = ""
+    #: Connexion avec Google (console Google Cloud → identifiants OAuth). Vide :
+    #: le bouton n'apparaît pas.
+    google_client_id: str = ""
+    google_client_secret: str = ""
 
     # --- Base de données --------------------------------------------------
     database_url: str = "sqlite+aiosqlite:///./data/msm.db"

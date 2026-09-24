@@ -22,7 +22,7 @@ propres serveurs Minecraft.
 | 2 | Comptes : inscription, profil, pseudo, avatar, bannissement (backend) | terminée |
 | 3 | Création par utilisateur : dossiers, quotas, ports (backend) | terminée |
 | 4 | Interface : inscription, profil, dashboard user, membres, panel admin | terminée |
-| 5 | Connexion avec Google | à faire |
+| 5 | Connexion avec Google | terminée |
 | 6 | Isolation des serveurs, **préalable à l'ouverture publique** | à faire |
 | — | E-mails (vérification, mot de passe oublié) | quand MSM aura un domaine |
 
@@ -338,7 +338,9 @@ l'admin. Une fois le domaine et le serveur SMTP en place, on ajoutera :
 
 ## Étape 5 — Connexion avec Google
 
-- Protocole OpenID Connect, avec la bibliothèque `authlib`.
+- Protocole OpenID Connect (code d'autorisation + PKCE), sans bibliothèque
+  supplémentaire : l'ID token, reçu directement de Google en TLS, se valide par
+  ses revendications (émetteur, audience, expiration, nonce).
 - À configurer par l'admin :
   - un identifiant client Google (Google Cloud Console) ;
   - `MSM_GOOGLE_CLIENT_ID` et `MSM_GOOGLE_CLIENT_SECRET` ;

@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 #: Alphabet des identifiants de stockage : sans ambiguïté dans un chemin.
 _STORAGE_ALPHABET = string.ascii_lowercase + string.digits
 STORAGE_ID_LENGTH = 10
+#: Empreinte d'un compte sans mot de passe (créé avec Google) : aucune saisie ne
+#: peut la vérifier, argon2 la refuse comme invalide.
+NO_PASSWORD = "!"  # noqa: S105 - une empreinte impossible, pas un mot de passe
 
 
 def new_storage_id() -> str:
@@ -66,6 +69,9 @@ class User(Base, TimestampMixin):
     #: Réservé à la double authentification (phase ultérieure).
     totp_secret: Mapped[str | None] = mapped_column(String(64))
 
+    #: Identifiant Google stable (`sub`) du compte lié ; jamais l'adresse, qui change.
+    google_sub: Mapped[str | None] = mapped_column(String(255), unique=True)
+
     #: Surcharge des quotas d'hébergement pour ce compte (clés de `Quota`) ;
     #: ``None`` : ceux par défaut.
     quota: Mapped[dict[str, int | None] | None] = mapped_column(JSON)
@@ -85,6 +91,14 @@ class User(Base, TimestampMixin):
     @property
     def is_banned(self) -> bool:
         return self.banned_at is not None
+
+    @property
+    def has_password(self) -> bool:
+        return self.password_hash != NO_PASSWORD
+
+    @property
+    def google_linked(self) -> bool:
+        return self.google_sub is not None
 
 
 class UserSession(Base):

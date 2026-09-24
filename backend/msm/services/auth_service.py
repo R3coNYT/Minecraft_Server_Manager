@@ -149,6 +149,30 @@ class AuthService:
         logger.info("login_success", username=user.username, role=user.role.value)
         return user, token
 
+    async def open_session(self, user: User, *, ip_address: str | None, method: str) -> str:
+        """Ouvre une session pour un compte déjà authentifié (par Google, par exemple)."""
+        user.failed_attempts = 0
+        user.locked_until = None
+        user.last_login_at = datetime.now(UTC)
+        _, token = await self._sessions.create(
+            user_id=user.id,
+            ttl_hours=self._settings.session_ttl_hours,
+            ip_address=ip_address,
+            user_agent=None,
+        )
+        self._audit.record(
+            action=AuditAction.LOGIN,
+            summary=tr(
+                "{username} signed in with {method}.", username=user.username, method=method
+            ),
+            actor_id=user.id,
+            actor_username=user.username,
+            actor_role=user.role.value,
+            ip_address=ip_address,
+            payload={"method": method},
+        )
+        return token
+
     async def resolve_session(self, token: str) -> tuple[User, UserSession] | None:
         """Retrouve l'utilisateur d'un jeton de session, ou ``None``."""
         record = await self._sessions.get_valid(token)
@@ -187,8 +211,12 @@ class AuthService:
         new_password: str,
         ip_address: str | None = None,
     ) -> None:
-        """Change le mot de passe et invalide toutes les sessions existantes."""
-        if not verify_password(user.password_hash, current_password):
+        """Change le mot de passe et invalide toutes les sessions existantes.
+
+        Un compte créé avec Google n'a pas de mot de passe : il en définit un sans
+        ancien à confirmer (la session prouve qui il est).
+        """
+        if user.has_password and not verify_password(user.password_hash, current_password):
             raise AuthenticationError(
                 tr("Current password incorrect."),
                 cause=tr("The current password could not be verified."),

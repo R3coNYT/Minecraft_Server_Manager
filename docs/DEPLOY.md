@@ -121,7 +121,33 @@ Les dossiers des comptes sont créés sous la même page de réglages (par défa
 la première des racines autorisées), un dossier par compte, nommé d'après son
 identifiant immuable — un changement de pseudo ne déplace rien.
 
-## Interface web
+## Connexion avec Google
+
+Facultative : sans configuration, le bouton « Continue with Google » n'apparaît
+pas. Il faut une adresse publique **en HTTPS** (Google refuse une adresse IP ou
+du HTTP, sauf `http://localhost` pour essayer).
+
+1. Dans la [console Google Cloud](https://console.cloud.google.com/apis/credentials),
+   créer un projet, configurer l'écran de consentement (type « Externe »,
+   champs d'application `openid`, `email`, `profile`), puis créer un
+   **ID client OAuth** de type « Application Web ».
+2. Y déclarer l'URI de redirection autorisée :
+   `https://msm.exemple.fr/api/v1/auth/google/callback`.
+3. Dans `/etc/msm/.env` :
+
+   ```bash
+   MSM_PUBLIC_URL=https://msm.exemple.fr
+   MSM_GOOGLE_CLIENT_ID=123456-abc.apps.googleusercontent.com
+   MSM_GOOGLE_CLIENT_SECRET=GOCSPX-...
+   ```
+
+4. Redémarrer le service.
+
+Un compte MSM est lié à l'identifiant Google, jamais à l'adresse : un compte
+existant se lie depuis son profil, après s'être connecté avec son mot de passe.
+La première connexion d'un inconnu suit le mode d'inscription (fermée, sur
+invitation, ouverte) et lui fait choisir un pseudo.
+
 
 MSM sert lui-même l'interface compilée, sur le même port que l'API. Ce n'est pas
 qu'une commodité : le panneau et son API partagent alors la même origine, donc le

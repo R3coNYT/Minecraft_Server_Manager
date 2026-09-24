@@ -48,6 +48,9 @@ export interface User {
   ban_reason: string | null
   /** Adresse de l'avatar, ou `null` sans avatar. */
   avatar_url: string | null
+  /** Compte lié à Google ; sans mot de passe, il ne se connecte que par Google. */
+  google_linked: boolean
+  has_password: boolean
 }
 
 export interface Me extends User {
@@ -645,6 +648,15 @@ export type RegistrationMode = 'closed' | 'invite' | 'open'
 
 export interface RegistrationInfo {
   mode: RegistrationMode
+  /** La connexion avec Google est configurée. */
+  google: boolean
+}
+
+export interface GoogleSignup {
+  email: string
+  name: string | null
+  picture: string | null
+  suggested_username: string
 }
 
 /** Ce qu'un compte voit d'un autre pour lui partager un serveur. */

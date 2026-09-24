@@ -10,6 +10,7 @@ from msm.api.v1 import (
     console,
     events,
     files,
+    google,
     launcher,
     notifications,
     players,
@@ -21,6 +22,7 @@ from msm.api.v1 import (
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
+api_router.include_router(google.router)
 api_router.include_router(users.router)
 api_router.include_router(servers.router)
 api_router.include_router(console.router)

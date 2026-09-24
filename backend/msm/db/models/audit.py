@@ -92,6 +92,8 @@ class AuditAction(str, Enum):
     USER_BANNED = "user.banned"
     USER_UNBANNED = "user.unbanned"
     INVITATION_CREATED = "user.invitation_created"
+    GOOGLE_LINKED = "user.google_linked"
+    GOOGLE_UNLINKED = "user.google_unlinked"
     #: Ancien réglage fin des droits par serveur, remplacé par les membres.
     #: Conservé pour relire les entrées existantes du journal.
     PERMISSIONS_UPDATED = "user.permissions_updated"

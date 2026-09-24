@@ -13,6 +13,7 @@ import { MsmLogo } from '@/components/brand/MsmLogo'
 import { Button } from '@/components/ui/Button'
 import { Card, Checkbox, Field, Input, LoadingBlock } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
+import { GoogleButton, OrSeparator } from '@/components/common/GoogleButton'
 import { t } from '@/i18n'
 
 const MIN_PASSWORD = 10
@@ -142,6 +143,13 @@ export function RegisterPage() {
               >
                 {t('register.submit')}
               </Button>
+
+              {info.data?.google ? (
+                <>
+                  <OrSeparator />
+                  <GoogleButton invitation={invitation} />
+                </>
+              ) : null}
             </form>
           </Card>
         )}

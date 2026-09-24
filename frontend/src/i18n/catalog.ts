@@ -31,5 +31,6 @@ import { account } from './messages/account'
 import { members } from './messages/members'
 import { people } from './messages/people'
 import { platform } from './messages/platform'
+import { google } from './messages/google'
 
-export const SECTIONS = [common, shell, dashboard, actions, createServer, provision, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage, account, members, people, platform] as const
+export const SECTIONS = [common, shell, dashboard, actions, createServer, provision, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage, account, members, people, platform, google] as const

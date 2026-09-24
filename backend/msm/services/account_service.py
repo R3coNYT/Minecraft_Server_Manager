@@ -23,7 +23,7 @@ from msm.core.permissions import Permission, Role, ServerRole
 from msm.db.models.audit import AuditAction
 from msm.db.models.misc import AppSetting
 from msm.db.models.server import Server, ServerMember
-from msm.db.models.user import Invitation, User, UsernameChange
+from msm.db.models.user import NO_PASSWORD, Invitation, User, UsernameChange
 from msm.db.repositories import AuditRepository, SessionRepository, UserRepository
 from msm.exceptions import (
     ConflictError,
@@ -216,16 +216,8 @@ class AccountService:
     # ------------------------------------------------------------------ #
     #  Inscription
     # ------------------------------------------------------------------ #
-    async def register(
-        self,
-        *,
-        email: str,
-        username: str,
-        password: str,
-        invitation_token: str | None = None,
-        ip_address: str | None = None,
-    ) -> tuple[User, str]:
-        """Crée un compte user et ouvre sa session. Renvoie ``(compte, jeton)``."""
+    async def ensure_can_register(self, invitation_token: str | None) -> RegistrationMode:
+        """Refuse d'emblée une inscription impossible (fermée, invitation invalide)."""
         mode = await self.registration_mode()
         if mode is RegistrationMode.CLOSED:
             raise PermissionDenied(
@@ -234,6 +226,26 @@ class AccountService:
                 remediation=tr("Ask an administrator for an account or an invitation."),
                 code="REGISTRATION_CLOSED",
             )
+        if mode is RegistrationMode.INVITE:
+            await self._usable_invitation(invitation_token)
+        return mode
+
+    async def register(
+        self,
+        *,
+        email: str,
+        username: str,
+        password: str | None,
+        invitation_token: str | None = None,
+        ip_address: str | None = None,
+        google_sub: str | None = None,
+    ) -> tuple[User, str]:
+        """Crée un compte user et ouvre sa session. Renvoie ``(compte, jeton)``.
+
+        Sans mot de passe, le compte vient de Google (`google_sub`) : il ne se
+        connecte que par Google, jusqu'à ce qu'il se définisse un mot de passe.
+        """
+        mode = await self.ensure_can_register(invitation_token)
 
         limiter = registration_limiter(self._settings)
         key = ip_address or "unknown"
@@ -256,7 +268,11 @@ class AccountService:
         await self._ensure_username_free(clean_username)
         clean_email = normalise_email(email)
         await self.ensure_email_free(clean_email)
-        password_hash = hash_password(validate_password_strength(password))
+        password_hash = (
+            hash_password(validate_password_strength(password))
+            if password is not None
+            else NO_PASSWORD
+        )
 
         user = await self._users.create(
             username=clean_username,
@@ -264,6 +280,7 @@ class AccountService:
             role=Role.USER,
             email=clean_email,
         )
+        user.google_sub = google_sub
         if invitation is not None:
             invitation.used_at = datetime.now(UTC)
             invitation.used_by = user.id
@@ -284,7 +301,10 @@ class AccountService:
             ip_address=ip_address,
             target_type="user",
             target_id=str(user.id),
-            payload={"invitation": invitation.id if invitation else None},
+            payload={
+                "invitation": invitation.id if invitation else None,
+                "method": "google" if google_sub else "password",
+            },
         )
         logger.info("user_registered", user_id=user.id, username=user.username)
         return user, token
@@ -321,8 +341,11 @@ class AccountService:
     async def change_email(
         self, user: User, email: str, *, current_password: str, ip_address: str | None = None
     ) -> User:
-        """Change l'adresse, contre le mot de passe actuel : c'est elle qui récupère le compte."""
-        if not verify_password(user.password_hash, current_password):
+        """Change l'adresse, contre le mot de passe actuel : c'est elle qui récupère le compte.
+
+        Un compte créé avec Google n'a pas de mot de passe à confirmer.
+        """
+        if user.has_password and not verify_password(user.password_hash, current_password):
             raise ValidationError(
                 tr("Wrong password."),
                 cause=tr("The current password does not match."),

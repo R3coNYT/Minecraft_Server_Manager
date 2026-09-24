@@ -28,6 +28,10 @@ class UserRepository:
         statement = select(User).where(User.username.ilike(username.strip()))
         return (await self._session.execute(statement)).scalar_one_or_none()
 
+    async def get_by_google_sub(self, sub: str) -> User | None:
+        statement = select(User).where(User.google_sub == sub)
+        return (await self._session.execute(statement)).scalar_one_or_none()
+
     async def search(self, prefix: str, *, limit: int = 8) -> list[User]:
         """Comptes actifs, non bannis, dont le pseudo commence par `prefix`."""
         escaped = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

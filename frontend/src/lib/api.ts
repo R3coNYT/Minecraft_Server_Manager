@@ -62,6 +62,7 @@ import type {
   ServerRole,
   UserDetail,
   UserLookup,
+  GoogleSignup,
 } from './types'
 import { t } from '@/i18n'
 
@@ -256,6 +257,13 @@ export const api = {
     },
     removeAvatar: () => request<Me>('/auth/me/avatar', { method: 'DELETE' }),
     quota: () => request<MyQuota>('/auth/me/quota'),
+    googleSignup: () => request<GoogleSignup>('/auth/google/signup'),
+    completeGoogleSignup: (username: string, acceptTerms: boolean) =>
+      request<Me>('/auth/google/signup', {
+        method: 'POST',
+        body: { username, accept_terms: acceptTerms },
+      }),
+    unlinkGoogle: () => request<Me>('/auth/google/unlink', { method: 'POST' }),
   },
 
   servers: {

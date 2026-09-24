@@ -3,8 +3,9 @@
  * limites d'hébergement. On y arrive en cliquant sur son pseudo, en haut à droite.
  */
 
-import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { GoogleButton } from '@/components/common/GoogleButton'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ImageUp, Trash2 } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -193,20 +194,22 @@ function EmailCard({ me }: { me: Me }) {
         className="grid gap-3 px-5 py-4 sm:grid-cols-2"
         onSubmit={(event) => {
           event.preventDefault()
-          if (email.trim() && password) change.mutate()
+          if (email.trim() && (password || !me.has_password)) change.mutate()
         }}
       >
         <Field label={t('profile.emailNew')}>
           <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </Field>
-        <Field label={t('profile.currentPassword')}>
-          <Input
-            type="password"
-            value={password}
-            autoComplete="current-password"
-            onChange={(event) => setPassword(event.target.value)}
-          />
-        </Field>
+        {me.has_password ? (
+          <Field label={t('profile.currentPassword')}>
+            <Input
+              type="password"
+              value={password}
+              autoComplete="current-password"
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </Field>
+        ) : null}
         <div className="sm:col-span-2">
           <ErrorPanel error={change.error} />
           <Button
@@ -215,7 +218,7 @@ function EmailCard({ me }: { me: Me }) {
             variant="primary"
             className="mt-2"
             loading={change.isPending}
-            disabled={!email.trim() || !password}
+            disabled={!email.trim() || (me.has_password && !password)}
           >
             {t('profile.emailSave')}
           </Button>
@@ -225,14 +228,75 @@ function EmailCard({ me }: { me: Me }) {
   )
 }
 
-function PasswordCard() {
+function GoogleCard({ me }: { me: Me }) {
+  const saveMe = useSaveMe()
+  const push = useToasts((state) => state.push)
+  const pushError = useToasts((state) => state.pushError)
+  const [params, setParams] = useSearchParams()
+  const { data: info } = useQuery({ queryKey: ['registration'], queryFn: () => api.auth.registration() })
+
+  // Retour de Google après une liaison : on l'annonce une fois, puis on nettoie
+  // l'adresse (le mode strict de React rejoue les effets en développement).
+  const announced = useRef<string | null>(null)
+  useEffect(() => {
+    const outcome = params.get('google')
+    if (!outcome || announced.current === outcome) return
+    announced.current = outcome
+    if (outcome === 'linked') push({ kind: 'success', title: t('google.linked') })
+    if (outcome === 'taken') push({ kind: 'error', title: t('google.taken') })
+    setParams({}, { replace: true })
+  }, [params, push, setParams])
+
+  const unlink = useMutation({
+    mutationFn: () => api.auth.unlinkGoogle(),
+    onSuccess: (updated) => {
+      saveMe(updated)
+      push({ kind: 'success', title: t('google.unlinked') })
+    },
+    onError: (error) => pushError(error),
+  })
+
+  if (!info?.google && !me.google_linked) return null
+
+  return (
+    <Card>
+      <CardHeader
+        title={t('google.cardTitle')}
+        subtitle={me.google_linked ? t('google.cardLinked') : t('google.cardNotLinked')}
+      />
+      <div className="px-5 py-4">
+        {me.google_linked ? (
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              loading={unlink.isPending}
+              disabled={!me.has_password}
+              onClick={() => unlink.mutate()}
+            >
+              {t('google.unlink')}
+            </Button>
+            {!me.has_password ? (
+              <p className="text-xs text-slate-500">{t('google.unlinkNeedsPassword')}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="max-w-xs">
+            <GoogleButton intent="link" label={t('google.link')} />
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+function PasswordCard({ me }: { me: Me }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const change = useMutation({
-    mutationFn: () => api.auth.changePassword(current, next),
+    mutationFn: () => api.auth.changePassword(me.has_password ? current : '', next),
     onSuccess: () => {
       // Toutes les sessions sont fermées, celle-ci comprise : retour à la connexion.
       queryClient.setQueryData(queryKeys.me, null)
@@ -244,22 +308,27 @@ function PasswordCard() {
 
   return (
     <Card>
-      <CardHeader title={t('profile.passwordTitle')} subtitle={t('profile.passwordSubtitle')} />
+      <CardHeader
+        title={me.has_password ? t('profile.passwordTitle') : t('profile.passwordSetTitle')}
+        subtitle={me.has_password ? t('profile.passwordSubtitle') : t('profile.passwordSetSubtitle')}
+      />
       <form
         className="grid gap-3 px-5 py-4 sm:grid-cols-3"
         onSubmit={(event) => {
           event.preventDefault()
-          if (current && next && next === confirm) change.mutate()
+          if ((current || !me.has_password) && next && next === confirm) change.mutate()
         }}
       >
-        <Field label={t('profile.currentPassword')}>
-          <Input
-            type="password"
-            value={current}
-            autoComplete="current-password"
-            onChange={(event) => setCurrent(event.target.value)}
-          />
-        </Field>
+        {me.has_password ? (
+          <Field label={t('profile.currentPassword')}>
+            <Input
+              type="password"
+              value={current}
+              autoComplete="current-password"
+              onChange={(event) => setCurrent(event.target.value)}
+            />
+          </Field>
+        ) : null}
         <Field label={t('profile.newPassword')} hint={t('register.passwordHint')}>
           <Input
             type="password"
@@ -284,7 +353,7 @@ function PasswordCard() {
             variant="primary"
             className="mt-2"
             loading={change.isPending}
-            disabled={!current || !next || next !== confirm}
+            disabled={(me.has_password && !current) || !next || next !== confirm}
           >
             {t('profile.passwordSave')}
           </Button>
@@ -355,7 +424,8 @@ export function ProfilePage() {
         <LimitsCard />
         <LanguageCard me={me} />
         <EmailCard me={me} />
-        <PasswordCard />
+        <GoogleCard me={me} />
+        <PasswordCard me={me} />
       </div>
     </div>
   )

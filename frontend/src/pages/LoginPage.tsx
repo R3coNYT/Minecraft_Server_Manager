@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
+import { GoogleButton, OrSeparator } from '@/components/common/GoogleButton'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { MsmLogo } from '@/components/brand/MsmLogo'
@@ -7,13 +8,26 @@ import { useLogin, useMe } from '@/hooks/useApi'
 import { Button } from '@/components/ui/Button'
 import { Card, Field, Input, LoadingBlock } from '@/components/ui/primitives'
 import { ErrorPanel } from '@/components/common/ErrorPanel'
-import { t } from '@/i18n'
+import { t, type MessageKey } from '@/i18n'
+
+const GOOGLE_ERRORS = new Set([
+  'cancelled',
+  'failed',
+  'unavailable',
+  'closed',
+  'invite',
+  'email_taken',
+  'banned',
+  'disabled',
+])
 
 export function LoginPage() {
   const { data: me, isLoading } = useMe()
   const login = useLogin()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [params] = useSearchParams()
+  const googleError = params.get('google')
   const registration = useQuery({
     queryKey: ['registration'],
     queryFn: () => api.auth.registration(),
@@ -58,6 +72,12 @@ export function LoginPage() {
               />
             </Field>
 
+            {googleError && GOOGLE_ERRORS.has(googleError) ? (
+              <p className="rounded-lg border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+                {t(`google.error.${googleError}` as MessageKey)}
+              </p>
+            ) : null}
+
             <ErrorPanel error={login.error} />
 
             <Button
@@ -70,6 +90,13 @@ export function LoginPage() {
             >
               {t('login.submit')}
             </Button>
+
+            {registration.data?.google ? (
+              <>
+                <OrSeparator />
+                <GoogleButton />
+              </>
+            ) : null}
           </form>
         </Card>
 

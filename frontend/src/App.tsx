@@ -24,6 +24,7 @@ import { LauncherPage } from '@/pages/server/LauncherPage'
 import { NotificationsPage } from '@/pages/server/NotificationsPage'
 import { MembersPage } from '@/pages/server/MembersPage'
 import { RegisterPage } from '@/pages/RegisterPage'
+import { GoogleSignupPage } from '@/pages/GoogleSignupPage'
 import { ProfilePage } from '@/pages/ProfilePage'
 import { UserDetailPage } from '@/pages/UserDetailPage'
 import { SettingsPage } from '@/pages/SettingsPage'
@@ -60,6 +61,7 @@ export function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/register/google" element={<GoogleSignupPage />} />
 
       <Route
         element={

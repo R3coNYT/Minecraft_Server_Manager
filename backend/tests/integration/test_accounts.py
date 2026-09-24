@@ -72,7 +72,7 @@ def _png(width: int = 600, height: int = 300) -> bytes:
 class TestRegistration:
     async def test_registration_is_closed_until_an_admin_opens_it(self, app: FastAPI) -> None:
         async with anonymous(app) as visitor:
-            assert (await visitor.get("/api/v1/auth/registration")).json() == {"mode": "closed"}
+            assert (await visitor.get("/api/v1/auth/registration")).json()["mode"] == "closed"
             refused = await visitor.post("/api/v1/auth/register", json=_signup())
             assert refused.status_code == 403
             assert refused.json()["code"] == "REGISTRATION_CLOSED"
