@@ -79,6 +79,9 @@ class ProvisioningJob:
     downloaded_bytes: int = 0
     error: dict[str, str | None] | None = None
     server_id: int | None = None
+    #: Port attribué : réservé tant que la création court, pour qu'une création
+    #: simultanée n'obtienne pas le même.
+    port: int | None = None
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     finished_at: datetime | None = None
     task: asyncio.Task[None] | None = field(default=None, repr=False)

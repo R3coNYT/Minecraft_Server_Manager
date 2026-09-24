@@ -137,8 +137,11 @@ class TestChoices:
             await admin.get("/api/v1/provisioning/defaults", params={"name": "Mini-jeux Été"})
         ).json()
 
+        storage_id = (await admin.get("/api/v1/auth/me")).json()["storage_id"]
         assert body["roots"] == [str(servers_root)]
-        assert Path(body["directory"]) == servers_root / "mini-jeux-ete"
+        # Proposé dans le dossier du compte ; un admin reste libre de le changer.
+        assert Path(body["directory"]) == servers_root / storage_id / "mini-jeux-ete"
+        assert body["directory_locked"] is False
         assert body["port"] == 25565
 
     async def test_every_account_may_create_servers(self, viewer: ApiClient) -> None:
@@ -291,3 +294,164 @@ class TestValidation:
         response = await admin.get("/api/v1/provisioning/inconnu")
 
         assert response.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+#  Hébergement des comptes : dossiers, ports, quotas (ouverture au public, étape 3)
+# --------------------------------------------------------------------------- #
+async def _hosting(admin: ApiClient, **changes: Any) -> dict[str, Any]:
+    current = (await admin.get("/api/v1/settings/hosting")).json()
+    quota = {**current["quota"], **changes.pop("quota", {})}
+    response = await admin.put(
+        "/api/v1/settings/hosting", json={**current, **changes, "quota": quota}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def _created(client: ApiClient, servers_root: Path, **overrides: Any) -> dict[str, Any]:
+    response = await client.post("/api/v1/provisioning", json=_payload(servers_root, **overrides))
+    assert response.status_code == 202, response.text
+    job = await _wait_job(client, response.json()["id"])
+    assert job["status"] == "COMPLETED", job
+    return (await client.get(f"/api/v1/servers/{job['server_id']}")).json()
+
+
+class TestHosting:
+    async def test_a_user_creates_in_their_own_folder_on_an_allocated_port(
+        self, viewer: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        storage_id = (await viewer.get("/api/v1/auth/me")).json()["storage_id"]
+        # Dossier et port demandés : ignorés, ce n'est pas au compte de les choisir.
+        server = await _created(viewer, servers_root / "ailleurs", port=22)
+
+        directory = servers_root / storage_id / "survie"
+        assert Path(server["directory"]) == directory
+        assert server["settings"]["port"] == 25565
+        assert server["access"] == "OWNER"
+        properties = (directory / "server.properties").read_text()
+        for line in ("server-port=25565", "enable-rcon=false", "enable-query=false"):
+            assert line in properties
+
+    async def test_defaults_are_imposed_on_users(self, viewer: ApiClient) -> None:
+        body = (await viewer.get("/api/v1/provisioning/defaults", params={"name": "x"})).json()
+        assert body["directory_locked"] is True
+        assert body["port_locked"] is True
+        assert body["max_memory_mb"] == 4096
+
+    async def test_each_server_gets_its_own_port(
+        self, viewer: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        first = await _created(viewer, servers_root, name="un")
+        second = await _created(viewer, servers_root, name="deux")
+        assert [first["settings"]["port"], second["settings"]["port"]] == [25565, 25566]
+
+    async def test_the_server_count_is_limited(
+        self, admin: ApiClient, viewer: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        await _hosting(admin, quota={"max_servers": 1})
+        await _created(viewer, servers_root, name="un")
+
+        second = await viewer.post("/api/v1/provisioning", json=_payload(servers_root, name="deux"))
+        assert second.status_code == 403
+        assert second.json()["code"] == "QUOTA_EXCEEDED"
+
+        # Surcharge pour ce compte : il peut en avoir davantage.
+        users = (await admin.get("/api/v1/users")).json()
+        user_id = next(user["id"] for user in users if user["username"] == "lecteur")
+        raised = await admin.put(f"/api/v1/users/{user_id}/quota", json={"max_servers": 3})
+        assert raised.status_code == 200, raised.text
+        mine = (await viewer.get("/api/v1/auth/me/quota")).json()
+        assert mine["quota"]["max_servers"] == 3
+        assert mine["usage"]["servers"] == 1
+        details = (await admin.get(f"/api/v1/users/{user_id}")).json()
+        assert details["quota_overrides"] == {"max_servers": 3}
+
+        third = await viewer.post("/api/v1/provisioning", json=_payload(servers_root, name="deux"))
+        assert third.status_code == 202, third.text
+
+    async def test_memory_per_server_is_limited(
+        self, viewer: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        response = await viewer.post(
+            "/api/v1/provisioning", json=_payload(servers_root, memory_max_mb=8192)
+        )
+        assert response.status_code == 403
+        assert response.json()["code"] == "QUOTA_EXCEEDED"
+
+    async def test_owners_change_neither_the_port_nor_memory_beyond_their_quota(
+        self, viewer: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        server = await _created(viewer, servers_root)
+        url = f"/api/v1/servers/{server['id']}"
+
+        assert (await viewer.put(url, json={"settings": {"port": 22}})).status_code == 403
+        too_much = await viewer.put(url, json={"settings": {"memory_max_mb": 8192}})
+        assert too_much.status_code == 403
+        fine = await viewer.put(url, json={"settings": {"memory_max_mb": 3072}})
+        assert fine.status_code == 200, fine.text
+
+    async def test_the_port_is_enforced_again_before_each_start(
+        self, viewer: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        from msm.services.hosting_service import make_network_hook
+
+        server = await _created(viewer, servers_root)
+        properties = Path(server["directory"]) / "server.properties"
+        properties.write_text("motd=x\nserver-port=22\nenable-rcon=true\n")
+
+        messages = await make_network_hook()(server["id"])
+
+        assert messages
+        content = properties.read_text()
+        for line in ("server-port=25565", "enable-rcon=false", "enable-query=false", "motd=x"):
+            assert line in content
+
+    async def test_admin_servers_are_left_alone(
+        self, admin: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        from msm.services.hosting_service import make_network_hook
+
+        server = await _created(admin, servers_root / "admin", port=25570)
+        properties = Path(server["directory"]) / "server.properties"
+        properties.write_text("server-port=25999\nenable-rcon=true\n")
+
+        assert await make_network_hook()(server["id"]) == []
+        assert "enable-rcon=true" in properties.read_text()
+
+    async def test_the_admin_sets_the_hosting_rules(
+        self, admin: ApiClient, viewer: ApiClient, servers_root: Path
+    ) -> None:
+        assert (await viewer.get("/api/v1/settings/hosting")).status_code == 403
+        body = await _hosting(
+            admin, port_min=30000, port_max=30010, users_root=str(servers_root / "comptes")
+        )
+        assert body["users_root_effective"] == str((servers_root / "comptes").resolve())
+
+        refused = await admin.put(
+            "/api/v1/settings/hosting", json={**body, "port_min": 30010, "port_max": 30000}
+        )
+        assert refused.status_code == 422
+        outside = await admin.put(
+            "/api/v1/settings/hosting", json={**body, "users_root": str(servers_root.parent)}
+        )
+        assert outside.status_code == 422
+
+    async def test_a_full_disk_blocks_backups(
+        self,
+        viewer: ApiClient,
+        servers_root: Path,
+        fake_network: dict[str, Any],
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from msm.services import hosting_service
+
+        server = await _created(viewer, servers_root)
+
+        async def full(self: Any, user: Any, owned: Any = None) -> float:
+            return 1_000_000.0
+
+        monkeypatch.setattr(hosting_service.HostingService, "disk_mb", full)
+        backup = await viewer.post(f"/api/v1/servers/{server['id']}/backups", json={})
+        assert backup.status_code == 403
+        assert backup.json()["code"] == "QUOTA_EXCEEDED"

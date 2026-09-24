@@ -30,6 +30,8 @@ from msm.api.schemas import (
     UserOut,
     UserUpdateRequest,
 )
+from msm.api.schemas.hosting import QuotaModel
+from msm.api.v1.auth import quota_report
 from msm.core.permissions import Permission, Role
 from msm.db.models.audit import AuditAction
 from msm.db.repositories import AuditRepository, ServerRepository
@@ -38,6 +40,7 @@ from msm.i18n import tr
 from msm.security.rbac import AccessContext
 from msm.services.account_service import AccountService, normalise_email
 from msm.services.avatar_service import avatar_path
+from msm.services.hosting_service import HostingService
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -269,7 +272,12 @@ async def _target(auth: AuthServiceDep, user_id: int) -> Any:
 
 @router.get("/{user_id}", response_model=UserDetailOut, summary="Account details")
 async def user_details(
-    settings: AppSettings, user_id: int, auth: AuthServiceDep, session: DbSession, _: StaffOnly
+    supervisor: SupervisorDep,
+    settings: AppSettings,
+    user_id: int,
+    auth: AuthServiceDep,
+    session: DbSession,
+    _: StaffOnly,
 ) -> UserDetailOut:
     """Fiche d'un compte pour l'équipe : pseudos successifs, serveurs, bannissement."""
     user = await _target(auth, user_id)
@@ -285,6 +293,8 @@ async def user_details(
         servers_shared=[
             ServerRefOut(id=server.id, name=server.name, role=role) for server, role in shared
         ],
+        quota_overrides=user.quota,
+        limits=await quota_report(user, HostingService(session, settings), supervisor),
     )
 
 
@@ -342,3 +352,36 @@ async def user_avatar(settings: AppSettings, user_id: int, _: CurrentUser) -> Fi
     return FileResponse(
         path, media_type="image/webp", headers={"Cache-Control": "private, max-age=604800"}
     )
+
+
+@router.put(
+    "/{user_id}/quota",
+    response_model=UserOut,
+    summary="Set an account's limits",
+    dependencies=[CsrfProtected],
+)
+async def set_quota(
+    user_id: int,
+    payload: QuotaModel,
+    auth: AuthServiceDep,
+    session: DbSession,
+    actor: CurrentUser,
+    ip: ClientIp,
+    _: AdminOnly,
+) -> UserOut:
+    """Seuls les champs envoyés surchargent les quotas par défaut ; `{}` les rétablit."""
+    user = await _target(auth, user_id)
+    overrides = payload.model_dump(exclude_unset=True)
+    user.quota = overrides or None
+    AuditRepository(session).record(
+        action=AuditAction.USER_UPDATED,
+        summary=tr("Limits of {username} updated.", username=user.username),
+        actor_id=actor.id,
+        actor_username=actor.username,
+        actor_role=actor.role.value,
+        ip_address=ip,
+        target_type="user",
+        target_id=str(user.id),
+        payload={"quota": overrides},
+    )
+    return UserOut.model_validate(user)

@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from msm.config import get_settings
 from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction, AuditResult
 from msm.db.models.server import Server
@@ -22,6 +23,7 @@ from msm.logging_conf import get_logger
 from msm.runtime.server_runtime import ServerRuntime
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
+from msm.services.hosting_service import HostingService
 
 logger = get_logger(__name__)
 
@@ -43,6 +45,7 @@ class LifecycleService:
 
     def __init__(self, session: AsyncSession, supervisor: Supervisor) -> None:
         self._supervisor = supervisor
+        self._session = session
         self._audit = AuditRepository(session)
         self._servers = ServerRepository(session)
 
@@ -51,6 +54,7 @@ class LifecycleService:
     ) -> dict[str, Any]:
         context.require(Permission.SERVER_START, action=tr("start this server"))
         ensure_owner_not_banned(server)
+        await HostingService(self._session, get_settings()).check_start(server, self._supervisor)
         runtime = self._supervisor.get(server.id)
 
         try:

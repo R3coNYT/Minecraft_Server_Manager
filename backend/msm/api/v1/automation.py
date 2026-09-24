@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, status
@@ -27,6 +28,7 @@ from msm.api.schemas import (
     ScheduleUpdateRequest,
     VersionOut,
 )
+from msm.api.schemas.hosting import HostingSettingsModel, QuotaModel
 from msm.core.permissions import Permission
 from msm.db.models.schedule import Schedule, ScheduleAction
 from msm.exceptions import ValidationError
@@ -34,6 +36,7 @@ from msm.i18n import SUPPORTED_LANGUAGES, tr
 from msm.schedule.rules import describe, parse_rule
 from msm.services.account_service import AccountService, RegistrationMode
 from msm.services.download_service import DownloadService
+from msm.services.hosting_service import HostingService, HostingSettings, Quota
 from msm.services.schedule_service import ScheduleService
 from msm.services.settings_service import SettingsService
 
@@ -250,6 +253,53 @@ async def update_registration(
         mode, context=context, ip_address=ip
     )
     return RegistrationSettings(mode=mode.value)
+
+
+# --------------------------------------------------------------------------- #
+#  Hébergement des comptes
+# --------------------------------------------------------------------------- #
+def _hosting_out(service: HostingService, hosting: HostingSettings) -> HostingSettingsModel:
+    return HostingSettingsModel(
+        users_root=hosting.users_root,
+        port_min=hosting.port_min,
+        port_max=hosting.port_max,
+        quota=QuotaModel(**asdict(hosting.quota)),
+        users_root_effective=str(service.users_root(hosting)),
+    )
+
+
+@router.get("/settings/hosting", response_model=HostingSettingsModel, summary="Hosting settings")
+async def hosting_settings(
+    session: DbSession, settings: AppSettings, context: GlobalContext
+) -> HostingSettingsModel:
+    context.require(Permission.SETTINGS_MANAGE, action=tr("view the settings"))
+    service = HostingService(session, settings)
+    return _hosting_out(service, await service.load())
+
+
+@router.put(
+    "/settings/hosting",
+    response_model=HostingSettingsModel,
+    summary="Change the hosting settings",
+    dependencies=[CsrfProtected],
+)
+async def update_hosting(
+    payload: HostingSettingsModel,
+    session: DbSession,
+    settings: AppSettings,
+    context: GlobalContext,
+    ip: ClientIp,
+) -> HostingSettingsModel:
+    """Dossier des comptes, plage de ports, quotas par défaut."""
+    service = HostingService(session, settings)
+    hosting = HostingSettings(
+        users_root=payload.users_root or None,
+        port_min=payload.port_min,
+        port_max=payload.port_max,
+        quota=Quota(**payload.quota.model_dump()),
+    )
+    await service.save(hosting, context=context, ip_address=ip)
+    return _hosting_out(service, hosting)
 
 
 # --------------------------------------------------------------------------- #

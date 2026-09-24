@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -130,6 +131,10 @@ class UserDetailOut(UserOut):
     username_history: list[UsernameChangeOut] = Field(default_factory=list)
     servers_owned: list[ServerRefOut] = Field(default_factory=list)
     servers_shared: list[ServerRefOut] = Field(default_factory=list)
+    #: Limites propres à ce compte, par-dessus celles par défaut ; ``None`` : aucune.
+    quota_overrides: dict[str, int | None] | None = None
+    #: Limites effectives et consommation (voir `/auth/me/quota`).
+    limits: Any = None
 
 
 class AccountBanRequest(BaseModel):

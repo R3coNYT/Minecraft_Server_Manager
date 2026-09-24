@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -36,8 +36,9 @@ from msm.runtime.supervisor import Supervisor
 from msm.security.access import server_context
 from msm.security.rbac import AccessContext
 from msm.services.download_service import download_file
+from msm.services.hosting_service import HostingService, enforce_properties
 from msm.services.lifecycle_service import LifecycleService
-from msm.services.server_service import ServerService, slugify
+from msm.services.server_service import ServerService
 
 logger = get_logger(__name__)
 
@@ -53,15 +54,18 @@ PROVISIONING_TOPIC = topics.system_topic("provisioning")
 @dataclass(frozen=True, slots=True)
 class ProvisioningRequest:
     name: str
-    directory: str
+    directory: str | None
     distribution: str
     version: str
     build: str | None
     memory_min_mb: int
     memory_max_mb: int
-    port: int
+    port: int | None
     accept_eula: bool
     start_after: bool
+    #: Serveur d'un compte (pas d'un admin de MSM) : port de la plage, ni RCON ni
+    #: query. Décidé par le service, jamais par la requête.
+    hosted: bool = False
 
 
 class ProvisioningService:
@@ -83,23 +87,32 @@ class ProvisioningService:
     # ------------------------------------------------------------------ #
     #  Valeurs proposées
     # ------------------------------------------------------------------ #
-    async def defaults(self, name: str, *, context: AccessContext) -> dict[str, Any]:
-        """Racines autorisées, dossier et port proposés pour un nouveau serveur."""
+    async def defaults(self, name: str, *, context: AccessContext, actor: User) -> dict[str, Any]:
+        """Dossier et port proposés — imposés à qui n'est pas admin de MSM."""
         context.require(Permission.SERVER_CREATE, action=tr("create a server"))
+        hosting = HostingService(self._session, self._settings)
         roots = [str(Path(root).expanduser()) for root in self._settings.server_roots]
-        folder = slugify(name) if name.strip() else ""
-        directory = str(Path(roots[0]) / folder) if roots and folder else ""
-
-        ports = [
-            server.settings.port
-            for server in await self._servers.list_all()
-            if server.settings is not None and server.settings.port
-        ]
+        directory = (
+            str(await hosting.directory_for(actor, name, taken=self._taken_directories()))
+            if name.strip()
+            else str(await hosting.home_of(actor))
+        )
+        quota = await hosting.quota_for(actor)
+        free_choice = context.has(Permission.SERVER_REGISTER)
         return {
             "roots": roots,
             "directory": directory,
-            "port": max(ports) + 1 if ports else DEFAULT_PORT,
+            "port": await hosting.allocate_port(reserved=self._reserved_ports()),
+            "directory_locked": not free_choice,
+            "port_locked": not free_choice,
+            "max_memory_mb": quota.max_memory_per_server_mb if quota else None,
         }
+
+    def _taken_directories(self) -> set[str]:
+        return {job.directory for job in self._registry.running()}
+
+    def _reserved_ports(self) -> set[int]:
+        return {job.port for job in self._registry.running() if job.port is not None}
 
     # ------------------------------------------------------------------ #
     #  Lancement
@@ -113,6 +126,7 @@ class ProvisioningService:
         ip_address: str | None = None,
     ) -> ProvisioningJob:
         context.require(Permission.SERVER_CREATE, action=tr("create a server"))
+        request = await self._place(request, context=context, actor=actor)
         directory = await self._validate(request, owner_id=actor.id)
 
         installer = SOURCES[request.distribution]["kind"] == "installer"
@@ -131,6 +145,7 @@ class ProvisioningService:
             build=request.build,
             created_by=actor.id,
             steps=steps,
+            port=request.port,
         )
         self._registry.add(job)
         job.task = asyncio.create_task(
@@ -163,6 +178,28 @@ class ProvisioningService:
                 remediation=tr("Start the creation again from the dashboard."),
             )
         return job
+
+    async def _place(
+        self, request: ProvisioningRequest, *, context: AccessContext, actor: User
+    ) -> ProvisioningRequest:
+        """Dossier, port et quotas : ce qu'un admin choisit, MSM l'impose aux autres."""
+        hosting = HostingService(self._session, self._settings)
+        pending = sum(1 for job in self._registry.running() if job.created_by == actor.id)
+        await hosting.check_creation(actor, memory_max_mb=request.memory_max_mb, pending=pending)
+
+        free_choice = context.has(Permission.SERVER_REGISTER)
+        directory = request.directory if free_choice and request.directory else None
+        if directory is None:
+            placed = await hosting.directory_for(
+                actor, request.name, taken=self._taken_directories()
+            )
+            # Le dossier du compte naît avec son premier serveur.
+            await asyncio.to_thread(placed.parent.mkdir, parents=True, exist_ok=True)
+            directory = str(placed)
+        port = request.port if free_choice and request.port else None
+        if port is None:
+            port = await hosting.allocate_port(reserved=self._reserved_ports())
+        return replace(request, directory=directory, port=port, hosted=not free_choice)
 
     async def _validate(self, request: ProvisioningRequest, *, owner_id: int) -> Path:
         name = request.name.strip()
@@ -213,7 +250,7 @@ class ProvisioningService:
             )
 
         service = ServerService(self._session, self._settings, self._supervisor)
-        directory = service.check_directory(request.directory, must_exist=False)
+        directory = service.check_directory(request.directory or "", must_exist=False)
         if not directory.parent.is_dir():
             raise ValidationError(
                 tr("Parent folder not found."),
@@ -304,7 +341,10 @@ async def _run(
         publish()
         if request.accept_eula:
             files.write_eula(directory)
-        files.write_port(directory, request.port)
+        if request.hosted and request.port is not None:
+            enforce_properties(directory, request.port)
+        elif request.port is not None:
+            files.write_port(directory, request.port)
         job.finish(StepKey.CONFIGURE)
 
         job.begin(StepKey.REGISTER)

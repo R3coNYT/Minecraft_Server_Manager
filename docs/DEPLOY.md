@@ -80,6 +80,11 @@ server {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # L'adresse réelle du visiteur : sans elle, l'audit et la limite
+        # d'inscriptions par adresse verraient tout le monde comme 127.0.0.1.
+        # Uvicorn ne la croit que si elle vient de la machine elle-même.
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
 
         # Indispensable : sans ces deux en-têtes, la console temps réel ne
         # s'établit pas et l'interface reste figée sur « Reconnexion ».
@@ -97,6 +102,24 @@ MSM_SESSION_COOKIE_SECURE=true
 ```
 
 et redémarrer le service.
+
+## Serveurs des comptes : ports et pare-feu
+
+Chaque serveur créé par un compte reçoit un port d'une plage réservée, réglée
+dans **Settings → Hosting** (25565 à 25664 par défaut). Le compte ne choisit pas
+son port : MSM le réimpose dans `server.properties` à chaque démarrage, et y
+désactive RCON et query, qui ouvriraient d'autres ports.
+
+Pour que les joueurs puissent se connecter, cette plage doit être ouverte dans
+le pare-feu de la machine (et redirigée par la box si la machine est derrière) :
+
+```bash
+sudo ufw allow 25565:25664/tcp
+```
+
+Les dossiers des comptes sont créés sous la même page de réglages (par défaut,
+la première des racines autorisées), un dossier par compte, nommé d'après son
+identifiant immuable — un changement de pseudo ne déplace rien.
 
 ## Interface web
 

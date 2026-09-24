@@ -604,6 +604,11 @@ export interface ProvisioningDefaults {
   roots: string[]
   directory: string
   port: number
+  /** Imposés à qui n'est pas admin de MSM : affichés, pas modifiables. */
+  directory_locked: boolean
+  port_locked: boolean
+  /** Mémoire maximale permise par serveur ; `null` : pas de limite. */
+  max_memory_mb: number | null
 }
 
 export type ProvisioningStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'

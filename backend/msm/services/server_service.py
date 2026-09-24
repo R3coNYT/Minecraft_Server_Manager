@@ -40,13 +40,14 @@ from msm.runtime.orphans import find_server_process
 from msm.runtime.server_runtime import ServerRuntimeConfig
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
+from msm.services.hosting_service import HostingService
 
 logger = get_logger(__name__)
 
-#: Réglages qui décident de ce qui s'exécute sur la machine : réservés aux admins
-#: de MSM, même sur un serveur dont on est propriétaire.
+#: Réglages qui décident de ce qui s'exécute sur la machine, et du port qu'elle
+#: ouvre : réservés aux admins de MSM, même sur un serveur dont on est propriétaire.
 LAUNCH_SETTINGS: frozenset[str] = frozenset(
-    {"java_path", "jar_path", "script_path", "custom_argv", "jvm_args", "extra_args", "env"}
+    {"java_path", "jar_path", "script_path", "custom_argv", "jvm_args", "extra_args", "env", "port"}
 )
 
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
@@ -58,6 +59,31 @@ def slugify(value: str) -> str:
     ascii_only = normalized.encode("ascii", "ignore").decode("ascii").casefold()
     slug = _SLUG_STRIP_RE.sub("-", ascii_only).strip("-")
     return slug or "serveur"
+
+
+def check_within_roots(settings: Settings, resolved: Path) -> Path:
+    """Vérifie que le dossier est sous une racine autorisée, si la liste existe.
+
+    Sans cette restriction, un administrateur pourrait désigner ``/etc`` comme
+    dossier de serveur et l'exposer à l'éditeur de configurations.
+    """
+    roots = settings.server_roots
+    if not roots:
+        return resolved
+    for root in roots:
+        try:
+            root_resolved = Path(root).expanduser().resolve()
+        except OSError:  # pragma: no cover - racine mal configurée
+            continue
+        if resolved == root_resolved or root_resolved in resolved.parents:
+            return resolved
+
+    allowed = ", ".join(str(Path(root)) for root in roots)
+    raise ValidationError(
+        tr("Folder outside the allowed locations."),
+        cause=tr("{path} is not under an allowed root.", path=resolved),
+        remediation=tr("Choose a folder under: {roots}.", roots=allowed),
+    )
 
 
 class ServerService:
@@ -224,6 +250,10 @@ class ServerService:
         settings_changes = self._actual_settings_changes(server, settings_changes or {})
         for permission, action in self._required(changes, settings_changes):
             context.require(permission, action=action)
+        if "memory_max_mb" in settings_changes:
+            await HostingService(self._session, self._settings).check_memory_setting(
+                server.owner, settings_changes["memory_max_mb"]
+            )
         if not changes and not settings_changes:
             return server
 
@@ -564,28 +594,7 @@ class ServerService:
         return resolved
 
     def _check_within_roots(self, resolved: Path) -> None:
-        """Vérifie que le dossier est sous une racine autorisée, si la liste existe.
-
-        Sans cette restriction, un administrateur pourrait désigner ``/etc`` comme
-        dossier de serveur et l'exposer à l'éditeur de configurations.
-        """
-        roots = self._settings.server_roots
-        if not roots:
-            return
-        for root in roots:
-            try:
-                root_resolved = Path(root).expanduser().resolve()
-            except OSError:  # pragma: no cover - racine mal configurée
-                continue
-            if resolved == root_resolved or root_resolved in resolved.parents:
-                return
-
-        allowed = ", ".join(str(Path(root)) for root in roots)
-        raise ValidationError(
-            tr("Folder outside the allowed locations."),
-            cause=tr("{path} is not under an allowed root.", path=resolved),
-            remediation=tr("Choose a folder under: {roots}.", roots=allowed),
-        )
+        check_within_roots(self._settings, resolved)
 
     def _validate_launch(self, server: Server) -> None:
         """Vérifie que la configuration permettra effectivement un démarrage."""

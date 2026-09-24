@@ -20,7 +20,7 @@ propres serveurs Minecraft.
 | --- | --- | --- |
 | 1 | Modèle d'accès : rôles, propriétaires, membres, filtrage (backend) | terminée |
 | 2 | Comptes : inscription, profil, pseudo, avatar, bannissement (backend) | terminée |
-| 3 | Création par utilisateur : dossiers, quotas, ports (backend) | à faire |
+| 3 | Création par utilisateur : dossiers, quotas, ports (backend) | terminée |
 | 4 | Interface : inscription, profil, dashboard user, membres, panel admin | à faire |
 | 5 | Connexion avec Google | à faire |
 | 6 | Isolation des serveurs, **préalable à l'ouverture publique** | à faire |

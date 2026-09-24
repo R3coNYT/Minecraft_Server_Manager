@@ -29,7 +29,9 @@ async def _admin_server(admin: ApiClient, directory: Path, name: str = "admin-sr
     return response.json()
 
 
-async def _owned_by(app: FastAPI, username: str, directory: Path, name: str) -> int:
+async def _owned_by(
+    app: FastAPI, username: str, directory: Path, name: str, **settings: Any
+) -> int:
     """Crée un serveur **appartenant à** `username`, comme le ferait sa création.
 
     La route d'enregistrement d'un dossier existant est réservée aux admins ; un
@@ -50,6 +52,7 @@ async def _owned_by(app: FastAPI, username: str, directory: Path, name: str) -> 
                 "stop_timeout_s": 5,
                 "kill_timeout_s": 3,
                 "start_timeout_s": 30,
+                **settings,
             },
             actor=user,
         )
@@ -340,3 +343,25 @@ class TestMachine:
         assert response.status_code == 200
         keys = {item["key"] for item in response.json()}
         assert {"jar", "shell", "batch", "custom"} <= keys
+
+
+class TestMemoryQuota:
+    async def test_starting_beyond_the_online_memory_quota_is_refused(
+        self, app: FastAPI, admin: ApiClient, viewer: ApiClient, dirs: Any
+    ) -> None:
+        hosting = (await admin.get("/api/v1/settings/hosting")).json()
+        hosting["quota"]["max_memory_total_mb"] = 3000
+        assert (await admin.put("/api/v1/settings/hosting", json=hosting)).status_code == 200
+
+        first = await _owned_by(app, "lecteur", dirs(), "un", memory_max_mb=2048)
+        second = await _owned_by(app, "lecteur", dirs(), "deux", memory_max_mb=2048)
+
+        started = await viewer.post(f"/api/v1/servers/{first}/start")
+        assert started.status_code == 200, started.text
+        refused = await viewer.post(f"/api/v1/servers/{second}/start")
+        assert refused.status_code == 403
+        assert refused.json()["code"] == "QUOTA_EXCEEDED"
+
+        # Les admins de MSM n'ont pas de quota.
+        admin_started = await admin.post(f"/api/v1/servers/{first}/stop")
+        assert admin_started.status_code == 200, admin_started.text

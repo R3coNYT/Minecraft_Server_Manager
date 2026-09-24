@@ -33,6 +33,7 @@ from msm.runtime.stats import system_stats
 from msm.runtime.supervisor import Supervisor
 from msm.services.backup_service import BackupService
 from msm.services.event_service import EventService
+from msm.services.hosting_service import make_network_hook
 from msm.services.launcher_service import LauncherSyncer, make_pre_start_hook
 from msm.services.metrics_recorder import MetricsRecorder
 from msm.services.notification_service import load_notification_settings
@@ -75,6 +76,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     supervisor = Supervisor(bus=get_event_bus())
     # Avant chaque démarrage : appliquer les mods synchronisés mis en attente.
     supervisor.add_pre_start_hook(make_pre_start_hook(settings))
+    # Serveurs des comptes : port de la plage réimposé, ni RCON ni query.
+    supervisor.add_pre_start_hook(make_network_hook())
     app.state.supervisor = supervisor
     app.state.agent = LocalAgent(supervisor)
 

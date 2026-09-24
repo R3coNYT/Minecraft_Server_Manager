@@ -100,10 +100,11 @@ async def builds(key: str, version: str, context: GlobalContext) -> list[BuildOu
 )
 async def defaults(
     context: GlobalContext,
+    user: CurrentUser,
     service: ProvisioningDep,
     name: Annotated[str, Query(max_length=128)] = "",
 ) -> ProvisioningDefaultsOut:
-    return ProvisioningDefaultsOut(**await service.defaults(name, context=context))
+    return ProvisioningDefaultsOut(**await service.defaults(name, context=context, actor=user))
 
 
 @router.post(

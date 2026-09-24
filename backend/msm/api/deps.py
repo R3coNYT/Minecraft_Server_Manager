@@ -60,10 +60,11 @@ def get_supervisor(request: Request) -> Supervisor:
 
 
 def client_ip(request: Request) -> str | None:
-    """Adresse du client, journalisée dans l'audit.
+    """Adresse du client, journalisée dans l'audit et comptée par les limites.
 
-    L'en-tête `X-Forwarded-For` n'est **pas** lu : sans configuration explicite du
-    reverse proxy de confiance, il est falsifiable et rendrait l'audit trompeur.
+    L'en-tête `X-Forwarded-For` n'est pas lu ici : Uvicorn l'applique lui-même, et
+    seulement quand il vient d'un proxy de confiance (la machine elle-même par
+    défaut). Venu d'ailleurs, il serait falsifiable et rendrait l'audit trompeur.
     """
     return request.client.host if request.client else None
 

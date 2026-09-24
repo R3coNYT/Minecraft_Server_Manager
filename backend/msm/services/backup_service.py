@@ -60,6 +60,7 @@ from msm.logging_conf import get_logger
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
 from msm.security.safe_path import resolve_within
+from msm.services.hosting_service import HostingService
 
 logger = get_logger(__name__)
 
@@ -175,6 +176,7 @@ class BackupService:
         ip_address: str | None = None,
     ) -> Backup:
         context.require(Permission.BACKUP_CREATE, action=tr("create a backup"))
+        await HostingService(self._session, self._settings).check_disk(server.owner)
 
         directory = Path(server.directory)
         if not directory.is_dir():

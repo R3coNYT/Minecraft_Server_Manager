@@ -7,7 +7,7 @@ import string
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from msm.core.permissions import Role
@@ -65,6 +65,10 @@ class User(Base, TimestampMixin):
 
     #: Réservé à la double authentification (phase ultérieure).
     totp_secret: Mapped[str | None] = mapped_column(String(64))
+
+    #: Surcharge des quotas d'hébergement pour ce compte (clés de `Quota`) ;
+    #: ``None`` : ceux par défaut.
+    quota: Mapped[dict[str, int | None] | None] = mapped_column(JSON)
 
     #: Bannissement : connexion refusée, serveurs arrêtés et bloqués.
     banned_at: Mapped[datetime | None] = mapped_column(UtcDateTime)

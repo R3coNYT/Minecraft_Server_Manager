@@ -11,7 +11,8 @@ pas lire le cookie CSRF pour le recopier dans l'en-tête attendu.
 
 from __future__ import annotations
 
-from typing import Annotated
+from dataclasses import asdict
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Cookie, File, Response, UploadFile, status
 
@@ -24,6 +25,7 @@ from msm.api.deps import (
     CurrentUser,
     DbSession,
     GlobalContext,
+    SupervisorDep,
 )
 from msm.api.schemas import (
     CsrfOut,
@@ -36,6 +38,7 @@ from msm.api.schemas import (
     RegistrationInfoOut,
     UserOut,
 )
+from msm.api.schemas.hosting import MyQuotaOut, QuotaModel, UsageOut
 from msm.config import Settings
 from msm.db.models.user import User
 from msm.exceptions import ValidationError
@@ -44,6 +47,7 @@ from msm.security.rbac import AccessContext, build_context
 from msm.security.tokens import generate_token
 from msm.services.account_service import AccountService
 from msm.services.avatar_service import MAX_UPLOAD_BYTES, delete_avatar, save_avatar
+from msm.services.hosting_service import HostingService
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -270,3 +274,24 @@ async def remove_avatar(user: CurrentUser, session: DbSession, settings: AppSett
     delete_avatar(settings, user)
     await session.flush()
     return _me(user, build_context(user))
+
+
+@router.get("/me/quota", response_model=MyQuotaOut, summary="My limits and usage")
+async def my_quota(
+    user: CurrentUser, session: DbSession, settings: AppSettings, supervisor: SupervisorDep
+) -> MyQuotaOut:
+    """Ce que le compte peut encore créer ou démarrer, et ce qu'il occupe déjà."""
+    return await quota_report(user, HostingService(session, settings), supervisor)
+
+
+async def quota_report(user: User, hosting: HostingService, supervisor: Any) -> MyQuotaOut:
+    quota = await hosting.quota_for(user)
+    usage = await hosting.usage_of(user, supervisor)
+    return MyQuotaOut(
+        quota=QuotaModel(**asdict(quota)) if quota is not None else None,
+        usage=UsageOut(
+            servers=usage.servers,
+            memory_online_mb=usage.memory_online_mb,
+            disk_mb=round(usage.disk_mb, 1),
+        ),
+    )

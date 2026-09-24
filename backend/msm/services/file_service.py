@@ -30,6 +30,7 @@ from msm.logging_conf import get_logger
 from msm.security.rbac import AccessContext
 from msm.security.safe_path import resolve_within
 from msm.security.uploads import check_size, sanitize_filename, strip_executable_bit
+from msm.services.hosting_service import HostingService
 from msm.utils.files import atomic_write_bytes
 
 logger = get_logger(__name__)
@@ -87,6 +88,7 @@ class FileService:
     """Cas d'usage des dossiers de mods et de plugins."""
 
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
+        self._session = session
         self._settings = settings
         self._audit = AuditRepository(session)
 
@@ -183,6 +185,7 @@ class FileService:
     ) -> ManagedFile:
         """Dépose un fichier dans le dossier, sans jamais l'exécuter."""
         context.require(Permission.FILE_UPLOAD, action=tr("upload a file"))
+        await HostingService(self._session, self._settings).check_disk(server.owner)
         area = get_area(area_key)
 
         safe_name = sanitize_filename(filename, allowed_suffixes=area.allowed_suffixes)
