@@ -28,7 +28,7 @@ from typing import Any
 
 import httpx
 
-from msm.bus import EventBus, topics
+from msm.bus import EventBus, Subscription, topics
 from msm.core.states import ServerState
 from msm.i18n import tr
 from msm.logging_conf import get_logger
@@ -215,7 +215,10 @@ class Notifier:
     def start(self) -> None:
         if self._task is None:
             self._stop.clear()
-            self._task = asyncio.create_task(self._run(), name="msm-notifier")
+            # Abonné tout de suite, et non dans la tâche : les événements publiés
+            # avant son premier tour de boucle (démarrage automatique) comptent.
+            subscription = self._bus.subscribe("server.", "system.")
+            self._task = asyncio.create_task(self._run(subscription), name="msm-notifier")
 
     async def stop(self, *, timeout: float = 5.0) -> None:
         if self._task is None:
@@ -235,8 +238,7 @@ class Notifier:
         """Met un fait en file. Non bloquant, appelable depuis n'importe où."""
         self._queue.append(notification)
 
-    async def _run(self) -> None:
-        subscription = self._bus.subscribe("server.", "system.")
+    async def _run(self, subscription: Subscription) -> None:
         try:
             async for event in subscription:
                 if self._stop.is_set():

@@ -20,7 +20,7 @@ import contextlib
 
 from sqlalchemy.exc import IntegrityError
 
-from msm.bus import EventBus, topics
+from msm.bus import EventBus, Subscription, topics
 from msm.db.repositories import ServerRepository
 from msm.db.session import session_scope
 from msm.logging_conf import get_logger
@@ -42,7 +42,10 @@ class RuntimeStateRecorder:
 
     def start(self) -> None:
         if self._task is None:
-            self._task = asyncio.create_task(self._run(), name="msm-runtime-recorder")
+            # Abonné tout de suite, et non dans la tâche : les événements publiés
+            # avant son premier tour de boucle (démarrage automatique) comptent.
+            subscription = self._bus.subscribe("server.")
+            self._task = asyncio.create_task(self._run(subscription), name="msm-runtime-recorder")
 
     async def stop(self, *, timeout: float = 5.0) -> None:
         """Termine la boucle en laissant l'écriture en cours s'achever."""
@@ -60,8 +63,7 @@ class RuntimeStateRecorder:
         finally:
             self._task = None
 
-    async def _run(self) -> None:
-        subscription = self._bus.subscribe("server.")
+    async def _run(self, subscription: Subscription) -> None:
         try:
             async for event in subscription:
                 if self._stopping:

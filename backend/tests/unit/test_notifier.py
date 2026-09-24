@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import httpx
@@ -366,3 +367,42 @@ class TestRouting:
         notifier._collect(topics.server_topic(7, topics.CRASH), {"server": "survie"})
 
         assert notifier._queue[0].server_id == 7
+
+
+@pytest.mark.asyncio
+class TestSubscription:
+    async def test_events_published_right_after_start_are_not_missed(self, monkeypatch) -> None:
+        """Les serveurs en démarrage automatique partent juste après le notifier.
+
+        L'abonnement se faisait dans la tâche de fond, au premier tour de boucle :
+        un démarrage publié entre-temps était perdu, et jamais annoncé.
+        """
+        monkeypatch.setattr("msm.services.notifier.BATCH_WINDOW_S", 0)
+        bus = EventBus()
+        notifier = Notifier(bus, lambda _server_id: {})
+        flushed: list[NotificationEvent] = []
+
+        async def fake_flush() -> bool:
+            flushed.extend(item.event for item in notifier._queue)
+            notifier._queue.clear()
+            return True
+
+        monkeypatch.setattr(notifier, "flush", fake_flush)
+
+        notifier.start()
+        topic = topics.server_topic(1, topics.STATUS)
+        bus.publish(topic, {"id": 1, "name": "survie", "state": "OFFLINE"})
+        bus.publish(
+            topic,
+            {"id": 1, "name": "survie", "state": "STARTING", "state_reason": "autostart"},
+        )
+        bus.publish(topic, {"id": 1, "name": "survie", "state": "ONLINE"})
+        # La boucle traite ce qu'elle a reçu, puis on l'arrête.
+        for _ in range(50):
+            if flushed:
+                break
+            await asyncio.sleep(0.02)
+        await notifier.stop()
+        bus.close()
+
+        assert flushed == [NotificationEvent.SERVER_STARTED]

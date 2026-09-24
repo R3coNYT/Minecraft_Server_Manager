@@ -15,7 +15,7 @@ import asyncio
 import contextlib
 from typing import Any
 
-from msm.bus import EventBus, topics
+from msm.bus import EventBus, Subscription, topics
 from msm.db.repositories.player_repo import PlayerRepository
 from msm.db.session import session_scope
 from msm.logging_conf import get_logger
@@ -36,7 +36,10 @@ class PlayerRecorder:
 
     def start(self) -> None:
         if self._task is None:
-            self._task = asyncio.create_task(self._run(), name="msm-player-recorder")
+            # Abonné tout de suite, et non dans la tâche : les événements publiés
+            # avant son premier tour de boucle (démarrage automatique) comptent.
+            subscription = self._bus.subscribe("server.")
+            self._task = asyncio.create_task(self._run(subscription), name="msm-player-recorder")
 
     async def stop(self, *, timeout: float = 5.0) -> None:
         """Termine la boucle en laissant l'écriture en cours s'achever.
@@ -62,10 +65,9 @@ class PlayerRecorder:
         finally:
             self._task = None
 
-    async def _run(self) -> None:
+    async def _run(self, subscription: Subscription) -> None:
         # Un seul abonnement générique : les serveurs vont et viennent, s'abonner
         # par serveur imposerait de suivre leur cycle de vie ici aussi.
-        subscription = self._bus.subscribe("server.")
         try:
             async for event in subscription:
                 if self._stopping:

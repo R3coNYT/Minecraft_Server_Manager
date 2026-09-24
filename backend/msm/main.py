@@ -78,6 +78,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.supervisor = supervisor
     app.state.agent = LocalAgent(supervisor)
 
+    # Les consommateurs du bus avant les serveurs : un démarrage automatique
+    # doit être enregistré (PID, réadoption possible) et notifié comme un autre.
+    # Deux enregistreurs : l'historique des joueurs, et l'état des processus
+    # dont dépend la réadoption au prochain démarrage.
+    recorder = PlayerRecorder(get_event_bus())
+    recorder.start()
+    state_recorder = RuntimeStateRecorder(get_event_bus(), supervisor)
+    state_recorder.start()
+    notifier = Notifier(get_event_bus(), load_notification_settings)
+    notifier.start()
+
     # Les serveurs configurés sont mis sous supervision au démarrage. Ceux qui
     # ont survécu au précédent MSM sont réadoptés ; ceux qui demandent un
     # démarrage automatique sont lancés — dans cet ordre, sans quoi on relancerait
@@ -107,20 +118,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     stats_task = asyncio.create_task(_publish_system_stats(settings), name="msm-system-stats")
 
-    # Deux consommateurs du bus : l'historique des joueurs, et l'état des
-    # processus dont dépend la réadoption au prochain démarrage.
-    recorder = PlayerRecorder(get_event_bus())
-    recorder.start()
-    state_recorder = RuntimeStateRecorder(get_event_bus(), supervisor)
-    state_recorder.start()
     metrics_recorder = MetricsRecorder(supervisor, settings)
     metrics_recorder.start()
-    # Les tâches programmées et les notifications sortantes : deux boucles de
-    # fond, arrêtées proprement plus bas.
+    # Les tâches programmées : une boucle de fond, arrêtée proprement plus bas.
     scheduler = Scheduler(supervisor, settings)
     scheduler.start()
-    notifier = Notifier(get_event_bus(), load_notification_settings)
-    notifier.start()
     launcher_syncer = LauncherSyncer(supervisor, settings)
     launcher_syncer.start()
     app.state.launcher_syncer = launcher_syncer
