@@ -315,8 +315,8 @@ run_as_msm() {
 
 run_as_msm "$VENV/bin/python" -m msm.cli migrate \
   || fail "Initialising the database failed." \
-          "The Alembic migrations could not be applied." \
-          "Check the permissions on $DATA_DIR, then run install.sh again"
+          "The Alembic migrations could not be applied (the error is printed above)." \
+          "If it mentions permissions, check $DATA_DIR; otherwise report the error. An update restores the database by itself."
 ok "Database schema applied."
 
 # --------------------------------------------------------------------------- #

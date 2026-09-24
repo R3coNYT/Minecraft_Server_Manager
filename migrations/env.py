@@ -45,7 +45,29 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _foreign_key_violations(connection: Connection) -> list[tuple[object, ...]]:
+    return [tuple(row) for row in connection.exec_driver_sql("PRAGMA foreign_key_check")]
+
+
 def do_run_migrations(connection: Connection) -> None:
+    """Applique les migrations, clés étrangères **désactivées** sous SQLite.
+
+    Pour modifier une table, SQLite oblige à la recréer : copie, ``DROP TABLE``,
+    renommage. Avec les clés étrangères actives (l'application les active à
+    chaque connexion), ce ``DROP`` déclenche les suppressions en cascade — recréer
+    ``servers`` effacerait réglages, sauvegardes et joueurs de chaque serveur — ou
+    échoue sur une contrainte ``RESTRICT``. D'où la recette d'Alembic : les couper
+    le temps des migrations, puis vérifier qu'aucune référence n'a été cassée.
+    """
+    sqlite = connection.dialect.name == "sqlite"
+    before: list[tuple[object, ...]] = []
+    if sqlite:
+        # Hors transaction, sans quoi SQLite ignore silencieusement le PRAGMA.
+        connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+        connection.commit()
+        before = _foreign_key_violations(connection)
+        connection.commit()
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -54,6 +76,18 @@ def do_run_migrations(connection: Connection) -> None:
     )
     with context.begin_transaction():
         context.run_migrations()
+
+    if sqlite:
+        after = _foreign_key_violations(connection)
+        connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+        connection.commit()
+        # Seules comptent les références cassées par ces migrations-ci : une base
+        # déjà incohérente ne doit pas bloquer toutes les mises à jour à venir.
+        broken = [row for row in after if row not in before]
+        if broken:
+            raise RuntimeError(
+                f"The migrations broke {len(broken)} foreign key reference(s): {broken[:10]}"
+            )
 
 
 async def run_migrations_online() -> None:
