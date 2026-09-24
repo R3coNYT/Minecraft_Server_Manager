@@ -8,16 +8,19 @@ from pathlib import Path
 import httpx
 import pytest
 
+from msm.downloads import sources as sources_module
 from msm.downloads.sources import (
     ALLOWED_HOSTS,
     SOURCES,
     DownloadTarget,
     DownloadUnavailable,
+    list_builds,
     list_versions,
+    neoforge_minecraft_version,
     resolve,
 )
 from msm.exceptions import ValidationError
-from msm.services.download_service import _download
+from msm.services.download_service import download_file
 
 MOJANG_MANIFEST_BODY = {
     "versions": [
@@ -126,10 +129,6 @@ class TestSources:
         assert "evil.example" in (excinfo.value.cause or "")
         await client.aclose()
 
-    def test_every_source_declares_a_known_host(self) -> None:
-        assert ALLOWED_HOSTS
-        assert set(SOURCES) == {"vanilla", "paper", "purpur"}
-
 
 @pytest.mark.asyncio
 class TestDownload:
@@ -148,7 +147,7 @@ class TestDownload:
         )
         client = self._client(body)
 
-        await _download(target, tmp_path / "server.jar", client=client)
+        await download_file(target, tmp_path / "server.jar", client=client)
 
         assert (tmp_path / "server.jar").read_bytes() == body
         # Aucun résidu : le fichier temporaire a été renommé, pas laissé derrière.
@@ -166,7 +165,7 @@ class TestDownload:
         client = self._client(b"tout autre chose")
 
         with pytest.raises(ValidationError) as excinfo:
-            await _download(target, tmp_path / "server.jar", client=client)
+            await download_file(target, tmp_path / "server.jar", client=client)
 
         assert "checksum" in (excinfo.value.cause or "")
         assert not (tmp_path / "server.jar").exists()
@@ -186,8 +185,202 @@ class TestDownload:
         )
 
         with pytest.raises(ValidationError) as excinfo:
-            await _download(target, tmp_path / "server.jar", client=client)
+            await download_file(target, tmp_path / "server.jar", client=client)
 
         assert excinfo.value.remediation
         assert not (tmp_path / "server.jar.part").exists()
+        await client.aclose()
+
+
+class TestCatalogue:
+    def test_every_source_is_offered(self) -> None:
+        assert set(SOURCES) == {
+            "vanilla",
+            "paper",
+            "purpur",
+            "fabric",
+            "neoforge",
+            "mohist",
+            "youer",
+        }
+
+    def test_every_api_points_to_an_allowed_host(self) -> None:
+        """Une source ajoutée sans son hôte échouerait au premier appel."""
+        for name in (
+            "MOJANG_MANIFEST",
+            "PAPER_API",
+            "PURPUR_API",
+            "FABRIC_META",
+            "NEOFORGE_MAVEN",
+            "NEOFORGE_VERSIONS",
+            "MOHIST_API",
+        ):
+            host = httpx.URL(getattr(sources_module, name)).host
+            assert host in ALLOWED_HOSTS, name
+
+    def test_only_the_neoforge_installer_is_an_installer(self) -> None:
+        kinds = {key: source["kind"] for key, source in SOURCES.items()}
+        assert [key for key, kind in kinds.items() if kind == "installer"] == ["neoforge"]
+
+    def test_existing_servers_cannot_switch_to_an_installer(self) -> None:
+        from msm.services.download_service import DownloadService
+
+        keys = {item["key"] for item in DownloadService.sources()}
+        assert "neoforge" not in keys
+        assert {"vanilla", "fabric", "mohist", "youer"} <= keys
+
+
+class TestNeoForgeNumbering:
+    @pytest.mark.parametrize(
+        ("neoforge", "minecraft"),
+        [
+            ("21.1.77", "1.21.1"),
+            ("21.0.3-beta", "1.21"),
+            ("20.4.80-beta", "1.20.4"),
+            ("20.2.3-beta", "1.20.2"),
+            ("26.3.0.8-beta", "26.3"),
+            ("26.1.1.2", "26.1.1"),
+            ("0.25w14craftmine.3-beta", None),
+        ],
+    )
+    def test_minecraft_version_is_derived(self, neoforge: str, minecraft: str | None) -> None:
+        assert neoforge_minecraft_version(neoforge) == minecraft
+
+
+NEOFORGE_VERSIONS_BODY = {
+    "versions": [
+        "20.4.80-beta",
+        "21.1.76",
+        "21.1.77",
+        "21.1.78-beta",
+        "26.3.0.8-beta",
+        "0.25w14craftmine.3-beta",
+    ]
+}
+
+
+@pytest.mark.asyncio
+class TestNewSources:
+    async def test_neoforge_groups_builds_by_minecraft_version(self) -> None:
+        client = httpx.AsyncClient(
+            transport=transport(
+                {sources_module.NEOFORGE_VERSIONS: httpx.Response(200, json=NEOFORGE_VERSIONS_BODY)}
+            )
+        )
+
+        versions = await list_versions("neoforge", client=client)
+        builds = await list_builds("neoforge", "1.21.1", client=client)
+
+        assert [(item.id, item.channel) for item in versions] == [
+            ("26.3", "snapshot"),  # uniquement des bêtas
+            ("1.21.1", "release"),
+            ("1.20.4", "snapshot"),
+        ]
+        assert [item.id for item in builds] == ["21.1.78-beta", "21.1.77", "21.1.76"]
+        assert builds[0].channel == "beta"
+        await client.aclose()
+
+    async def test_neoforge_resolves_to_a_verified_installer(self) -> None:
+        installer = f"{sources_module.NEOFORGE_MAVEN}/21.1.77/neoforge-21.1.77-installer.jar"
+        client = httpx.AsyncClient(
+            transport=transport(
+                {
+                    sources_module.NEOFORGE_VERSIONS: httpx.Response(
+                        200, json=NEOFORGE_VERSIONS_BODY
+                    ),
+                    f"{installer}.sha256": httpx.Response(200, text="a" * 64 + "  file\n"),
+                }
+            )
+        )
+
+        # Sans build précisé : le plus récent **stable**, pas la bêta.
+        target = await resolve("neoforge", "1.21.1", client=client)
+
+        assert target.url == installer
+        assert target.kind == "installer"
+        assert (target.algorithm, target.checksum) == ("sha256", "a" * 64)
+        await client.aclose()
+
+    async def test_fabric_has_no_checksum_but_a_known_host(self) -> None:
+        meta = sources_module.FABRIC_META
+        client = httpx.AsyncClient(
+            transport=transport(
+                {
+                    f"{meta}/loader/1.21.1": httpx.Response(
+                        200,
+                        json=[
+                            {"loader": {"version": "0.20.0-beta", "stable": False}},
+                            {"loader": {"version": "0.19.5", "stable": True}},
+                        ],
+                    ),
+                    f"{meta}/installer": httpx.Response(
+                        200, json=[{"version": "1.1.2", "stable": True}]
+                    ),
+                }
+            )
+        )
+
+        target = await resolve("fabric", "1.21.1", client=client)
+
+        assert target.url == f"{meta}/loader/1.21.1/0.19.5/1.1.2/server/jar"
+        assert target.checksum is None
+        assert target.kind == "jar"
+        await client.aclose()
+
+    async def test_mohist_builds_are_newest_first_and_verified(self) -> None:
+        api = sources_module.MOHIST_API
+        body = [
+            {"id": 424, "file_sha256": "b" * 64, "build_date": "2025-12-26T10:19:05Z"},
+            {"id": 471, "file_sha256": "c" * 64, "build_date": "2026-01-16T13:01:42Z"},
+        ]
+        client = httpx.AsyncClient(
+            transport=transport({f"{api}/mohist/1.20.1/builds": httpx.Response(200, json=body)})
+        )
+
+        builds = await list_builds("mohist", "1.20.1", client=client)
+        latest = await resolve("mohist", "1.20.1", client=client)
+        chosen = await resolve("mohist", "1.20.1", "424", client=client)
+
+        assert [item.id for item in builds] == ["471", "424"]
+        assert latest.url == f"{api}/mohist/1.20.1/builds/471/download"
+        assert latest.checksum == "c" * 64
+        assert chosen.checksum == "b" * 64
+        await client.aclose()
+
+    async def test_a_mohist_build_without_checksum_is_refused(self) -> None:
+        api = sources_module.MOHIST_API
+        client = httpx.AsyncClient(
+            transport=transport(
+                {f"{api}/youer/1.21.1/builds": httpx.Response(200, json=[{"id": 9}])}
+            )
+        )
+
+        with pytest.raises(DownloadUnavailable):
+            await resolve("youer", "1.21.1", client=client)
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+class TestDownloadWithoutChecksum:
+    async def test_file_is_installed_and_progress_reported(self, tmp_path: Path) -> None:
+        body = b"launcher" * 1000
+        client = httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda request: httpx.Response(200, content=body))
+        )
+        seen: list[tuple[int, int | None]] = []
+
+        await download_file(
+            DownloadTarget(
+                url="https://meta.fabricmc.net/x.jar",
+                filename="x.jar",
+                checksum=None,
+                algorithm=None,
+            ),
+            tmp_path / "x.jar",
+            client=client,
+            on_progress=lambda written, total: seen.append((written, total)),
+        )
+
+        assert (tmp_path / "x.jar").read_bytes() == body
+        assert seen[-1] == (len(body), len(body))
         await client.aclose()

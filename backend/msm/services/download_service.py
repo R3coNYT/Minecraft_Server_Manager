@@ -6,8 +6,8 @@ Quatre garde-fous, dans cet ordre :
    produit des erreurs incompréhensibles au prochain chargement de classe ;
 2. **le fichier est écrit à côté puis renommé.** Une coupure réseau laisse un
    `.part`, jamais un JAR tronqué qui refuserait de démarrer sans dire pourquoi ;
-3. **l'empreinte est vérifiée avant le renommage.** Un téléchargement altéré est
-   supprimé, pas installé ;
+3. **l'empreinte est vérifiée avant le renommage**, quand la source en publie
+   une (toutes sauf Fabric). Un téléchargement altéré est supprimé, pas installé ;
 4. **le chemin est confiné au dossier du serveur**, comme tout ce que MSM écrit.
 """
 
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +58,13 @@ class DownloadService:
 
     @staticmethod
     def sources() -> list[dict[str, str]]:
-        return [{"key": key, "label": source["label"]} for key, source in SOURCES.items()]
+        # Seuls les JAR se remplacent sur un serveur existant : un installeur
+        # (NeoForge) ne sert qu'à la création d'un serveur.
+        return [
+            {"key": key, "label": source["label"]}
+            for key, source in SOURCES.items()
+            if source["kind"] == "jar"
+        ]
 
     async def versions(self, source: str, *, context: AccessContext) -> list[dict[str, Any]]:
         context.require(Permission.SERVER_EDIT, action=tr("view available versions"))
@@ -92,15 +99,23 @@ class DownloadService:
             )
 
         target = await resolve(source, version)
+        if target.kind != "jar":
+            raise ValidationError(
+                tr("This source cannot change a server's version."),
+                cause=tr("{source} installs a server with its own installer.", source=source),
+                remediation=tr("Create a new server of this type from the dashboard."),
+            )
         destination = resolve_within(directory, target.filename)
-        await _download(target, destination)
+        await download_file(target, destination)
 
         settings = server.settings
         previous = settings.jar_path if settings else None
         if settings is not None:
             # Le serveur pointera sur le nouveau JAR au prochain démarrage : sans
             # cela, l'utilisateur téléchargerait une version qui ne sert à rien.
-            settings.jar_path = str(destination)
+            # Relatif au dossier : le lanceur refuse un chemin absolu, qui pourrait
+            # désigner un exécutable hors du serveur.
+            settings.jar_path = destination.name
         server.minecraft_version = version
         if (declared := SOURCES[source]["server_type"]) is not None:
             server.server_type = declared
@@ -137,18 +152,28 @@ class DownloadService:
         }
 
 
-async def _download(
-    target: DownloadTarget, destination: Path, *, client: httpx.AsyncClient | None = None
+#: Rappel de progression : octets reçus, taille totale si la source l'annonce.
+ProgressCallback = Callable[[int, int | None], None]
+
+
+async def download_file(
+    target: DownloadTarget,
+    destination: Path,
+    *,
+    client: httpx.AsyncClient | None = None,
+    on_progress: ProgressCallback | None = None,
 ) -> None:
     """Télécharge en flux, vérifie l'empreinte, puis publie le fichier."""
     partial = destination.with_name(destination.name + ".part")
-    digest = hashlib.new(target.algorithm)
+    digest = hashlib.new(target.algorithm) if target.algorithm else None
     written = 0
     http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
 
     try:
         async with http.stream("GET", target.url) as response:
             response.raise_for_status()
+            announced = response.headers.get("content-length")
+            total = int(announced) if announced and announced.isdigit() else target.size_bytes
             # Le fichier est écrit par morceaux : un JAR de 100 Mo n'a aucune
             # raison de transiter par la mémoire du processus.
             with partial.open("wb") as handle:
@@ -163,8 +188,11 @@ async def _download(
                             ),
                             remediation=tr("Report the anomaly: this is not a server JAR."),
                         )
-                    digest.update(chunk)
+                    if digest is not None:
+                        digest.update(chunk)
                     await asyncio.to_thread(handle.write, chunk)
+                    if on_progress is not None:
+                        on_progress(written, total)
     except httpx.HTTPError as exc:
         partial.unlink(missing_ok=True)
         raise ValidationError(
@@ -180,7 +208,9 @@ async def _download(
         if client is None:
             await http.aclose()
 
-    if digest.hexdigest().lower() != target.checksum.lower():
+    # Sans empreinte publiée (Fabric), seul le transport HTTPS depuis l'hôte
+    # officiel garantit le fichier.
+    if digest is not None and digest.hexdigest().lower() != (target.checksum or "").lower():
         partial.unlink(missing_ok=True)
         raise ValidationError(
             tr("Invalid downloaded file."),

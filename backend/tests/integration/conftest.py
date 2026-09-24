@@ -177,3 +177,25 @@ def _cleanup_processes() -> Iterator[None]:
                 process.kill()
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
+
+
+@pytest.fixture
+def java_on_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Un `java` factice dans le PATH : enregistrer un serveur « JAR » vérifie sa présence.
+
+    Les tests ne doivent pas dépendre du Java installé sur la machine (l'image
+    Linux des tests n'en a pas) ; celui-ci n'est jamais exécuté.
+    """
+    import os
+
+    folder = tmp_path / "fake-java"
+    folder.mkdir()
+    if sys.platform == "win32":
+        java = folder / "java.bat"
+        java.write_text("@echo off\r\n", encoding="utf-8")
+    else:
+        java = folder / "java"
+        java.write_text("#!/bin/sh\n", encoding="utf-8")
+        java.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{folder}{os.pathsep}{os.environ.get('PATH', '')}")
+    return java

@@ -562,7 +562,10 @@ class TestDownloads:
         response = await admin.get("/api/v1/downloads/sources")
 
         assert response.status_code == 200
-        assert {item["key"] for item in response.json()} == {"vanilla", "paper", "purpur"}
+        keys = {item["key"] for item in response.json()}
+        assert {"vanilla", "paper", "purpur", "fabric", "mohist", "youer"} <= keys
+        # Un installeur ne remplace pas le JAR d'un serveur existant.
+        assert "neoforge" not in keys
 
     async def test_unknown_source_is_refused_without_touching_the_network(
         self, admin: ApiClient
@@ -588,3 +591,49 @@ class TestDownloads:
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")
         await asyncio.sleep(0)
+
+    async def test_an_installed_version_is_selected_by_a_relative_path(
+        self,
+        admin: ApiClient,
+        fake_server_dir: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        java_on_path: Path,
+    ) -> None:
+        """Le lanceur refuse un chemin absolu : un JAR installé doit rester démarrable."""
+        from msm.downloads.sources import DownloadTarget
+        from msm.services import download_service
+
+        async def fake_resolve(source: str, version: str) -> DownloadTarget:
+            return DownloadTarget(
+                url="https://api.papermc.io/paper.jar",
+                filename="paper-1.21.1-119.jar",
+                checksum=None,
+                algorithm=None,
+            )
+
+        async def fake_download(target: DownloadTarget, destination: Path, **_: object) -> None:
+            destination.write_bytes(b"jar")
+
+        monkeypatch.setattr(download_service, "resolve", fake_resolve)
+        monkeypatch.setattr(download_service, "download_file", fake_download)
+        (fake_server_dir / "ancien.jar").write_bytes(b"jar")
+        created = await admin.post(
+            "/api/v1/servers",
+            json={
+                "name": "survie",
+                "directory": str(fake_server_dir),
+                "launcher_key": "jar",
+                "settings": {"jar_path": "ancien.jar"},
+            },
+        )
+        assert created.status_code == 201, created.text
+        server = created.json()
+
+        response = await admin.post(
+            f"/api/v1/servers/{server['id']}/install",
+            json={"source": "paper", "version": "1.21.1"},
+        )
+
+        assert response.status_code == 200, response.text
+        settings = (await admin.get(f"/api/v1/servers/{server['id']}")).json()["settings"]
+        assert settings["jar_path"] == "paper-1.21.1-119.jar"

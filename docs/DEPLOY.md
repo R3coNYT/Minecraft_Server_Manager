@@ -180,16 +180,22 @@ marquée « manquée » et l'occurrence suivante est visée.
 
 ## Accès sortants
 
-MSM n'a besoin d'Internet que pour trois choses, toutes facultatives :
+MSM n'a besoin d'Internet que pour ces usages, tous facultatifs :
 
 | Vers | Pourquoi |
 |---|---|
 | `api.mojang.com`, `sessionserver.mojang.com`, `textures.minecraft.net` | pseudos et skins des joueurs |
-| `launchermeta.mojang.com`, `piston-*.mojang.com`, `api.papermc.io`, `api.purpurmc.org` | catalogue de versions et téléchargement des JAR |
+| `launchermeta.mojang.com`, `piston-*.mojang.com`, `api.papermc.io`, `api.purpurmc.org`, `meta.fabricmc.net`, `maven.neoforged.net`, `api.mohistmc.com` | catalogue de versions, création de serveurs et téléchargement des JAR |
 | `discord.com` | notifications, si un webhook est configuré |
+| le serveur de fichiers d'un launcher | synchronisation des mods, si une liaison est configurée |
 
-Aucune autre destination n'est possible : les hôtes sont codés en dur et
-revérifiés avant chaque requête.
+Aucune autre destination n'est possible pour MSM : les hôtes sont codés en dur
+et revérifiés avant chaque requête.
+
+Deux exceptions, qui ne passent pas par MSM : **l'installeur de NeoForge**,
+exécuté à la création d'un serveur NeoForge, télécharge lui-même Minecraft et
+ses bibliothèques (hôtes de Mojang et de NeoForged) ; **Mohist et Youer**
+récupèrent leurs bibliothèques au premier démarrage du serveur.
 
 ## Mise à jour
 

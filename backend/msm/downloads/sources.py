@@ -1,21 +1,27 @@
-"""Sources officielles de JAR de serveur.
+"""Sources officielles de serveurs Minecraft.
 
-Trois seulement, et **codées en dur** : Mojang, PaperMC, PurpurMC. Aucune URL ne
-vient de l'utilisateur — un champ « adresse du JAR » ferait de MSM un outil de
-téléchargement arbitraire tournant avec les droits du service, ce qui est
-exactement ce qu'on évite.
+Toutes **codées en dur** : Mojang, PaperMC, PurpurMC, FabricMC, NeoForged et
+MohistMC. Aucune URL ne vient de l'utilisateur — un champ « adresse du JAR »
+ferait de MSM un outil de téléchargement arbitraire tournant avec les droits du
+service, ce qui est exactement ce qu'on évite.
 
-Chaque source expose la même chose : une liste de versions, puis la résolution
-d'une version en URL de téléchargement **accompagnée de son empreinte**. Sans
-empreinte publiée, on refuse plutôt que d'installer un fichier non vérifié.
+Chaque source expose la même chose : une liste de versions de Minecraft, parfois
+une liste de builds pour une version (loader Fabric, version NeoForge, build
+Mohist), puis la résolution en URL de téléchargement **accompagnée de son
+empreinte** quand la source en publie une. Seul Fabric n'en publie pas : son
+JAR de lancement vient alors de son hôte officiel, en HTTPS, sans autre garantie.
 
-Forge et NeoForge sont volontairement absents : ils ne distribuent pas un JAR de
-serveur mais un installateur à exécuter, qui télécharge lui-même ses dépendances.
-Le lancer reviendrait à exécuter du code arbitraire à la place de l'utilisateur.
+Deux sortes de fichiers :
+
+* ``jar`` — un JAR de serveur, lancé tel quel ;
+* ``installer`` — l'installeur officiel de NeoForge, que la création d'un
+  serveur exécute une fois pour produire ``run.sh`` et les bibliothèques.
+  L'installeur de version d'un serveur existant ne le propose pas.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +39,10 @@ REQUEST_TIMEOUT_S = 20.0
 MOJANG_MANIFEST = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
 PAPER_API = "https://api.papermc.io/v2/projects/paper"
 PURPUR_API = "https://api.purpurmc.org/v2/purpur"
+FABRIC_META = "https://meta.fabricmc.net/v2/versions"
+NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
+NEOFORGE_VERSIONS = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge"
+MOHIST_API = "https://api.mohistmc.com/project"
 
 #: Hôtes dont un téléchargement peut provenir. La vérification a lieu juste avant
 #: la requête : une API compromise ne pourrait pas nous faire tirer d'ailleurs.
@@ -43,6 +53,9 @@ ALLOWED_HOSTS: frozenset[str] = frozenset(
         "piston-data.mojang.com",
         "api.papermc.io",
         "api.purpurmc.org",
+        "meta.fabricmc.net",
+        "maven.neoforged.net",
+        "api.mohistmc.com",
     }
 )
 
@@ -73,15 +86,31 @@ class VersionInfo:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildInfo:
+    """Un build proposé pour une version : loader Fabric, version NeoForge…"""
+
+    id: str
+    label: str
+    #: `release` ou `beta` — l'interface propose le plus récent stable.
+    channel: str = "release"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"id": self.id, "label": self.label, "channel": self.channel}
+
+
+@dataclass(frozen=True, slots=True)
 class DownloadTarget:
     """Où télécharger, et comment vérifier ce qui arrive."""
 
     url: str
     filename: str
     #: Empreinte publiée par la source ; `sha1` chez Mojang, `sha256` chez Paper.
-    checksum: str
-    algorithm: str
+    #: `None` seulement pour Fabric, qui n'en publie pas.
+    checksum: str | None
+    algorithm: str | None
     size_bytes: int | None = None
+    #: `jar` : lancé tel quel ; `installer` : exécuté une fois pour installer.
+    kind: str = "jar"
 
 
 def _check_host(url: str) -> None:
@@ -110,6 +139,33 @@ async def _get_json(client: httpx.AsyncClient, url: str) -> Any:
         ) from exc
 
 
+async def _get_text(client: httpx.AsyncClient, url: str) -> str:
+    _check_host(url)
+    try:
+        response = await client.get(url)
+        response.raise_for_status()
+        return response.text
+    except httpx.HTTPError as exc:
+        raise DownloadUnavailable(
+            tr("Download source unreachable."),
+            cause=tr("{url} did not answer correctly: {error}", url=url, error=exc),
+            remediation=tr("Check the machine's network connection, then try again."),
+        ) from exc
+
+
+def version_key(value: str) -> tuple[int, ...]:
+    """Clé de tri numérique : « 1.21.10 » après « 1.21.9 »."""
+    return tuple(int(part) for part in re.findall(r"\d+", value))
+
+
+def _unknown_version(source: str, version: str) -> NotFoundError:
+    return NotFoundError(
+        tr("Unknown version."),
+        cause=tr("{source} publishes nothing for “{version}”.", source=source, version=version),
+        remediation=tr("Choose a version from the list offered."),
+    )
+
+
 # --------------------------------------------------------------------------- #
 #  Mojang (Vanilla)
 # --------------------------------------------------------------------------- #
@@ -122,7 +178,9 @@ async def _vanilla_versions(client: httpx.AsyncClient) -> list[VersionInfo]:
     return versions
 
 
-async def _vanilla_target(client: httpx.AsyncClient, version: str) -> DownloadTarget:
+async def _vanilla_target(
+    client: httpx.AsyncClient, version: str, build: str | None = None
+) -> DownloadTarget:
     manifest = await _get_json(client, MOJANG_MANIFEST)
     entry = next((item for item in manifest.get("versions", []) if item.get("id") == version), None)
     if entry is None:
@@ -159,7 +217,9 @@ async def _paper_versions(client: httpx.AsyncClient) -> list[VersionInfo]:
     return [VersionInfo(id=str(version)) for version in reversed(data.get("versions", []))]
 
 
-async def _paper_target(client: httpx.AsyncClient, version: str) -> DownloadTarget:
+async def _paper_target(
+    client: httpx.AsyncClient, version: str, build: str | None = None
+) -> DownloadTarget:
     builds = await _get_json(client, f"{PAPER_API}/versions/{version}/builds")
     stable = [
         build
@@ -200,7 +260,9 @@ async def _purpur_versions(client: httpx.AsyncClient) -> list[VersionInfo]:
     return [VersionInfo(id=str(version)) for version in reversed(data.get("versions", []))]
 
 
-async def _purpur_target(client: httpx.AsyncClient, version: str) -> DownloadTarget:
+async def _purpur_target(
+    client: httpx.AsyncClient, version: str, build: str | None = None
+) -> DownloadTarget:
     latest = await _get_json(client, f"{PURPUR_API}/{version}/latest")
     checksum = (latest.get("md5") or "").strip()
     build = latest.get("build")
@@ -220,25 +282,266 @@ async def _purpur_target(client: httpx.AsyncClient, version: str) -> DownloadTar
     )
 
 
+# --------------------------------------------------------------------------- #
+#  FabricMC
+# --------------------------------------------------------------------------- #
+async def _fabric_versions(client: httpx.AsyncClient) -> list[VersionInfo]:
+    data = await _get_json(client, f"{FABRIC_META}/game")
+    return [
+        VersionInfo(
+            id=str(entry["version"]), channel="release" if entry.get("stable") else "snapshot"
+        )
+        for entry in data
+        if entry.get("version")
+    ]
+
+
+async def _fabric_builds(client: httpx.AsyncClient, version: str) -> list[BuildInfo]:
+    # Loaders compatibles avec *cette* version de Minecraft.
+    data = await _get_json(client, f"{FABRIC_META}/loader/{version}")
+    builds = []
+    for entry in data:
+        loader = entry.get("loader") or {}
+        if loader.get("version"):
+            builds.append(
+                BuildInfo(
+                    id=str(loader["version"]),
+                    label=tr("Loader {version}", version=loader["version"]),
+                    channel="release" if loader.get("stable") else "beta",
+                )
+            )
+    return builds
+
+
+async def _fabric_target(
+    client: httpx.AsyncClient, version: str, build: str | None = None
+) -> DownloadTarget:
+    builds = await _fabric_builds(client, version)
+    if not builds:
+        raise _unknown_version("Fabric", version)
+    loader = build or next((item.id for item in builds if item.channel == "release"), builds[0].id)
+    if loader not in {item.id for item in builds}:
+        raise _unknown_version("Fabric", f"{version} / {loader}")
+
+    installers = await _get_json(client, f"{FABRIC_META}/installer")
+    installer = next(
+        (str(item["version"]) for item in installers if item.get("stable")),
+        str(installers[0]["version"]) if installers else None,
+    )
+    if installer is None:
+        raise DownloadUnavailable(
+            tr("Build without a downloadable file."),
+            cause=tr("FabricMC publishes no installer version."),
+            remediation=tr("Try again later, or choose another version."),
+        )
+    return DownloadTarget(
+        url=f"{FABRIC_META}/loader/{version}/{loader}/{installer}/server/jar",
+        filename=f"fabric-server-mc.{version}-loader.{loader}-launcher.{installer}.jar",
+        checksum=None,
+        algorithm=None,
+    )
+
+
+# --------------------------------------------------------------------------- #
+#  NeoForge
+# --------------------------------------------------------------------------- #
+def neoforge_minecraft_version(neoforge: str) -> str | None:
+    """Version de Minecraft visée par une version de NeoForge.
+
+    Deux numérotations coexistent :
+
+    * ``21.1.77`` → MC 1.21.1, ``21.0.3`` → MC 1.21, ``20.4.80`` → MC 1.20.4 ;
+    * ``26.3.0.8`` → MC 26.3, ``26.1.1.2`` → MC 26.1.1 (Minecraft numérote
+      désormais par année).
+
+    `None` pour ce qui n'en suit aucune (versions expérimentales en ``0.``).
+    """
+    parts = neoforge.split("-", 1)[0].split(".")
+    if len(parts) < 3 or not all(part.isdigit() for part in parts):
+        return None
+    major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+    if major == 0:
+        return None
+    if major >= 26 and len(parts) >= 4:
+        return f"{major}.{minor}" + (f".{patch}" if patch else "")
+    return f"1.{major}" + (f".{minor}" if minor else "")
+
+
+async def _neoforge_catalogue(client: httpx.AsyncClient) -> dict[str, list[str]]:
+    """Versions de NeoForge regroupées par version de Minecraft, plus récentes d'abord."""
+    data = await _get_json(client, NEOFORGE_VERSIONS)
+    grouped: dict[str, list[str]] = {}
+    for value in data.get("versions", []):
+        minecraft = neoforge_minecraft_version(str(value))
+        if minecraft:
+            grouped.setdefault(minecraft, []).append(str(value))
+    for values in grouped.values():
+        values.sort(key=version_key, reverse=True)
+    return grouped
+
+
+def _neoforge_channel(value: str) -> str:
+    return "beta" if "-" in value else "release"
+
+
+async def _neoforge_versions(client: httpx.AsyncClient) -> list[VersionInfo]:
+    catalogue = await _neoforge_catalogue(client)
+    return [
+        VersionInfo(
+            id=minecraft,
+            # Une version de Minecraft sans aucun NeoForge stable reste en retrait.
+            channel="release"
+            if any(_neoforge_channel(value) == "release" for value in values)
+            else "snapshot",
+        )
+        for minecraft, values in sorted(
+            catalogue.items(), key=lambda item: version_key(item[0]), reverse=True
+        )
+    ]
+
+
+async def _neoforge_builds(client: httpx.AsyncClient, version: str) -> list[BuildInfo]:
+    catalogue = await _neoforge_catalogue(client)
+    return [
+        BuildInfo(id=value, label=f"NeoForge {value}", channel=_neoforge_channel(value))
+        for value in catalogue.get(version, [])
+    ]
+
+
+async def _neoforge_target(
+    client: httpx.AsyncClient, version: str, build: str | None = None
+) -> DownloadTarget:
+    builds = await _neoforge_builds(client, version)
+    if not builds:
+        raise _unknown_version("NeoForge", version)
+    chosen = build or next((item.id for item in builds if item.channel == "release"), builds[0].id)
+    if chosen not in {item.id for item in builds}:
+        raise _unknown_version("NeoForge", f"{version} / {chosen}")
+
+    url = f"{NEOFORGE_MAVEN}/{chosen}/neoforge-{chosen}-installer.jar"
+    published = (await _get_text(client, f"{url}.sha256")).split()
+    if not published or not re.fullmatch(r"[0-9a-fA-F]{64}", published[0]):
+        raise DownloadUnavailable(
+            tr("Build without a published checksum."),
+            cause=tr("NeoForged has published no checksum for this build."),
+            remediation=tr("Try again later, or choose another version."),
+        )
+    return DownloadTarget(
+        url=url,
+        filename=f"neoforge-{chosen}-installer.jar",
+        checksum=published[0],
+        algorithm="sha256",
+        kind="installer",
+    )
+
+
+# --------------------------------------------------------------------------- #
+#  MohistMC — Mohist (Forge) et Youer (NeoForge)
+# --------------------------------------------------------------------------- #
+def _mohist_source(project: str, label: str) -> dict[str, Any]:
+    async def versions(client: httpx.AsyncClient) -> list[VersionInfo]:
+        data = await _get_json(client, f"{MOHIST_API}/{project}/versions")
+        names = [str(entry["name"]) for entry in data if entry.get("name")]
+        return [VersionInfo(id=name) for name in sorted(names, key=version_key, reverse=True)]
+
+    async def raw_builds(client: httpx.AsyncClient, version: str) -> list[dict[str, Any]]:
+        data = await _get_json(client, f"{MOHIST_API}/{project}/{version}/builds")
+        entries = [entry for entry in data if isinstance(entry, dict) and entry.get("id")]
+        return sorted(entries, key=lambda entry: int(entry["id"]), reverse=True)
+
+    async def builds(client: httpx.AsyncClient, version: str) -> list[BuildInfo]:
+        return [
+            BuildInfo(
+                id=str(entry["id"]),
+                label=f"#{entry['id']} · {str(entry.get('build_date') or '')[:10]}".rstrip(" ·"),
+            )
+            for entry in await raw_builds(client, version)
+        ]
+
+    async def target(
+        client: httpx.AsyncClient, version: str, build: str | None = None
+    ) -> DownloadTarget:
+        entries = await raw_builds(client, version)
+        if not entries:
+            raise _unknown_version(label, version)
+        chosen = (
+            entries[0]
+            if build is None
+            else next((entry for entry in entries if str(entry["id"]) == build), None)
+        )
+        if chosen is None:
+            raise _unknown_version(label, f"{version} / {build}")
+        checksum = str(chosen.get("file_sha256") or "")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", checksum):
+            raise DownloadUnavailable(
+                tr("Build without a published checksum."),
+                cause=tr("MohistMC has published no checksum for this build."),
+                remediation=tr("Try again later, or choose another version."),
+            )
+        number = chosen["id"]
+        return DownloadTarget(
+            url=f"{MOHIST_API}/{project}/{version}/builds/{number}/download",
+            filename=f"{project}-{version}-{number}-server.jar",
+            checksum=checksum,
+            algorithm="sha256",
+        )
+
+    return {"versions": versions, "builds": builds, "target": target}
+
+
 #: Sources disponibles, exposées telles quelles à l'interface.
 SOURCES: dict[str, dict[str, Any]] = {
     "vanilla": {
         "label": "Vanilla (Mojang)",
         "server_type": ServerType.VANILLA,
+        "kind": "jar",
         "versions": _vanilla_versions,
+        "builds": None,
         "target": _vanilla_target,
     },
     "paper": {
         "label": "Paper",
         "server_type": ServerType.PAPER,
+        "kind": "jar",
         "versions": _paper_versions,
+        "builds": None,
         "target": _paper_target,
     },
     "purpur": {
         "label": "Purpur",
         "server_type": ServerType.PURPUR,
+        "kind": "jar",
         "versions": _purpur_versions,
+        "builds": None,
         "target": _purpur_target,
+    },
+    "fabric": {
+        "label": "Fabric",
+        "server_type": ServerType.FABRIC,
+        "kind": "jar",
+        "versions": _fabric_versions,
+        "builds": _fabric_builds,
+        "target": _fabric_target,
+    },
+    "neoforge": {
+        "label": "NeoForge",
+        "server_type": ServerType.NEOFORGE,
+        "kind": "installer",
+        "versions": _neoforge_versions,
+        "builds": _neoforge_builds,
+        "target": _neoforge_target,
+    },
+    "mohist": {
+        "label": "Mohist (Forge)",
+        "server_type": ServerType.MOHIST,
+        "kind": "jar",
+        **_mohist_source("mohist", "Mohist"),
+    },
+    "youer": {
+        "label": "Youer (NeoForge)",
+        "server_type": ServerType.YOUER,
+        "kind": "jar",
+        **_mohist_source("youer", "Youer"),
     },
 }
 
@@ -268,15 +571,35 @@ async def list_versions(
             await http.aclose()
 
 
-async def resolve(
+async def list_builds(
     source: str, version: str, *, client: httpx.AsyncClient | None = None
+) -> list[BuildInfo]:
+    """Builds proposés pour une version ; vide pour une source sans builds."""
+    handler = _source(source)["builds"]
+    if handler is None:
+        return []
+    owned = client is None
+    http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
+    try:
+        return await handler(http, version)
+    finally:
+        if owned:
+            await http.aclose()
+
+
+async def resolve(
+    source: str,
+    version: str,
+    build: str | None = None,
+    *,
+    client: httpx.AsyncClient | None = None,
 ) -> DownloadTarget:
-    """Résout une version en URL vérifiable."""
+    """Résout une version (et un build, sinon le plus récent stable) en URL vérifiable."""
     handler = _source(source)["target"]
     owned = client is None
     http = client or httpx.AsyncClient(timeout=REQUEST_TIMEOUT_S, follow_redirects=True)
     try:
-        target = await handler(http, version)
+        target = await handler(http, version, build)
     finally:
         if owned:
             await http.aclose()

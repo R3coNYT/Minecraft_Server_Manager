@@ -6,8 +6,8 @@ poussée avant de passer à la suivante.
 | Phase | Contenu | État |
 | --- | --- | --- |
 | 1 | Notifications Discord par serveur, webhook global recentré | terminée |
-| 2 | Création de serveur de zéro — backend | en cours |
-| 3 | Création de serveur de zéro — interface | à faire |
+| 2 | Création de serveur de zéro — backend | terminée |
+| 3 | Création de serveur de zéro — interface | en cours |
 
 ---
 

@@ -26,6 +26,7 @@ from msm.bus import topics as bus_topics
 from msm.config import Settings, get_settings
 from msm.db.session import dispose_engine, init_engine, session_scope
 from msm.logging_conf import configure_logging, get_logger
+from msm.provisioning.jobs import JobRegistry
 from msm.runtime.agent import LocalAgent
 from msm.runtime.backends import get_backend
 from msm.runtime.stats import system_stats
@@ -123,6 +124,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     launcher_syncer = LauncherSyncer(supervisor, settings)
     launcher_syncer.start()
     app.state.launcher_syncer = launcher_syncer
+    # Créations de serveurs en cours : en mémoire, le temps qu'on les suive.
+    provisioning_jobs = JobRegistry()
+    app.state.provisioning_jobs = provisioning_jobs
 
     logger.info(
         "msm_started",
@@ -145,6 +149,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await scheduler.stop()
         await notifier.stop()
         await launcher_syncer.stop()
+        # Une création interrompue par l'arrêt nettoie son dossier avant de rendre la main.
+        await provisioning_jobs.cancel_all()
         # Les serveurs Minecraft ne sont PAS arrêtés : redémarrer le panel ne doit
         # pas déconnecter les joueurs. Ils seront réadoptés au prochain démarrage.
         await supervisor.shutdown(stop_servers=False)

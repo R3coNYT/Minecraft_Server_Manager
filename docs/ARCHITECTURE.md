@@ -416,12 +416,22 @@ renvoyée par l'API. Les messages sont regroupés sur trois secondes : un serveu
 en boucle de redémarrage produirait sinon des dizaines d'appels par minute. Rien
 de ce qui se passe là ne peut faire échouer autre chose.
 
-**Téléchargements.** Trois sources codées en dur (Mojang, PaperMC, PurpurMC).
-Aucune URL ne vient de l'utilisateur : un champ « adresse du JAR » ferait du
-panneau un outil de téléchargement arbitraire tournant avec les droits du
-service. L'empreinte publiée est vérifiée avant d'installer, et l'hôte est
-revalidé juste avant la requête — une API compromise ne pourrait pas rediriger
-ailleurs.
+**Téléchargements.** Des sources codées en dur : Mojang, PaperMC, PurpurMC,
+FabricMC, NeoForged et MohistMC (Mohist, Youer). Aucune URL ne vient de
+l'utilisateur : un champ « adresse du JAR » ferait du panneau un outil de
+téléchargement arbitraire tournant avec les droits du service. L'empreinte
+publiée est vérifiée avant d'installer — toutes les sources en publient une,
+sauf Fabric —, et l'hôte est revalidé juste avant la requête : une API
+compromise ne pourrait pas rediriger ailleurs.
+
+**Création de serveurs** (`msm/provisioning/`, `provisioning_service`). Une
+demande est validée dans la requête (nom, dossier vide sous une racine
+autorisée, mémoire, port), puis une tâche de fond crée le dossier, télécharge,
+lance l'installeur officiel pour NeoForge (argv en liste, délai borné), écrit
+le CLUF — seulement s'il a été accepté — et le port, enregistre le serveur et,
+au choix, le démarre. L'interface suit la tâche par `GET /provisioning/{id}`.
+Un échec défait tout : le dossier créé est supprimé, un dossier vide qui
+existait est vidé.
 
 **Intégration launcher.** Un serveur peut être relié au serveur de fichiers d'un
 launcher personnalisé ([protocole](LAUNCHER_INTEGRATION.md)). Le partage des

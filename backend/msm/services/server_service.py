@@ -427,6 +427,10 @@ class ServerService:
     # ------------------------------------------------------------------ #
     #  Validation
     # ------------------------------------------------------------------ #
+    def check_directory(self, raw: str, *, must_exist: bool = True) -> Path:
+        """Valide un dossier de serveur (absolu, dans une racine autorisée) et le résout."""
+        return self._validate_directory(raw, must_exist=must_exist)
+
     def _validate_directory(self, raw: str, *, must_exist: bool = True) -> Path:
         """Valide un dossier de serveur : absolu, existant, dans un périmètre autorisé."""
         value = (raw or "").strip()

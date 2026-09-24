@@ -23,6 +23,7 @@ _JAR_PATTERNS: tuple[tuple[re.Pattern[str], ServerType], ...] = (
     (re.compile(r"^neoforge.*\.jar$", re.I), ServerType.NEOFORGE),
     (re.compile(r"^forge.*\.jar$", re.I), ServerType.FORGE),
     (re.compile(r"^mohist.*\.jar$", re.I), ServerType.MOHIST),
+    (re.compile(r"^youer.*\.jar$", re.I), ServerType.YOUER),
     (re.compile(r"^purpur.*\.jar$", re.I), ServerType.PURPUR),
     (re.compile(r"^paper.*\.jar$", re.I), ServerType.PAPER),
     (re.compile(r"^spigot.*\.jar$", re.I), ServerType.SPIGOT),

@@ -22,6 +22,8 @@ class ServerType(str, Enum):
     FABRIC = "FABRIC"
     QUILT = "QUILT"
     MOHIST = "MOHIST"
+    #: Hybride NeoForge + plugins de MohistMC.
+    YOUER = "YOUER"
     PAPER = "PAPER"
     SPIGOT = "SPIGOT"
     BUKKIT = "BUKKIT"
@@ -42,6 +44,7 @@ _LABELS: dict[ServerType, str] = {
     ServerType.FABRIC: "Fabric",
     ServerType.QUILT: "Quilt",
     ServerType.MOHIST: "Mohist",
+    ServerType.YOUER: "Youer",
     ServerType.PAPER: "Paper",
     ServerType.SPIGOT: "Spigot",
     ServerType.BUKKIT: "Bukkit",
