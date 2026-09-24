@@ -1,8 +1,7 @@
 # Plan : ouvrir MSM au public
 
-Rédigé le 24/09/2026, **à valider avant tout code** (voir « Décisions à
-valider » en fin de document). La phase 7 (agents distants) reste au programme,
-après ce chantier.
+Rédigé et validé le 24/09/2026 (voir « Décisions » en fin de document). La
+phase 7 (agents distants) reste au programme, après ce chantier.
 
 ## Objectif
 
@@ -25,10 +24,11 @@ propres serveurs Minecraft.
 | 4 | Interface : inscription, profil, dashboard user, membres, panel admin | à faire |
 | 5 | Connexion avec Google | à faire |
 | 6 | Isolation des serveurs, **préalable à l'ouverture publique** | à faire |
+| — | E-mails (vérification, mot de passe oublié) | quand MSM aura un domaine |
 
 Chaque étape est testée, commitée et poussée avant la suivante. L'inscription
-publique reste **fermée par défaut** tant que l'étape 6 n'est pas faite (voir
-« Sécurité »).
+reste **fermée** — ni ouverte, ni sur invitation — tant que **toutes** les
+étapes ne sont pas terminées (voir « Sécurité »).
 
 ---
 
@@ -39,9 +39,13 @@ publique reste **fermée par défaut** tant que l'étape 6 n'est pas faite (voir
 | Rôle | Qui | Accès |
 | --- | --- | --- |
 | **Admin** | l'administrateur de la machine | tout MSM (détail plus bas) |
+| **Moderator** | nommé par un admin | modère la plateforme : voit tout, arrête un serveur, bannit des users |
 | **User** | tout compte créé par inscription | ses serveurs et ceux qu'on lui partage |
 
-Les rôles actuels **Moderator** et **Viewer** disparaissent (migration plus bas).
+Le rôle **Viewer** disparaît (aucun compte ne l'a). Les modérateurs actuels
+restent **Moderator**, avec la définition ci-dessus : ils n'ont plus d'accès
+automatique à la console ou aux fichiers des serveurs. Pour les serveurs
+actuels, l'admin les ajoute comme admins de ces serveurs.
 
 ### Rôles sur un serveur
 
@@ -53,18 +57,23 @@ Les rôles actuels **Moderator** et **Viewer** disparaissent (migration plus bas
 
 ### Qui peut faire quoi sur un serveur
 
-| Action | Propriétaire | Admin du serveur | Membre | Admin MSM non membre |
-| --- | :-: | :-: | :-: | :-: |
-| Voir la vue d'ensemble (overview) | ✅ | ✅ | ✅ | ✅ |
-| Console (lire, envoyer des commandes) | ✅ | ✅ | — | — |
-| Démarrer, arrêter, redémarrer, forcer | ✅ | ✅ | — | — |
-| Joueurs, fichiers, configs, server.properties | ✅ | ✅ | — | — |
-| Événements, tâches programmées, sauvegardes | ✅ | ✅ | — | — |
-| Notifications Discord, launcher | ✅ | ✅ | — | — |
-| Paramètres du serveur (nom, mémoire…) | ✅ | ✅ | — | — |
-| Gérer les membres | ✅ | — | — | — |
-| Supprimer le serveur | ✅ | — | — | ✅ |
-| Option « Start with MSM » | — | — | — | ✅ (tous les serveurs) |
+| Action | Propriétaire | Admin du serveur | Membre | Moderator non membre | Admin MSM non membre |
+| --- | :-: | :-: | :-: | :-: | :-: |
+| Voir la vue d'ensemble (overview) | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Console (lire, envoyer des commandes) | ✅ | ✅ | — | — | — |
+| Démarrer, redémarrer | ✅ | ✅ | — | — | — |
+| Arrêter, forcer l'arrêt | ✅ | ✅ | — | ✅ | ✅ |
+| Joueurs, fichiers, configs, server.properties | ✅ | ✅ | — | — | — |
+| Événements, tâches programmées, sauvegardes | ✅ | ✅ | — | — | — |
+| Notifications Discord, launcher | ✅ | ✅ | — | — | — |
+| Paramètres du serveur (nom, mémoire…) | ✅ | ✅ | — | — | — |
+| Gérer les membres | ✅ | — | — | — | — |
+| Supprimer le serveur | ✅ | — | — | — | ✅ |
+| Option « Start with MSM » | — | — | — | — | ✅ (tous les serveurs) |
+
+L'arrêt par un modérateur ou un admin non membre sert à couper un serveur qui
+pose problème sans le supprimer ni bannir son propriétaire. Il est journalisé,
+et le propriétaire le voit dans la console et les notifications.
 
 - Un membre ne voit que l'onglet **Overview**. Les autres onglets sont masqués,
   et l'API refuse de toute façon.
@@ -92,6 +101,16 @@ Les rôles actuels **Moderator** et **Viewer** disparaissent (migration plus bas
     possédés et partagés avec lui ;
   - les actions : **bannir** avec un motif, **débannir**, changer le rôle.
 - **Settings** : langue, webhook global, inscriptions, quotas, plage de ports.
+
+### Moderator
+
+- **Dashboard et barre latérale** : tous les serveurs, comme l'admin, mais sans
+  les ressources de la machine.
+- **Audit log** : tout MSM.
+- **Users** : la liste et les fiches. Il peut bannir et débannir des **users**,
+  pas les admins ni les autres modérateurs, et ne change pas les rôles.
+- **Settings** : uniquement la langue.
+- Ses propres serveurs se gèrent comme ceux d'un user.
 
 ### User
 
@@ -121,7 +140,11 @@ Les rôles actuels **Moderator** et **Viewer** disparaissent (migration plus bas
 
 ### Données
 
-- `users.role` : `ADMIN` ou `USER`.
+- `users.role` : `ADMIN`, `MODERATOR` ou `USER`.
+- `users.storage_id` : identifiant court, aléatoire et **immuable** (10
+  caractères `a-z0-9`), attribué à la création du compte. Il nomme le dossier de
+  l'utilisateur (étape 3), pour qu'un changement de pseudo ne touche à rien sur
+  le disque.
 - `servers.owner_id` : le propriétaire, obligatoire.
 - Nouvelle table `server_members` : `(server_id, user_id, role)`, avec pour
   `role` : `ADMIN` ou `VIEWER`. Le propriétaire n'y figure pas, il est dans
@@ -171,12 +194,13 @@ Les serveurs d'un user utilisent le lancement standard de leur type (JAR ou
 
 ### Migration des données existantes
 
-- Les admins restent admins. Tous les autres comptes deviennent **User**.
+- Les admins restent admins, les modérateurs restent modérateurs (avec la
+  nouvelle définition). Il n'y a aucun Viewer à migrer ; s'il en restait un, il
+  deviendrait User.
 - Chaque serveur existant reçoit pour propriétaire le premier admin (ton
   compte). Les dossiers existants **ne bougent pas**.
-- Les anciens Moderator et Viewer deviennent membres de tous les serveurs
-  existants : Moderator → admin du serveur, Viewer → membre. Personne ne perd
-  son accès du jour au lendemain, et tu ajustes ensuite.
+- Aucun membre n'est ajouté automatiquement : l'admin partage ensuite ses
+  serveurs, depuis l'onglet Members, avec qui il veut.
 
 ### Tests
 
@@ -210,9 +234,8 @@ WebSocket, statistiques.
 
 - **Changer de pseudo** : l'ancien est conservé dans `username_history`, que
   l'admin consulte. Un ancien pseudo reste réservé à son titulaire : personne
-  d'autre ne peut le prendre pour usurper son identité. Le dossier de l'user
-  est renommé (étape 3), ce qui demande que ses serveurs soient arrêtés ;
-  sinon, un message clair le demande.
+  d'autre ne peut le prendre pour usurper son identité. Rien ne change sur le
+  disque : le dossier porte l'identifiant immuable du compte, pas son pseudo.
 - **Changer de mot de passe** : l'ancien est exigé, les autres sessions sont
   fermées.
 - **Avatar** : PNG, JPEG ou WebP de 2 Mo au plus. Il est **réencodé** en WebP
@@ -231,12 +254,14 @@ WebSocket, statistiques.
     démarrer.
 - Débannir rend l'accès. Les serveurs ne redémarrent pas d'eux-mêmes.
 - On ne peut pas se réinscrire avec le même e-mail ou le même compte Google.
-- Un admin ne peut ni se bannir lui-même, ni bannir le dernier admin.
+- Un admin ne peut ni se bannir lui-même, ni bannir le dernier admin. Un
+  modérateur ne bannit que des users.
 
-### E-mails (option)
+### E-mails : plus tard
 
-Sans serveur SMTP configuré, pas de vérification d'e-mail, et un mot de passe
-oublié se réinitialise par l'admin. Avec SMTP, on ajoute :
+MSM n'a pas encore de nom de domaine : les e-mails attendront. En attendant, pas
+de vérification d'adresse, et un mot de passe oublié se réinitialise par
+l'admin. Une fois le domaine et le serveur SMTP en place, on ajoutera :
 
 - la vérification de l'adresse à l'inscription ;
 - « mot de passe oublié » ;
@@ -248,14 +273,16 @@ oublié se réinitialise par l'admin. Avec SMTP, on ajoute :
 
 ### Dossiers
 
-- Un serveur créé par un compte va dans `{racine des users}/{pseudo}/{serveur}`.
-  La racine est un réglage admin, qui vaut par défaut la première racine
-  autorisée. Avec `/data` comme racine : `/data/flavien/survie`.
+- Un serveur créé par un compte va dans
+  `{racine des users}/{identifiant du compte}/{serveur}`. La racine est un
+  réglage admin, qui vaut par défaut la première racine autorisée. Avec `/data`
+  comme racine : `/data/k7x2m9qd4a/survie`.
+- La fiche d'un compte, dans le panel admin, affiche son identifiant et le
+  chemin de son dossier, pour s'y retrouver sur la machine.
 - Le dossier de l'user est créé à sa première création de serveur.
 - Un user ne choisit plus le dossier : il ne donne que le nom du serveur. Le
   choix libre reste possible pour un admin.
-- Renommer son pseudo renomme son dossier et met à jour les chemins de ses
-  serveurs. Tous ses serveurs doivent être arrêtés.
+- Changer de pseudo ne touche pas aux dossiers.
 - Les serveurs existants restent où ils sont.
 
 ### Quotas (réglages admin, avec une valeur par défaut et une surcharge par compte)
@@ -314,7 +341,9 @@ oublié se réinitialise par l'admin. Avec SMTP, on ajoute :
   - un identifiant client Google (Google Cloud Console) ;
   - `MSM_GOOGLE_CLIENT_ID` et `MSM_GOOGLE_CLIENT_SECRET` ;
   - une adresse publique **en HTTPS**, obligatoire pour Google.
-  Sans configuration, le bouton n'apparaît pas.
+  Sans configuration, le bouton n'apparaît pas. Comme pour les e-mails, il
+  faudra un nom de domaine. Le développement et les tests se font sur
+  `http://localhost`, que Google accepte.
 - Première connexion : Google donne l'e-mail et l'avatar. MSM demande ensuite
   de **choisir un pseudo** avant de créer le compte avec le rôle User.
 - Le compte est lié à l'identifiant Google stable (`sub`), pas à l'e-mail, qui
@@ -355,7 +384,7 @@ Chaque serveur est lancé comme une **unité systemd transitoire**
 - avec un système de fichiers en lecture seule, hors de son propre dossier
   (`ProtectSystem`, `ReadWritePaths`).
 
-MSM obtient le droit de lancer ces unités, et seulement celui-là, par une règle
+**Retenu : systemd.** MSM obtient le droit de lancer ces unités, et seulement celui-là, par une règle
 polkit ou sudoers installée par `install.sh`. Bonus : systemd suit lui-même les
 processus, ce qui fiabilise la réadoption après un redémarrage de MSM.
 
@@ -380,22 +409,17 @@ sauf besoin particulier.
 
 ---
 
-## Décisions à valider
+## Décisions (validées le 24/09/2026)
 
-1. **Admin MSM sur le serveur d'un autre** : le plan lui donne la vue
-   d'ensemble, la suppression et « Start with MSM ». Faut-il ajouter l'**arrêt
-   forcé**, pour couper un serveur qui pose problème sans le supprimer ni
-   bannir son propriétaire ?
-2. **Admin du serveur** : le plan lui donne tout, sauf gérer les membres et
-   supprimer le serveur. Doit-il pouvoir ajouter des membres lui-même ?
-3. **Dossiers** : `{racine}/{pseudo}/{serveur}`, renommés quand le pseudo
-   change. L'alternative est de garder le pseudo d'origine comme nom de
-   dossier, ce qui évite d'arrêter les serveurs pour changer de pseudo.
-4. **Anciens Moderator et Viewer** : ils deviennent membres de tous les
-   serveurs existants. Ou simples Users sans accès, que tu partages ensuite à
-   la main ?
-5. **E-mails** : faut-il prévoir SMTP (vérification, mot de passe oublié) dès
-   l'étape 2, ou plus tard ?
-6. **Isolation (étape 6)** : systemd, comme proposé, ou Docker ? Et
-   l'inscription peut-elle s'ouvrir avant, en mode « sur invitation » pour des
-   personnes de confiance ?
+1. **Admin MSM sur le serveur d'un autre** : vue d'ensemble, **arrêt et arrêt
+   forcé**, suppression, « Start with MSM ».
+2. **Membres** : seul le propriétaire les gère. On pourra l'ouvrir aux admins
+   du serveur plus tard si le besoin se présente.
+3. **Dossiers** : nommés d'après un **identifiant immuable** du compte, pas son
+   pseudo. Changer de pseudo ne touche pas au disque.
+4. **Moderator** : le rôle est conservé, redéfini en modérateur de la
+   plateforme (voir « Les rôles »). Les modérateurs actuels le gardent ; un
+   seul admin, aucun Viewer.
+5. **E-mails** : plus tard, quand MSM aura un nom de domaine et un serveur SMTP.
+6. **Isolation** : systemd. L'inscription (ouverte ou sur invitation) n'est
+   activée qu'une fois **toutes** les étapes terminées.
