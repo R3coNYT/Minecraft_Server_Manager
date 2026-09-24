@@ -372,12 +372,18 @@ class TestNotifications:
             await moderator.put("/api/v1/notifications", json={"enabled": False})
         ).status_code == 403
 
-    async def test_events_are_listed_with_their_labels(self, admin: ApiClient) -> None:
-        response = await admin.get("/api/v1/notifications/events")
+    async def test_the_global_channel_only_offers_msm_events(self, admin: ApiClient) -> None:
+        """Ce qui arrive à un serveur va dans son salon : le global annonce la flotte."""
+        body = (await admin.get("/api/v1/notifications")).json()
 
-        keys = {item["key"] for item in response.json()}
-        assert "server_crashed" in keys
-        assert all(item["label"] for item in response.json())
+        keys = {item["key"] for item in body["available_events"]}
+        assert keys == {"server_created", "server_deleted"}
+        assert all(item["label"] for item in body["available_events"])
+
+    async def test_a_server_event_is_refused_globally(self, admin: ApiClient) -> None:
+        response = await admin.put("/api/v1/notifications", json={"events": ["server_crashed"]})
+
+        assert response.status_code == 422
 
     async def test_starting_and_stopping_a_server_reach_discord(
         self, admin: ApiClient, fake_server_dir: Path, app, monkeypatch: pytest.MonkeyPatch
@@ -391,7 +397,7 @@ class TestNotifications:
             sent.append(content)
             return True
 
-        async def settings() -> dict:
+        async def settings(_server_id: int | None) -> dict:
             return {
                 "enabled": True,
                 "webhook_url": WEBHOOK,
@@ -420,6 +426,135 @@ class TestNotifications:
         assert "Server started" in text
         assert "Server stopped" in text
         assert "survie" in text
+
+
+class TestServerNotifications:
+    async def test_a_new_server_has_no_webhook(
+        self, admin: ApiClient, fake_server_dir: Path
+    ) -> None:
+        server = await _create_server(admin, fake_server_dir)
+
+        body = (await admin.get(f"/api/v1/servers/{server['id']}/notifications")).json()
+
+        assert body["enabled"] is False
+        assert body["webhook_configured"] is False
+        # Les ennuis sont cochés d'avance ; la routine, non.
+        assert "server_crashed" in body["events"]
+        assert "server_started" not in body["events"]
+        keys = {item["key"] for item in body["available_events"]}
+        assert {"server_crashed", "server_started", "server_stopped", "schedule_failed"} <= keys
+        assert "server_created" not in keys
+
+    async def test_each_server_has_its_own_webhook(
+        self, admin: ApiClient, fake_server_dir: Path, tmp_path: Path
+    ) -> None:
+        first = await _create_server(admin, fake_server_dir, "survie")
+        other_dir = tmp_path / "servers" / "creatif"
+        other_dir.mkdir(parents=True)
+        second = await _create_server(admin, other_dir, "creatif")
+
+        response = await admin.put(
+            f"/api/v1/servers/{first['id']}/notifications",
+            json={"webhook_url": WEBHOOK, "enabled": True, "events": ["server_started"]},
+        )
+
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["webhook_configured"] is True
+        assert body["events"] == ["server_started"]
+        assert WEBHOOK not in response.text
+        other = (await admin.get(f"/api/v1/servers/{second['id']}/notifications")).json()
+        assert other["webhook_configured"] is False
+        assert (await admin.get("/api/v1/notifications")).json()["webhook_configured"] is False
+
+    async def test_a_global_event_is_refused_on_a_server(
+        self, admin: ApiClient, fake_server_dir: Path
+    ) -> None:
+        server = await _create_server(admin, fake_server_dir)
+
+        response = await admin.put(
+            f"/api/v1/servers/{server['id']}/notifications", json={"events": ["server_created"]}
+        )
+
+        assert response.status_code == 422
+
+    async def test_testing_without_a_webhook_explains_what_to_do(
+        self, admin: ApiClient, fake_server_dir: Path
+    ) -> None:
+        server = await _create_server(admin, fake_server_dir)
+
+        response = await admin.post(f"/api/v1/servers/{server['id']}/notifications/test")
+
+        assert response.status_code == 422
+        assert response.json()["remediation"]
+
+    async def test_a_viewer_cannot_read_or_change_them(
+        self, admin: ApiClient, viewer: ApiClient, fake_server_dir: Path
+    ) -> None:
+        server = await _create_server(admin, fake_server_dir)
+        url = f"/api/v1/servers/{server['id']}/notifications"
+
+        assert (await viewer.get(url)).status_code == 403
+        assert (await viewer.put(url, json={"enabled": False})).status_code == 403
+
+    async def test_deleting_a_server_deletes_its_settings(
+        self, admin: ApiClient, fake_server_dir: Path
+    ) -> None:
+        from msm.db.models import ServerNotification
+        from msm.db.session import session_scope
+
+        server = await _create_server(admin, fake_server_dir)
+        await admin.put(
+            f"/api/v1/servers/{server['id']}/notifications", json={"webhook_url": WEBHOOK}
+        )
+
+        assert (await admin.delete(f"/api/v1/servers/{server['id']}")).status_code == 200
+
+        async with session_scope() as session:
+            assert await session.get(ServerNotification, server["id"]) is None
+
+    async def test_creating_and_deleting_a_server_reach_the_global_channel(
+        self, admin: ApiClient, fake_server_dir: Path, app, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from msm.services import notifier as notifier_module
+
+        sent: list[tuple[str, str]] = []
+
+        async def fake_send(url: str, content: str, **_: object) -> bool:
+            sent.append((url, content))
+            return True
+
+        async def settings(server_id: int | None) -> dict:
+            if server_id is not None:
+                return {}
+            return {
+                "enabled": True,
+                "webhook_url": WEBHOOK,
+                "events": ["server_created", "server_deleted"],
+            }
+
+        def everything() -> str:
+            return "\n".join(content for _, content in sent)
+
+        monkeypatch.setattr(notifier_module, "send_to_discord", fake_send)
+        monkeypatch.setattr(notifier_module, "BATCH_WINDOW_S", 0.1)
+        notifier = notifier_module.Notifier(app.state.supervisor.bus, settings)
+        notifier.start()
+        try:
+            server = await _create_server(admin, fake_server_dir, "lobby")
+            await admin.delete(f"/api/v1/servers/{server['id']}")
+
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 10
+            while loop.time() < deadline and "Server deleted" not in everything():
+                await asyncio.sleep(0.1)
+        finally:
+            await notifier.stop()
+
+        assert "Server created" in everything()
+        assert "Server deleted" in everything()
+        assert "lobby" in everything()
+        assert all(url == WEBHOOK for url, _ in sent)
 
 
 class TestDownloads:

@@ -117,6 +117,42 @@ class TestRevision:
         assert run_cli("db-revision", env=cli_env).stdout.strip() == "none"
 
 
+class TestNotificationsMigration:
+    def test_the_global_webhook_is_kept_and_refocused(
+        self, cli_env: dict[str, str], tmp_path: Path
+    ) -> None:
+        """Le webhook global survit, mais n'annonce plus que la flotte."""
+        import json
+        import sqlite3
+
+        run_cli("migrate", env=cli_env)
+        run_cli("downgrade", "6913bd3193a1", env=cli_env)
+        database = tmp_path / "cli.db"
+        stored = {"enabled": True, "webhook_url": "chiffre", "events": ["server_crashed"]}
+        with sqlite3.connect(database) as connection:
+            connection.execute(
+                "INSERT INTO app_settings (key, value) VALUES (?, ?)",
+                ("notifications.discord", json.dumps(stored)),
+            )
+
+        run_cli("migrate", env=cli_env)
+        with sqlite3.connect(database) as connection:
+            (value,) = connection.execute(
+                "SELECT value FROM app_settings WHERE key = 'notifications.discord'"
+            ).fetchone()
+        migrated = json.loads(value)
+        assert migrated["events"] == ["server_created", "server_deleted"]
+        assert migrated["webhook_url"] == "chiffre"
+        assert migrated["enabled"] is True
+
+        run_cli("downgrade", "6913bd3193a1", env=cli_env)
+        with sqlite3.connect(database) as connection:
+            (value,) = connection.execute(
+                "SELECT value FROM app_settings WHERE key = 'notifications.discord'"
+            ).fetchone()
+        assert "server_crashed" in json.loads(value)["events"]
+
+
 class TestSecret:
     def test_secret_prints_a_usable_key(self, cli_env: dict[str, str]) -> None:
         """Elle sert à remplir le .env : elle ne doit rien afficher d'autre."""

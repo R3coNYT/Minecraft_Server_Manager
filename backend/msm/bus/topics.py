@@ -28,6 +28,8 @@ SCHEDULE: Final = "schedule"
 # --- Événements système ----------------------------------------------------
 SYSTEM_STATS: Final = "stats"
 NOTIFICATION: Final = "notification"
+SERVER_CREATED: Final = "server_created"
+SERVER_DELETED: Final = "server_deleted"
 
 
 def server_topic(server_id: int, event: str) -> str:

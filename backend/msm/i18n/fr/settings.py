@@ -31,4 +31,11 @@ MESSAGES: dict[str, str] = {
     "… and 1 more event.": "… et 1 autre événement.",
     "server": "serveur",
     "restarting in {delay} s": "redémarrage dans {delay} s",
+    "Server created": "Serveur créé",
+    "Server deleted": "Serveur supprimé",
+    "by {actor}": "par {actor}",
+    "Discord notifications of “{name}” changed.": "Notifications Discord de « {name} » modifiées.",
+    "view the notification settings": "consulter les réglages de notification",
+    "change the notification settings": "modifier les réglages de notification",
+    "✅ **{server}** · test message — this server's notifications will arrive here.": "✅ **{server}** · message de test — les notifications de ce serveur arriveront ici.",
 }

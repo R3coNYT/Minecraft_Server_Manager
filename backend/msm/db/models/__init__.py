@@ -17,6 +17,7 @@ from msm.db.models.misc import (
     Player,
     SkinCache,
 )
+from msm.db.models.notification import ServerNotification
 from msm.db.models.schedule import Schedule, ScheduleAction, ScheduleStatus
 from msm.db.models.server import (
     Server,
@@ -44,6 +45,7 @@ __all__ = [
     "ScheduleAction",
     "ScheduleStatus",
     "Server",
+    "ServerNotification",
     "ServerPermission",
     "ServerRuntimeStateRow",
     "ServerSettings",

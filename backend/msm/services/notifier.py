@@ -55,9 +55,29 @@ class NotificationEvent(str, Enum):
     BACKUP_FAILED = "backup_failed"
     BACKUP_COMPLETED = "backup_completed"
     SCHEDULE_FAILED = "schedule_failed"
+    # --- Événements de MSM lui-même, pour le webhook global ---------------
+    SERVER_CREATED = "server_created"
+    SERVER_DELETED = "server_deleted"
 
 
-#: Ceux qui sont cochés par défaut : les ennuis, pas la routine.
+#: Ce qui arrive à un serveur : annoncé dans le salon de ce serveur.
+SERVER_EVENTS: tuple[NotificationEvent, ...] = (
+    NotificationEvent.SERVER_CRASHED,
+    NotificationEvent.SERVER_RESTARTED,
+    NotificationEvent.SERVER_STARTED,
+    NotificationEvent.SERVER_STOPPED,
+    NotificationEvent.BACKUP_FAILED,
+    NotificationEvent.BACKUP_COMPLETED,
+    NotificationEvent.SCHEDULE_FAILED,
+)
+
+#: Ce qui arrive à la flotte : annoncé dans le salon global.
+GLOBAL_EVENTS: tuple[NotificationEvent, ...] = (
+    NotificationEvent.SERVER_CREATED,
+    NotificationEvent.SERVER_DELETED,
+)
+
+#: Cochés par défaut pour un serveur : les ennuis, pas la routine.
 DEFAULT_EVENTS: tuple[NotificationEvent, ...] = (
     NotificationEvent.SERVER_CRASHED,
     NotificationEvent.SERVER_RESTARTED,
@@ -73,6 +93,8 @@ LABELS: dict[NotificationEvent, str] = {
     NotificationEvent.BACKUP_FAILED: "Backup failed",
     NotificationEvent.BACKUP_COMPLETED: "Backup completed",
     NotificationEvent.SCHEDULE_FAILED: "Scheduled task failed",
+    NotificationEvent.SERVER_CREATED: "Server created",
+    NotificationEvent.SERVER_DELETED: "Server deleted",
 }
 
 #: Emoji ouvrant la ligne : dans un salon, la couleur se lit avant le texte.
@@ -84,6 +106,8 @@ _ICONS: dict[NotificationEvent, str] = {
     NotificationEvent.BACKUP_FAILED: "⚠️",
     NotificationEvent.BACKUP_COMPLETED: "💾",
     NotificationEvent.SCHEDULE_FAILED: "⚠️",
+    NotificationEvent.SERVER_CREATED: "🆕",
+    NotificationEvent.SERVER_DELETED: "🗑️",
 }
 
 
@@ -95,6 +119,9 @@ class Notification:
     server_name: str
     detail: str = ""
     ts: datetime = field(default_factory=lambda: datetime.now(UTC))
+    #: Serveur concerné, dont le salon reçoit le message ; `None` pour un
+    #: événement global, envoyé au salon global.
+    server_id: int | None = None
 
     def render(self) -> str:
         icon = _ICONS.get(self.event, "•")
@@ -173,8 +200,9 @@ class Notifier:
     _WAKE_TOPIC = "system.__notifier_wake__"
 
     def __init__(self, bus: EventBus, settings_loader: Any) -> None:
-        #: Fonction asynchrone renvoyant les réglages courants — relus à chaque
-        #: envoi, pour qu'un changement s'applique sans redémarrage.
+        #: Fonction asynchrone `(server_id | None) -> réglages` : ceux d'un
+        #: serveur, ou les réglages globaux pour `None`. Relus à chaque envoi,
+        #: pour qu'un changement s'applique sans redémarrage.
         self._load_settings = settings_loader
         self._bus = bus
         self._queue: list[Notification] = []
@@ -228,58 +256,73 @@ class Notifier:
 
     def _collect(self, topic: str, payload: Any) -> None:
         """Traduit un événement du bus en fait notifiable, s'il en est un."""
-        suffix = topic.rsplit(".", 1)[-1]
         if not isinstance(payload, dict):
             return
+        parts = topic.split(".")
+        suffix = parts[-1]
+
+        if parts[0] == topics.SYSTEM:
+            self._collect_global(suffix, payload)
+            return
+        # `server.<id>.<événement>` : l'identifiant désigne le salon destinataire.
+        if len(parts) < 3 or not parts[1].isdigit():
+            return
+        server_id = int(parts[1])
 
         # Les événements du runtime nomment le serveur « server » ; le statut
         # complet, publié ailleurs, dit « name ». Les deux sont acceptés.
-        name = payload.get("server") or payload.get("name") or tr("server")
+        name = str(payload.get("server") or payload.get("name") or tr("server"))
+
+        def notify(event: NotificationEvent, detail: str = "") -> None:
+            self.notify(Notification(event, name, detail, server_id=server_id))
 
         if suffix == topics.CRASH:
-            self.notify(
-                Notification(
-                    NotificationEvent.SERVER_CRASHED,
-                    str(name),
-                    str(payload.get("reason") or payload.get("last_error") or ""),
-                )
+            notify(
+                NotificationEvent.SERVER_CRASHED,
+                str(payload.get("reason") or payload.get("last_error") or ""),
             )
         elif suffix == topics.RESTART_SCHEDULED:
             delay = payload.get("delay_s")
-            self.notify(
-                Notification(
-                    NotificationEvent.SERVER_RESTARTED,
-                    str(name),
-                    tr("restarting in {delay} s", delay=delay) if delay else "",
-                )
+            notify(
+                NotificationEvent.SERVER_RESTARTED,
+                tr("restarting in {delay} s", delay=delay) if delay else "",
             )
         elif suffix == topics.BACKUP:
             status = payload.get("status")
             if status == "FAILED":
-                self.notify(
-                    Notification(
-                        NotificationEvent.BACKUP_FAILED,
-                        str(name),
-                        str(payload.get("error") or ""),
-                    )
-                )
+                notify(NotificationEvent.BACKUP_FAILED, str(payload.get("error") or ""))
             elif status == "COMPLETED":
-                self.notify(Notification(NotificationEvent.BACKUP_COMPLETED, str(name)))
+                notify(NotificationEvent.BACKUP_COMPLETED)
         elif suffix == topics.SCHEDULE:
             if payload.get("status") == "FAILED":
                 task = str(payload.get("task") or "")
                 error = str(payload.get("error") or "")
-                self.notify(
-                    Notification(
-                        NotificationEvent.SCHEDULE_FAILED,
-                        str(name),
-                        f"{task} — {error}" if task and error else task or error,
-                    )
+                notify(
+                    NotificationEvent.SCHEDULE_FAILED,
+                    f"{task} — {error}" if task and error else task or error,
                 )
         elif suffix == topics.STATUS:
-            self._collect_state(payload, str(name))
+            self._collect_state(server_id, payload, name)
 
-    def _collect_state(self, payload: dict[str, Any], name: str) -> None:
+    def _collect_global(self, suffix: str, payload: dict[str, Any]) -> None:
+        """Événements de MSM lui-même : ils partent vers le salon global."""
+        events = {
+            topics.SERVER_CREATED: NotificationEvent.SERVER_CREATED,
+            topics.SERVER_DELETED: NotificationEvent.SERVER_DELETED,
+        }
+        event = events.get(suffix)
+        if event is None:
+            return
+        actor = payload.get("actor")
+        self.notify(
+            Notification(
+                event,
+                str(payload.get("server") or tr("server")),
+                tr("by {actor}", actor=actor) if actor else "",
+            )
+        )
+
+    def _collect_state(self, server_id: int, payload: dict[str, Any], name: str) -> None:
         """Annonce un démarrage ou un arrêt à partir des changements d'état.
 
         Seules les transitions complètes comptent : STARTING → ONLINE pour un
@@ -288,9 +331,8 @@ class Notifier:
         là — il n'a été ni démarré ni arrêté. Un arrêt sur plantage aboutit à
         CRASHED, déjà annoncé à part.
         """
-        server_id = payload.get("id")
         state = payload.get("state")
-        if not isinstance(server_id, int) or not isinstance(state, str):
+        if not isinstance(state, str):
             return
         reason = str(payload.get("state_reason") or "")
         previous_state, previous_reason = self._states.get(server_id, ("", ""))
@@ -301,32 +343,46 @@ class Notifier:
         # La raison utile est celle de la demande (« Start requested by… »),
         # portée par l'état intermédiaire, pas celle de l'aboutissement.
         if state == ServerState.ONLINE.value and previous_state == ServerState.STARTING.value:
-            self.notify(Notification(NotificationEvent.SERVER_STARTED, name, previous_reason))
+            self.notify(
+                Notification(
+                    NotificationEvent.SERVER_STARTED, name, previous_reason, server_id=server_id
+                )
+            )
         elif state == ServerState.OFFLINE.value and previous_state in (
             ServerState.ONLINE.value,
             ServerState.STOPPING.value,
         ):
             detail = previous_reason if previous_state == ServerState.STOPPING.value else reason
-            self.notify(Notification(NotificationEvent.SERVER_STOPPED, name, detail))
+            self.notify(
+                Notification(NotificationEvent.SERVER_STOPPED, name, detail, server_id=server_id)
+            )
 
     async def flush(self) -> bool:
-        """Envoie ce qui est en file. Renvoie `True` si un message est parti."""
+        """Envoie ce qui est en file. Renvoie `True` si au moins un message est parti.
+
+        Chaque serveur a son salon : les faits sont regroupés par destinataire,
+        et chaque lot part avec les réglages de ce destinataire — le webhook du
+        serveur, ou le webhook global pour les événements de MSM.
+        """
         if not self._queue:
             return False
-
-        settings = await self._load_settings()
         pending, self._queue = self._queue, []
 
-        if not settings or not settings.get("enabled") or not settings.get("webhook_url"):
-            return False
+        batches: dict[int | None, list[Notification]] = {}
+        for item in pending:
+            batches.setdefault(item.server_id, []).append(item)
 
-        selected = {
-            NotificationEvent(value)
-            for value in settings.get("events", [])
-            if value in NotificationEvent._value2member_map_
-        }
-        retained = [item for item in pending if item.event in selected]
-        if not retained:
-            return False
-
-        return await send_to_discord(settings["webhook_url"], render_batch(retained))
+        sent = False
+        for server_id, items in batches.items():
+            settings = await self._load_settings(server_id)
+            if not settings or not settings.get("enabled") or not settings.get("webhook_url"):
+                continue
+            selected = {
+                NotificationEvent(value)
+                for value in settings.get("events", [])
+                if value in NotificationEvent._value2member_map_
+            }
+            retained = [item for item in items if item.event in selected]
+            if retained and await send_to_discord(settings["webhook_url"], render_batch(retained)):
+                sent = True
+        return sent

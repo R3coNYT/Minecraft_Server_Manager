@@ -66,6 +66,8 @@ class NotificationSettingsOut(BaseModel):
 
     enabled: bool
     events: list[str]
+    #: Événements que cette portée (globale ou serveur) peut notifier.
+    available_events: list[NotificationEventOut]
     webhook_configured: bool
     webhook_hint: str | None
     webhook_unreadable: bool

@@ -10,6 +10,7 @@
 import { NavLink, Outlet, useParams } from 'react-router-dom'
 import {
   Archive,
+  Bell,
   CalendarClock,
   FileCog,
   Link2,
@@ -43,6 +44,8 @@ interface TabDefinition {
   label: MessageKey
   icon: typeof Terminal
   capability?: string
+  /** Onglet masqué sans cette permission : son contenu serait refusé. */
+  permission?: string
   end?: boolean
 }
 
@@ -60,6 +63,7 @@ const TABS: TabDefinition[] = [
   { to: 'backups', label: 'tab.backups', icon: Archive },
   { to: 'schedules', label: 'tab.schedules', icon: Timer },
   { to: 'launcher', label: 'tab.launcher', icon: Link2 },
+  { to: 'notifications', label: 'tab.notifications', icon: Bell, permission: 'server:edit' },
 ]
 
 export function ServerLayout() {
@@ -78,7 +82,11 @@ export function ServerLayout() {
 
   const state = status?.state ?? 'UNKNOWN'
   const capabilities = new Set(server.capabilities)
-  const tabs = TABS.filter((tab) => !tab.capability || capabilities.has(tab.capability))
+  const tabs = TABS.filter(
+    (tab) =>
+      (!tab.capability || capabilities.has(tab.capability)) &&
+      (!tab.permission || hasPermission(me, tab.permission)),
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col">

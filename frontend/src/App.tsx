@@ -21,6 +21,7 @@ import { EventsPage } from '@/pages/server/EventsPage'
 import { BackupsPage } from '@/pages/server/BackupsPage'
 import { SchedulesPage } from '@/pages/server/SchedulesPage'
 import { LauncherPage } from '@/pages/server/LauncherPage'
+import { NotificationsPage } from '@/pages/server/NotificationsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 /**
@@ -79,6 +80,7 @@ export function App() {
           <Route path="backups" element={<BackupsPage />} />
           <Route path="schedules" element={<SchedulesPage />} />
           <Route path="launcher" element={<LauncherPage />} />
+          <Route path="notifications" element={<NotificationsPage />} />
         </Route>
       </Route>
 

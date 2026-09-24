@@ -11,6 +11,7 @@ from msm.api.v1 import (
     events,
     files,
     launcher,
+    notifications,
     players,
     servers,
     system,
@@ -27,6 +28,7 @@ api_router.include_router(files.router)
 api_router.include_router(events.router)
 api_router.include_router(backups.router)
 api_router.include_router(automation.router)
+api_router.include_router(notifications.router)
 api_router.include_router(launcher.router)
 api_router.include_router(audit.router)
 api_router.include_router(system.router)

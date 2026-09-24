@@ -34,12 +34,13 @@ from msm.services.backup_service import BackupService
 from msm.services.event_service import EventService
 from msm.services.launcher_service import LauncherSyncer, make_pre_start_hook
 from msm.services.metrics_recorder import MetricsRecorder
+from msm.services.notification_service import load_notification_settings
 from msm.services.notifier import Notifier
 from msm.services.player_recorder import PlayerRecorder
 from msm.services.runtime_recorder import RuntimeStateRecorder
 from msm.services.schedule_service import Scheduler
 from msm.services.server_service import ServerService
-from msm.services.settings_service import load_language, load_notification_settings
+from msm.services.settings_service import load_language
 from msm.web import mount_frontend
 from msm.ws import websocket_router
 

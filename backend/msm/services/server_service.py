@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from msm.bus import topics
 from msm.config import Settings
 from msm.core.restart_policy import AutoRestartMode, RestartPolicy
 from msm.core.states import ServerState
@@ -163,6 +164,10 @@ class ServerService:
             payload={"directory": server.directory, "launcher": launcher_key},
         )
         logger.info("server_created", server_id=server.id, server=server.name)
+        self._supervisor.bus.publish(
+            topics.system_topic(topics.SERVER_CREATED),
+            {"server_id": server.id, "server": server.name, "actor": actor.username},
+        )
         return server
 
     async def update_server(
@@ -262,6 +267,10 @@ class ServerService:
             payload={"directory": directory},
         )
         logger.info("server_deleted", server_id=server_id, server=name)
+        self._supervisor.bus.publish(
+            topics.system_topic(topics.SERVER_DELETED),
+            {"server_id": server_id, "server": name, "actor": actor.username},
+        )
 
     # ------------------------------------------------------------------ #
     #  Synchronisation avec le runtime

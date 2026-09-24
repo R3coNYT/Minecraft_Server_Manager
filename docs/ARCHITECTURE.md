@@ -405,11 +405,16 @@ Une tâche agit **au nom de son auteur, avec ses droits d'aujourd'hui**, rééva
 perdus depuis. Programmer une action exige la même permission que la déclencher à
 la main.
 
-**Notifications.** Un webhook Discord, dont l'URL est un secret — elle autorise à
-publier dans le salon — donc chiffrée en base et jamais renvoyée par l'API. Les
-messages sont regroupés sur trois secondes : un serveur en boucle de redémarrage
-produirait sinon des dizaines d'appels par minute. Rien de ce qui se passe là ne
-peut faire échouer autre chose.
+**Notifications.** Deux niveaux de salon Discord. Chaque serveur a le sien
+(`server_notifications`, onglet Notifications) pour ce qui lui arrive —
+plantage, démarrage, arrêt, sauvegarde, tâche échouée ; un salon global
+(`app_settings`) annonce la création et la suppression de serveurs. Le notifier
+écoute le bus, déduit le salon du sujet (`server.<id>.…` ou `system.…`), et
+envoie chaque lot au webhook de son destinataire. L'URL d'un webhook est un
+secret — elle autorise à publier dans le salon — donc chiffrée en base et jamais
+renvoyée par l'API. Les messages sont regroupés sur trois secondes : un serveur
+en boucle de redémarrage produirait sinon des dizaines d'appels par minute. Rien
+de ce qui se passe là ne peut faire échouer autre chose.
 
 **Téléchargements.** Trois sources codées en dur (Mojang, PaperMC, PurpurMC).
 Aucune URL ne vient de l'utilisateur : un champ « adresse du JAR » ferait du

@@ -300,6 +300,8 @@ export interface NotificationEventType {
 export interface NotificationSettings {
   enabled: boolean
   events: string[]
+  /** Événements que ce salon peut annoncer : global ou propres au serveur. */
+  available_events: NotificationEventType[]
   webhook_configured: boolean
   webhook_hint: string | null
   /** Le secret enregistré n'est plus déchiffrable : la clé applicative a changé. */

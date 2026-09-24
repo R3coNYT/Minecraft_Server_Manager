@@ -1,4 +1,4 @@
-"""Tâches programmées, notifications Discord et installation de versions."""
+"""Tâches programmées, langue de l'interface et installation de versions."""
 
 from __future__ import annotations
 
@@ -21,9 +21,6 @@ from msm.api.schemas import (
     InstallRequest,
     LanguageOut,
     LanguageRequest,
-    NotificationEventOut,
-    NotificationSettingsOut,
-    NotificationSettingsRequest,
     ScheduleCreateRequest,
     ScheduleOut,
     ScheduleUpdateRequest,
@@ -34,7 +31,6 @@ from msm.exceptions import ValidationError
 from msm.i18n import SUPPORTED_LANGUAGES, tr
 from msm.schedule.rules import describe, parse_rule
 from msm.services.download_service import DownloadService
-from msm.services.notifier import LABELS, NotificationEvent, send_to_discord
 from msm.services.schedule_service import ScheduleService
 from msm.services.settings_service import SettingsService
 
@@ -194,55 +190,8 @@ async def run_schedule_now(
 
 
 # --------------------------------------------------------------------------- #
-#  Notifications
+#  Langue
 # --------------------------------------------------------------------------- #
-@router.get(
-    "/notifications/events",
-    response_model=list[NotificationEventOut],
-    summary="Notifiable events",
-)
-async def notification_events(_: GlobalContext) -> list[NotificationEventOut]:
-    return [
-        NotificationEventOut(key=event.value, label=tr(LABELS[event]))
-        for event in NotificationEvent
-    ]
-
-
-@router.get(
-    "/notifications",
-    response_model=NotificationSettingsOut,
-    summary="Notification settings",
-)
-async def get_notifications(
-    context: GlobalContext, service: SettingsDep
-) -> NotificationSettingsOut:
-    return NotificationSettingsOut.model_validate(await service.notifications(context=context))
-
-
-@router.put(
-    "/notifications",
-    response_model=NotificationSettingsOut,
-    summary="Update notifications",
-    dependencies=[CsrfProtected],
-)
-async def update_notifications(
-    payload: NotificationSettingsRequest,
-    context: GlobalContext,
-    service: SettingsDep,
-    ip: ClientIp,
-) -> NotificationSettingsOut:
-    """L'adresse du webhook est chiffrée en base et n'est jamais renvoyée."""
-    result = await service.update_notifications(
-        enabled=payload.enabled,
-        events=payload.events,
-        webhook_url=payload.webhook_url,
-        clear_webhook=payload.clear_webhook,
-        context=context,
-        ip_address=ip,
-    )
-    return NotificationSettingsOut.model_validate(result)
-
-
 @router.put(
     "/settings/language",
     response_model=LanguageOut,
@@ -255,18 +204,6 @@ async def update_language(
     """Réglage global : il s'applique à tous les comptes et aux textes produits par MSM."""
     language = await service.update_language(payload.language, context=context, ip_address=ip)
     return LanguageOut(language=language, languages=list(SUPPORTED_LANGUAGES))
-
-
-@router.post(
-    "/notifications/test",
-    summary="Send a test message",
-    dependencies=[CsrfProtected],
-)
-async def test_notification(context: GlobalContext, service: SettingsDep) -> dict[str, bool]:
-    """Vérifie la configuration en publiant réellement dans le salon."""
-    url = await service.webhook_url(context=context)
-    content = tr("✅ **Minecraft Server Manager** · test message — notifications will arrive here.")
-    return {"sent": await send_to_discord(url, content)}
 
 
 # --------------------------------------------------------------------------- #

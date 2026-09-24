@@ -5,6 +5,7 @@ import { launcherPage } from './messages/launcherPage'
 import { users } from './messages/users'
 import { audit } from './messages/audit'
 import { settings } from './messages/settings'
+import { notifications } from './messages/notifications'
 import { backups } from './messages/backups'
 import { events } from './messages/events'
 import { schedules } from './messages/schedules'
@@ -26,4 +27,4 @@ import { actions } from './messages/actions'
 import { dashboard } from './messages/dashboard'
 import { shell } from './messages/shell'
 
-export const SECTIONS = [common, shell, dashboard, actions, createServer, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, audit, users, launcherPage] as const
+export const SECTIONS = [common, shell, dashboard, actions, createServer, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage] as const

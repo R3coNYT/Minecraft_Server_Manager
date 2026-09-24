@@ -36,7 +36,6 @@ import type {
   Me,
   MetricRange,
   MetricsHistory,
-  NotificationEventType,
   NotificationSettings,
   Schedule,
   PropertiesPage,
@@ -432,12 +431,25 @@ export const api = {
       request<UiSettings>('/settings/language', { method: 'PUT', body: { language } }),
   },
 
+  /** Salon global : création et suppression de serveurs. */
   notifications: {
     get: () => request<NotificationSettings>('/notifications'),
-    events: () => request<NotificationEventType[]>('/notifications/events'),
     update: (payload: Record<string, unknown>) =>
       request<NotificationSettings>('/notifications', { method: 'PUT', body: payload }),
     test: () => request<{ sent: boolean }>('/notifications/test', { method: 'POST' }),
+  },
+
+  /** Salon propre à un serveur : ce qui arrive à ce serveur. */
+  serverNotifications: {
+    get: (serverId: number) =>
+      request<NotificationSettings>(`/servers/${serverId}/notifications`),
+    update: (serverId: number, payload: Record<string, unknown>) =>
+      request<NotificationSettings>(`/servers/${serverId}/notifications`, {
+        method: 'PUT',
+        body: payload,
+      }),
+    test: (serverId: number) =>
+      request<{ sent: boolean }>(`/servers/${serverId}/notifications/test`, { method: 'POST' }),
   },
 
   downloads: {
