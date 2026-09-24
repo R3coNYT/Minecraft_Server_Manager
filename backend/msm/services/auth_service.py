@@ -29,6 +29,7 @@ from msm.security.password import (
     validate_password_strength,
     verify_password,
 )
+from msm.services.account_service import AccountService, normalise_email
 
 logger = get_logger(__name__)
 
@@ -109,6 +110,19 @@ class AuthService:
             await self._record_failure(username, ip_address, tr("wrong password"), user=user)
             raise self._invalid_credentials()
 
+        # Le bannissement ne se révèle qu'au détenteur du mot de passe : l'annoncer
+        # avant la vérification dirait à n'importe qui que le compte existe.
+        if user.is_banned:
+            await self._record_failure(username, ip_address, tr("account banned"), user=user)
+            raise AuthenticationError(
+                tr("Account banned."),
+                cause=user.ban_reason or tr("No reason was given."),
+                remediation=tr(
+                    "Contact an administrator of the panel if you think it is a mistake."
+                ),
+                code="ACCOUNT_BANNED",
+            )
+
         # Succès : le compteur repart de zéro et l'empreinte est modernisée
         # si les paramètres recommandés d'argon2 ont évolué.
         user.failed_attempts = 0
@@ -141,7 +155,7 @@ class AuthService:
         if record is None:
             return None
         user = record.user
-        if user is None or not user.is_active:
+        if user is None or not user.is_active or user.is_banned:
             return None
         await self._sessions.touch(record)
         return user, record
@@ -226,6 +240,10 @@ class AuthService:
                 cause=tr("An account “{username}” already exists.", username=clean_username),
                 remediation=tr("Choose another username."),
             )
+
+        if email:
+            email = normalise_email(email)
+            await AccountService(self._session, self._settings).ensure_email_free(email)
 
         user = await self._users.create(
             username=clean_username,

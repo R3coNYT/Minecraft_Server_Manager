@@ -2,25 +2,42 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import FileResponse
 
 from msm.api.deps import (
+    AppSettings,
     AuthServiceDep,
     ClientIp,
     CsrfProtected,
     CurrentUser,
     DbSession,
+    GlobalContext,
+    SupervisorDep,
     require_permission,
 )
-from msm.api.schemas import UserCreateRequest, UserOut, UserUpdateRequest
+from msm.api.schemas import (
+    AccountBanRequest,
+    InvitationCreatedOut,
+    InvitationCreateRequest,
+    InvitationOut,
+    ServerRefOut,
+    UserCreateRequest,
+    UserDetailOut,
+    UsernameChangeOut,
+    UserOut,
+    UserUpdateRequest,
+)
 from msm.core.permissions import Permission, Role
 from msm.db.models.audit import AuditAction
 from msm.db.repositories import AuditRepository, ServerRepository
 from msm.exceptions import ConflictError, NotFoundError, ValidationError
 from msm.i18n import tr
 from msm.security.rbac import AccessContext
+from msm.services.account_service import AccountService, normalise_email
+from msm.services.avatar_service import avatar_path
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -40,6 +57,58 @@ async def list_users(auth: AuthServiceDep, _: StaffOnly) -> list[UserOut]:
     return [UserOut.model_validate(user) for user in users]
 
 
+# --------------------------------------------------------------------------- #
+#  Invitations — déclarées avant `/{user_id}`, qui les capturerait sinon.
+# --------------------------------------------------------------------------- #
+@router.get("/invitations", response_model=list[InvitationOut], summary="Invitations")
+async def list_invitations(
+    settings: AppSettings, session: DbSession, context: GlobalContext
+) -> list[InvitationOut]:
+    accounts = AccountService(session, settings)
+    return [
+        InvitationOut.model_validate(item)
+        for item in await accounts.list_invitations(context=context)
+    ]
+
+
+@router.post(
+    "/invitations",
+    response_model=InvitationCreatedOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an invitation link",
+    dependencies=[CsrfProtected],
+)
+async def create_invitation(
+    settings: AppSettings,
+    payload: InvitationCreateRequest,
+    session: DbSession,
+    context: GlobalContext,
+    ip: ClientIp,
+) -> InvitationCreatedOut:
+    """Le jeton n'est renvoyé qu'ici, une seule fois : la base n'en garde que l'empreinte."""
+    created = await AccountService(session, settings).create_invitation(
+        note=payload.note, days=payload.days, context=context, ip_address=ip
+    )
+    return InvitationCreatedOut(
+        **InvitationOut.model_validate(created.invitation).model_dump(), token=created.token
+    )
+
+
+@router.delete(
+    "/invitations/{invitation_id}",
+    summary="Revoke an invitation",
+    dependencies=[CsrfProtected],
+)
+async def revoke_invitation(
+    settings: AppSettings, invitation_id: int, session: DbSession, context: GlobalContext
+) -> dict[str, str]:
+    await AccountService(session, settings).revoke_invitation(invitation_id, context=context)
+    return {"status": "revoked"}
+
+
+# --------------------------------------------------------------------------- #
+#  Comptes
+# --------------------------------------------------------------------------- #
 @router.post(
     "",
     response_model=UserOut,
@@ -73,6 +142,7 @@ async def create_user(
     dependencies=[CsrfProtected],
 )
 async def update_user(
+    settings: AppSettings,
     user_id: int,
     payload: UserUpdateRequest,
     auth: AuthServiceDep,
@@ -91,6 +161,11 @@ async def update_user(
         )
 
     changes = payload.model_dump(exclude_unset=True)
+    if changes.get("email"):
+        changes["email"] = normalise_email(changes["email"])
+        await AccountService(session, settings).ensure_email_free(
+            changes["email"], allow_user_id=user.id
+        )
 
     # Un administrateur ne doit pas pouvoir se retirer lui-même ses propres
     # droits : le panel se retrouverait potentiellement sans aucun administrateur.
@@ -179,3 +254,91 @@ async def delete_user(
         target_id=str(user_id),
     )
     return {"status": "deleted"}
+
+
+async def _target(auth: AuthServiceDep, user_id: int) -> Any:
+    user = await auth.get_user(user_id)
+    if user is None:
+        raise NotFoundError(
+            tr("Account not found."),
+            cause=tr("No user has the identifier {user_id}.", user_id=user_id),
+            remediation=tr("Refresh the account list."),
+        )
+    return user
+
+
+@router.get("/{user_id}", response_model=UserDetailOut, summary="Account details")
+async def user_details(
+    settings: AppSettings, user_id: int, auth: AuthServiceDep, session: DbSession, _: StaffOnly
+) -> UserDetailOut:
+    """Fiche d'un compte pour l'équipe : pseudos successifs, serveurs, bannissement."""
+    user = await _target(auth, user_id)
+    accounts = AccountService(session, settings)
+    owned, shared = await accounts.servers_of(user.id)
+    return UserDetailOut(
+        **UserOut.model_validate(user).model_dump(),
+        username_history=[
+            UsernameChangeOut.model_validate(item)
+            for item in await accounts.username_history(user.id)
+        ],
+        servers_owned=[ServerRefOut(id=server.id, name=server.name) for server in owned],
+        servers_shared=[
+            ServerRefOut(id=server.id, name=server.name, role=role) for server, role in shared
+        ],
+    )
+
+
+@router.post(
+    "/{user_id}/ban", response_model=UserOut, summary="Ban an account", dependencies=[CsrfProtected]
+)
+async def ban_user(
+    settings: AppSettings,
+    user_id: int,
+    payload: AccountBanRequest,
+    auth: AuthServiceDep,
+    session: DbSession,
+    supervisor: SupervisorDep,
+    context: GlobalContext,
+    ip: ClientIp,
+) -> UserOut:
+    """Sessions fermées, connexion refusée avec le motif, serveurs arrêtés et bloqués."""
+    user = await _target(auth, user_id)
+    await AccountService(session, settings).ban(
+        user, reason=payload.reason, context=context, supervisor=supervisor, ip_address=ip
+    )
+    return UserOut.model_validate(user)
+
+
+@router.post(
+    "/{user_id}/unban",
+    response_model=UserOut,
+    summary="Lift a ban",
+    dependencies=[CsrfProtected],
+)
+async def unban_user(
+    settings: AppSettings,
+    user_id: int,
+    auth: AuthServiceDep,
+    session: DbSession,
+    context: GlobalContext,
+    ip: ClientIp,
+) -> UserOut:
+    user = await _target(auth, user_id)
+    await AccountService(session, settings).unban(user, context=context, ip_address=ip)
+    return UserOut.model_validate(user)
+
+
+@router.get("/{user_id}/avatar", summary="Avatar of an account")
+async def user_avatar(settings: AppSettings, user_id: int, _: CurrentUser) -> FileResponse:
+    """Visible de tout compte connecté : les avatars s'affichent à côté des pseudos."""
+    path = avatar_path(settings, user_id)
+    if not path.is_file():
+        raise NotFoundError(
+            tr("No avatar."),
+            cause=tr("This account has not chosen an avatar."),
+            remediation=tr("Show the default avatar instead."),
+        )
+    # L'adresse change à chaque nouvel avatar (paramètre `v`) : cache long sans risque.
+    return FileResponse(
+        path, media_type="image/webp", headers={"Cache-Control": "private, max-age=604800"}
+    )

@@ -16,6 +16,7 @@ from msm.core.permissions import Permission
 from msm.db.models.audit import AuditAction, AuditResult
 from msm.db.models.server import Server
 from msm.db.repositories import AuditRepository, ServerRepository
+from msm.exceptions import PermissionDenied
 from msm.i18n import tr
 from msm.logging_conf import get_logger
 from msm.runtime.server_runtime import ServerRuntime
@@ -23,6 +24,18 @@ from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
 
 logger = get_logger(__name__)
+
+
+def ensure_owner_not_banned(server: Server) -> None:
+    """Le serveur d'un compte banni ne démarre plus, quel que soit qui le demande."""
+    owner = server.owner
+    if owner is not None and owner.is_banned:
+        raise PermissionDenied(
+            tr("This server cannot start."),
+            cause=tr("Its owner's account is banned."),
+            remediation=tr("An administrator must lift the ban first."),
+            code="OWNER_BANNED",
+        )
 
 
 class LifecycleService:
@@ -37,6 +50,7 @@ class LifecycleService:
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> dict[str, Any]:
         context.require(Permission.SERVER_START, action=tr("start this server"))
+        ensure_owner_not_banned(server)
         runtime = self._supervisor.get(server.id)
 
         try:
@@ -105,6 +119,7 @@ class LifecycleService:
         self, server: Server, *, context: AccessContext, ip_address: str | None = None
     ) -> dict[str, Any]:
         context.require(Permission.SERVER_RESTART, action=tr("restart this server"))
+        ensure_owner_not_banned(server)
         runtime = self._supervisor.get(server.id)
 
         await runtime.restart(actor=context.username)

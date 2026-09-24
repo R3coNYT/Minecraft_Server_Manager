@@ -89,6 +89,8 @@ class Settings(BaseSettings):
     session_cookie_secure: bool = False
     max_login_attempts: int = Field(default=8, ge=1)
     login_lockout_minutes: int = Field(default=15, ge=1)
+    #: Inscriptions acceptées par adresse IP et par heure, contre les robots.
+    registration_limit_per_hour: int = Field(default=5, ge=1)
 
     # --- Base de données --------------------------------------------------
     database_url: str = "sqlite+aiosqlite:///./data/msm.db"

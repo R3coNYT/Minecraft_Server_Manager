@@ -25,7 +25,7 @@ from msm.db.models.server import (
     ServerRuntimeStateRow,
     ServerSettings,
 )
-from msm.db.models.user import User, UserSession
+from msm.db.models.user import Invitation, User, UsernameChange, UserSession
 
 __all__ = [
     "AppSetting",
@@ -37,6 +37,7 @@ __all__ = [
     "EventDefinition",
     "EventRun",
     "EventRunStatus",
+    "Invitation",
     "LauncherFile",
     "LauncherIntegration",
     "MetricSample",
@@ -53,4 +54,5 @@ __all__ = [
     "SyncStatus",
     "User",
     "UserSession",
+    "UsernameChange",
 ]

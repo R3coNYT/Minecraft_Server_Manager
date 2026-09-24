@@ -87,6 +87,11 @@ class AuditAction(str, Enum):
     USER_CREATED = "user.created"
     USER_UPDATED = "user.updated"
     USER_DELETED = "user.deleted"
+    USER_REGISTERED = "user.registered"
+    USER_RENAMED = "user.renamed"
+    USER_BANNED = "user.banned"
+    USER_UNBANNED = "user.unbanned"
+    INVITATION_CREATED = "user.invitation_created"
     #: Ancien réglage fin des droits par serveur, remplacé par les membres.
     #: Conservé pour relire les entrées existantes du journal.
     PERMISSIONS_UPDATED = "user.permissions_updated"

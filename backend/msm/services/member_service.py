@@ -55,7 +55,7 @@ class MemberService:
             )
 
         user = await self._users.get_by_username(username.strip())
-        if user is None or not user.is_active:
+        if user is None or not user.is_active or user.is_banned:
             raise NotFoundError(
                 tr("Account not found."),
                 cause=tr("No active account is called “{username}”.", username=username.strip()),

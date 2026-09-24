@@ -19,7 +19,7 @@ from msm.db.models.server import Server
 from msm.db.models.user import User
 from msm.db.session import session_scope
 from msm.exceptions import AuthenticationError, PermissionDenied
-from msm.i18n import tr
+from msm.i18n import set_request_language, tr
 from msm.runtime.supervisor import Supervisor
 from msm.security.access import visible_server_context
 from msm.security.rbac import AccessContext, build_context
@@ -115,6 +115,8 @@ async def get_current_user(
             remediation=tr("Sign in to the panel again."),
         )
     user, _ = resolved
+    # Les réponses de cette requête sortent dans la langue du compte.
+    set_request_language(user.language)
     return user
 
 

@@ -493,6 +493,9 @@ class ServerService:
             settings = server.settings
             if settings is None or not settings.autostart_on_boot:
                 continue
+            if server.owner is not None and server.owner.is_banned:
+                logger.info("server_autostart_skipped_banned", server_id=server.id)
+                continue
 
             runtime = self._supervisor.find(server.id)
             if runtime is None or runtime.state.is_running:

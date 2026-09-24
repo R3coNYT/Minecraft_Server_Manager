@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Cookie, Response
+from fastapi import APIRouter, Cookie, File, Response, UploadFile, status
 
 from msm.api.deps import (
     CSRF_COOKIE_NAME,
@@ -25,12 +25,25 @@ from msm.api.deps import (
     DbSession,
     GlobalContext,
 )
-from msm.api.schemas import CsrfOut, LoginRequest, MeOut, PasswordChangeRequest, UserOut
+from msm.api.schemas import (
+    CsrfOut,
+    EmailChangeRequest,
+    LoginRequest,
+    MeOut,
+    PasswordChangeRequest,
+    ProfileUpdateRequest,
+    RegisterRequest,
+    RegistrationInfoOut,
+    UserOut,
+)
 from msm.config import Settings
 from msm.db.models.user import User
+from msm.exceptions import ValidationError
 from msm.i18n import tr
 from msm.security.rbac import AccessContext, build_context
 from msm.security.tokens import generate_token
+from msm.services.account_service import AccountService
+from msm.services.avatar_service import MAX_UPLOAD_BYTES, delete_avatar, save_avatar
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -151,3 +164,109 @@ async def change_password(
     )
     _clear_session_cookies(response, settings)
     return {"status": "password_changed", "detail": tr("All sessions have been closed.")}
+
+
+# --------------------------------------------------------------------------- #
+#  Inscription
+# --------------------------------------------------------------------------- #
+@router.get("/registration", response_model=RegistrationInfoOut, summary="Can I sign up?")
+async def registration_info(session: DbSession, settings: AppSettings) -> RegistrationInfoOut:
+    """Public : l'écran de connexion n'affiche « créer un compte » que si c'est possible."""
+    mode = await AccountService(session, settings).registration_mode()
+    return RegistrationInfoOut(mode=mode.value)
+
+
+@router.post(
+    "/register",
+    response_model=MeOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create an account",
+)
+async def register(
+    payload: RegisterRequest,
+    response: Response,
+    session: DbSession,
+    settings: AppSettings,
+    ip: ClientIp,
+) -> MeOut:
+    """Crée un compte user et l'ouvre aussitôt, comme une connexion."""
+    if not payload.accept_terms:
+        raise ValidationError(
+            tr("The rules must be accepted."),
+            cause=tr("Creating an account means accepting the rules of this panel."),
+            remediation=tr("Tick the box to accept them."),
+        )
+    user, token = await AccountService(session, settings).register(
+        email=payload.email,
+        username=payload.username,
+        password=payload.password,
+        invitation_token=payload.invitation,
+        ip_address=ip,
+    )
+    await session.flush()
+    _set_session_cookies(response, token, settings)
+    return _me(user, build_context(user))
+
+
+# --------------------------------------------------------------------------- #
+#  Profil
+# --------------------------------------------------------------------------- #
+@router.put("/me", response_model=MeOut, summary="Update my profile", dependencies=[CsrfProtected])
+async def update_profile(
+    payload: ProfileUpdateRequest,
+    user: CurrentUser,
+    context: GlobalContext,
+    session: DbSession,
+    settings: AppSettings,
+    ip: ClientIp,
+) -> MeOut:
+    """Pseudo et langue. Un champ absent reste inchangé."""
+    accounts = AccountService(session, settings)
+    if payload.username is not None:
+        await accounts.rename(user, payload.username, ip_address=ip)
+    if "language" in payload.model_fields_set:
+        accounts.set_language(user, payload.language)
+    await session.flush()
+    return _me(user, build_context(user))
+
+
+@router.put(
+    "/me/email", response_model=MeOut, summary="Change my e-mail", dependencies=[CsrfProtected]
+)
+async def change_email(
+    payload: EmailChangeRequest,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+    ip: ClientIp,
+) -> MeOut:
+    await AccountService(session, settings).change_email(
+        user, payload.email, current_password=payload.current_password, ip_address=ip
+    )
+    await session.flush()
+    return _me(user, build_context(user))
+
+
+@router.put(
+    "/me/avatar", response_model=MeOut, summary="Upload my avatar", dependencies=[CsrfProtected]
+)
+async def upload_avatar(
+    file: Annotated[UploadFile, File(description="PNG, JPEG or WebP image, 2 MB at most")],
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+) -> MeOut:
+    # Lecture bornée : un fichier énorme n'a pas à être chargé en entier pour être refusé.
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    await save_avatar(settings, user, data)
+    await session.flush()
+    return _me(user, build_context(user))
+
+
+@router.delete(
+    "/me/avatar", response_model=MeOut, summary="Remove my avatar", dependencies=[CsrfProtected]
+)
+async def remove_avatar(user: CurrentUser, session: DbSession, settings: AppSettings) -> MeOut:
+    delete_avatar(settings, user)
+    await session.flush()
+    return _me(user, build_context(user))

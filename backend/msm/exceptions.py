@@ -101,6 +101,13 @@ class ValidationError(MsmError):
     status_code = 422
 
 
+class TooManyRequests(MsmError):
+    """Trop de tentatives depuis la même origine : il faut patienter."""
+
+    code = "TOO_MANY_REQUESTS"
+    status_code = 429
+
+
 # --------------------------------------------------------------------------- #
 #  Cycle de vie des serveurs
 # --------------------------------------------------------------------------- #

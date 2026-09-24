@@ -19,7 +19,7 @@ propres serveurs Minecraft.
 | Étape | Contenu | État |
 | --- | --- | --- |
 | 1 | Modèle d'accès : rôles, propriétaires, membres, filtrage (backend) | terminée |
-| 2 | Comptes : inscription, profil, pseudo, avatar, bannissement (backend) | à faire |
+| 2 | Comptes : inscription, profil, pseudo, avatar, bannissement (backend) | terminée |
 | 3 | Création par utilisateur : dossiers, quotas, ports (backend) | à faire |
 | 4 | Interface : inscription, profil, dashboard user, membres, panel admin | à faire |
 | 5 | Connexion avec Google | à faire |
@@ -242,7 +242,9 @@ WebSocket, statistiques.
   256×256, ce qui retire les métadonnées et neutralise un fichier piégé. Il est
   stocké dans le dossier de données de MSM et servi par l'API.
 - **Langue** : propre à chaque compte, avec la langue globale en valeur par
-  défaut.
+  défaut. Elle s'applique aux réponses de ses requêtes (erreurs, messages) ;
+  ce que MSM produit hors requête (console, Discord) reste dans la langue du
+  panneau.
 
 ### Bannissement
 

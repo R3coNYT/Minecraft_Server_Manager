@@ -44,7 +44,13 @@ class User(Base, TimestampMixin):
         String(16), unique=True, nullable=False, default=new_storage_id
     )
     display_name: Mapped[str | None] = mapped_column(String(128))
-    email: Mapped[str | None] = mapped_column(String(255))
+    #: En minuscules. Unique : on ne se réinscrit pas avec l'adresse d'un compte banni.
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
+    #: Langue choisie par le compte ; ``None`` : celle du panneau.
+    language: Mapped[str | None] = mapped_column(String(8))
+    #: Date du dernier avatar envoyé ; ``None`` : pas d'avatar. Sert aussi à
+    #: invalider le cache du navigateur quand il change.
+    avatar_updated_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
 
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(
@@ -60,12 +66,21 @@ class User(Base, TimestampMixin):
     #: Réservé à la double authentification (phase ultérieure).
     totp_secret: Mapped[str | None] = mapped_column(String(64))
 
+    #: Bannissement : connexion refusée, serveurs arrêtés et bloqués.
+    banned_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    banned_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    ban_reason: Mapped[str | None] = mapped_column(Text)
+
     sessions: Mapped[list[UserSession]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     memberships: Mapped[list[ServerMember]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
+
+    @property
+    def is_banned(self) -> bool:
+        return self.banned_at is not None
 
 
 class UserSession(Base):
@@ -93,3 +108,39 @@ class UserSession(Base):
     user_agent: Mapped[str | None] = mapped_column(Text)
 
     user: Mapped[User] = relationship(back_populates="sessions")
+
+
+class UsernameChange(Base):
+    """Un ancien pseudo d'un compte.
+
+    Consultable par l'équipe de MSM, et **réservé** à son titulaire : personne
+    d'autre ne peut prendre le pseudo qu'un compte vient de quitter pour se faire
+    passer pour lui.
+    """
+
+    __tablename__ = "username_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    username: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    changed_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+
+
+class Invitation(Base):
+    """Lien d'inscription à usage unique, quand l'inscription est « sur invitation ».
+
+    Seule l'empreinte du jeton est gardée, comme pour les sessions.
+    """
+
+    __tablename__ = "invitations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
+    note: Mapped[str | None] = mapped_column(String(128))
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))

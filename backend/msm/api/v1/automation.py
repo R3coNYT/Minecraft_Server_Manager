@@ -21,6 +21,7 @@ from msm.api.schemas import (
     InstallRequest,
     LanguageOut,
     LanguageRequest,
+    RegistrationSettings,
     ScheduleCreateRequest,
     ScheduleOut,
     ScheduleUpdateRequest,
@@ -31,6 +32,7 @@ from msm.db.models.schedule import Schedule, ScheduleAction
 from msm.exceptions import ValidationError
 from msm.i18n import SUPPORTED_LANGUAGES, tr
 from msm.schedule.rules import describe, parse_rule
+from msm.services.account_service import AccountService, RegistrationMode
 from msm.services.download_service import DownloadService
 from msm.services.schedule_service import ScheduleService
 from msm.services.settings_service import SettingsService
@@ -206,6 +208,48 @@ async def update_language(
     """Réglage global : il s'applique à tous les comptes et aux textes produits par MSM."""
     language = await service.update_language(payload.language, context=context, ip_address=ip)
     return LanguageOut(language=language, languages=list(SUPPORTED_LANGUAGES))
+
+
+# --------------------------------------------------------------------------- #
+#  Inscriptions
+# --------------------------------------------------------------------------- #
+@router.get(
+    "/settings/registration", response_model=RegistrationSettings, summary="Registration mode"
+)
+async def registration_settings(
+    settings: AppSettings, session: DbSession, context: GlobalContext
+) -> RegistrationSettings:
+    context.require(Permission.SETTINGS_MANAGE, action=tr("view the settings"))
+    mode = await AccountService(session, settings).registration_mode()
+    return RegistrationSettings(mode=mode.value)
+
+
+@router.put(
+    "/settings/registration",
+    response_model=RegistrationSettings,
+    summary="Change the registration mode",
+    dependencies=[CsrfProtected],
+)
+async def update_registration(
+    settings: AppSettings,
+    payload: RegistrationSettings,
+    session: DbSession,
+    context: GlobalContext,
+    ip: ClientIp,
+) -> RegistrationSettings:
+    """Fermée, sur invitation, ou ouverte à tous."""
+    try:
+        mode = RegistrationMode(payload.mode)
+    except ValueError as exc:
+        raise ValidationError(
+            tr("Unknown registration mode."),
+            cause=tr("“{mode}” is not a registration mode.", mode=payload.mode),
+            remediation=tr("Choose one of: {choices}.", choices="closed, invite, open"),
+        ) from exc
+    await AccountService(session, settings).set_registration_mode(
+        mode, context=context, ip_address=ip
+    )
+    return RegistrationSettings(mode=mode.value)
 
 
 # --------------------------------------------------------------------------- #

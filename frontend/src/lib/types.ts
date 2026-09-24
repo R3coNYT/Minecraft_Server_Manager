@@ -42,6 +42,12 @@ export interface User {
   storage_id: string
   last_login_at: string | null
   created_at: string
+  /** Langue choisie par le compte ; `null` : celle du panneau. */
+  language: string | null
+  banned_at: string | null
+  ban_reason: string | null
+  /** Adresse de l'avatar, ou `null` sans avatar. */
+  avatar_url: string | null
 }
 
 export interface Me extends User {
