@@ -7,7 +7,7 @@ poussée avant de passer à la suivante.
 | --- | --- | --- |
 | 1 | Notifications Discord par serveur, webhook global recentré | terminée |
 | 2 | Création de serveur de zéro — backend | terminée |
-| 3 | Création de serveur de zéro — interface | en cours |
+| 3 | Création de serveur de zéro — interface | terminée |
 
 ---
 

@@ -37,6 +37,10 @@ import type {
   MetricRange,
   MetricsHistory,
   NotificationSettings,
+  ProvisioningBuild,
+  ProvisioningDefaults,
+  ProvisioningDistribution,
+  ProvisioningJob,
   Schedule,
   PropertiesPage,
   Player,
@@ -450,6 +454,22 @@ export const api = {
       }),
     test: (serverId: number) =>
       request<{ sent: boolean }>(`/servers/${serverId}/notifications/test`, { method: 'POST' }),
+  },
+
+  /** Création d'un serveur de zéro : choix proposés, lancement, suivi. */
+  provisioning: {
+    distributions: () => request<ProvisioningDistribution[]>('/provisioning/distributions'),
+    versions: (key: string) =>
+      request<GameVersion[]>(`/provisioning/distributions/${key}/versions`),
+    builds: (key: string, version: string) =>
+      request<ProvisioningBuild[]>(
+        `/provisioning/distributions/${key}/versions/${encodeURIComponent(version)}/builds`,
+      ),
+    defaults: (name: string) =>
+      request<ProvisioningDefaults>(`/provisioning/defaults?name=${encodeURIComponent(name)}`),
+    create: (payload: Record<string, unknown>) =>
+      request<ProvisioningJob>('/provisioning', { method: 'POST', body: payload }),
+    job: (id: string) => request<ProvisioningJob>(`/provisioning/${id}`),
   },
 
   downloads: {

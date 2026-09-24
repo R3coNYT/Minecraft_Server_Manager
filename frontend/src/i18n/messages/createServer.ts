@@ -3,7 +3,7 @@ import { section } from '../section'
 export const createServer = section({
   en: {
     "create.added": "“{name}” added",
-    "create.title": "Add a server",
+    "create.title": "Add an existing server",
     "create.description": "Give the server's folder; MSM analyses its content and suggests a configuration.",
     "create.submit": "Add",
     "create.directory": "Server folder",
@@ -25,7 +25,7 @@ export const createServer = section({
   },
   fr: {
     "create.added": "« {name} » ajouté",
-    "create.title": "Ajouter un serveur",
+    "create.title": "Ajouter un serveur existant",
     "create.description": "Indiquer le dossier du serveur ; MSM analyse son contenu et propose une configuration.",
     "create.submit": "Ajouter",
     "create.directory": "Dossier du serveur",

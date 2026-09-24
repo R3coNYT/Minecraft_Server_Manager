@@ -15,6 +15,8 @@ scheduled tasks — and two-way sync with a custom launcher's modpack.
 |---|---|
 | **Multi-server** | Each server runs in its own process group with its own console. Stopping one never affects the others. |
 | **Any server type** | Vanilla, Paper, Purpur, Spigot, Forge, NeoForge, Fabric, Quilt, Mohist… Nothing is hard-coded: the interface adapts to what the server folder actually contains. |
+| **Create from scratch** | Pick Vanilla, Paper, Purpur, Fabric, NeoForge, Mohist or Youer and a version: MSM creates the folder, downloads and verifies the server, runs the NeoForge installer when needed, and registers it. |
+| **Discord notifications** | Each server announces its crashes, starts, stops and backups in its own channel; a global channel announces server creation and deletion. |
 | **Real time** | WebSocket with sequence numbers and resume after a disconnect. No polling. |
 | **Survives restarts** | Restarting or updating MSM never disconnects players: running servers are re-adopted when the panel comes back. |
 | **Secure** | Mandatory authentication, per-server roles, audit log of every action, strict path confinement, no arbitrary shell commands. |

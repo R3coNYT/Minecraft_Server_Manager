@@ -23,8 +23,9 @@ import { version } from './messages/version'
 import { overview } from './messages/overview'
 import { serverLayout } from './messages/serverLayout'
 import { createServer } from './messages/createServer'
+import { provision } from './messages/provision'
 import { actions } from './messages/actions'
 import { dashboard } from './messages/dashboard'
 import { shell } from './messages/shell'
 
-export const SECTIONS = [common, shell, dashboard, actions, createServer, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage] as const
+export const SECTIONS = [common, shell, dashboard, actions, createServer, provision, serverLayout, overview, version, files, players, playerActions, console, logView, properties, configs, eventEditor, scheduleEditor, metrics, schedules, events, backups, settings, notifications, audit, users, launcherPage] as const

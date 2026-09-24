@@ -551,3 +551,56 @@ export interface UiSettings {
   language: 'en' | 'fr'
   languages: string[]
 }
+
+// --------------------------------------------------------------------------- //
+//  Création de serveurs de zéro
+// --------------------------------------------------------------------------- //
+export interface ProvisioningDistribution {
+  key: string
+  label: string
+  server_type: string
+  /** Une version de Minecraft se décline-t-elle en builds (loader, NeoForge…) ? */
+  has_builds: boolean
+  /** `installer` : un installeur s'exécute pendant la création (NeoForge). */
+  kind: 'jar' | 'installer'
+}
+
+export interface ProvisioningBuild {
+  id: string
+  label: string
+  channel: string
+}
+
+export interface ProvisioningDefaults {
+  roots: string[]
+  directory: string
+  port: number
+}
+
+export type ProvisioningStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
+
+export interface ProvisioningStep {
+  key: string
+  label: string
+  status: ProvisioningStepStatus
+  detail: string
+}
+
+export interface ProvisioningJob {
+  id: string
+  name: string
+  directory: string
+  distribution: string
+  version: string
+  build: string | null
+  status: 'RUNNING' | 'COMPLETED' | 'FAILED'
+  /** Avancement du téléchargement, de 0 à 1 ; `null` si la taille est inconnue. */
+  progress: number | null
+  downloaded_bytes: number
+  steps: ProvisioningStep[]
+  error: { message: string; cause: string | null; remediation: string | null } | null
+  server_id: number | null
+  created_at: string
+  finished_at: string | null
+}
+

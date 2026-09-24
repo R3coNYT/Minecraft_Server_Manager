@@ -2,7 +2,15 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Cpu, HardDrive, MemoryStick, Plus, Server as ServerIcon, Users } from 'lucide-react'
+import {
+  Cpu,
+  FolderInput,
+  HardDrive,
+  MemoryStick,
+  Plus,
+  Server as ServerIcon,
+  Users,
+} from 'lucide-react'
 import { hasPermission, useDashboard, useMe } from '@/hooks/useApi'
 import { useRealtime } from '@/stores/realtime'
 import { formatMemory, formatPercent, formatUptime } from '@/lib/format'
@@ -13,6 +21,7 @@ import { ServerStatusBadge } from '@/components/servers/ServerStatusBadge'
 import { ServerActions } from '@/components/servers/ServerActions'
 import { Button } from '@/components/ui/Button'
 import { CreateServerDialog } from '@/components/servers/CreateServerDialog'
+import { NewServerDialog } from '@/components/servers/NewServerDialog'
 import { t, tn } from '@/i18n'
 
 function ServerCard({ server }: { server: Server }) {
@@ -97,7 +106,9 @@ export function DashboardPage() {
   const { data: me } = useMe()
   const liveSystem = useRealtime((state) => state.system)
   const statuses = useRealtime((state) => state.statuses)
+  // Deux entrées : créer un serveur de zéro, ou ajouter un serveur existant.
   const [createOpen, setCreateOpen] = useState(false)
+  const [newOpen, setNewOpen] = useState(false)
 
   if (isLoading) return <LoadingBlock />
   if (error) return <div className="p-6"><ErrorPanel error={error} /></div>
@@ -124,9 +135,18 @@ export function DashboardPage() {
           </p>
         </div>
         {hasPermission(me, 'server:create') ? (
-          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-            {t('dashboard.addServer')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              icon={<FolderInput className="size-4" />}
+              onClick={() => setCreateOpen(true)}
+            >
+              {t('dashboard.addServer')}
+            </Button>
+            <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setNewOpen(true)}>
+              {t('dashboard.createServer')}
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -183,9 +203,22 @@ export function DashboardPage() {
             description={t('dashboard.emptyDescription')}
             action={
               hasPermission(me, 'server:create') ? (
-                <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreateOpen(true)}>
-                  {t('dashboard.addServer')}
-                </Button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button
+                    variant="secondary"
+                    icon={<FolderInput className="size-4" />}
+                    onClick={() => setCreateOpen(true)}
+                  >
+                    {t('dashboard.addServer')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    icon={<Plus className="size-4" />}
+                    onClick={() => setNewOpen(true)}
+                  >
+                    {t('dashboard.createServer')}
+                  </Button>
+                </div>
               ) : null
             }
           />
@@ -199,6 +232,7 @@ export function DashboardPage() {
       )}
 
       <CreateServerDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      <NewServerDialog open={newOpen} onClose={() => setNewOpen(false)} />
     </div>
   )
 }
