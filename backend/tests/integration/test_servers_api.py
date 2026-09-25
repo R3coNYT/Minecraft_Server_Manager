@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -150,18 +151,61 @@ class TestUpdateAndDelete:
         assert body["description"] == "Serveur principal"
         assert body["settings"]["memory_max_mb"] == 8192
 
-    async def test_delete_keeps_files_on_disk(
+    async def test_delete_removes_the_server_from_the_disk(
         self, admin: ApiClient, fake_server_dir: Path
     ) -> None:
-        marker = fake_server_dir / "world.dat"
-        marker.write_text("données précieuses", encoding="utf-8")
+        """Supprimer un serveur l'efface aussi du disque : il n'y a pas d'autre choix."""
+        (fake_server_dir / "world").mkdir()
+        (fake_server_dir / "world" / "level.dat").write_text("monde", encoding="utf-8")
         server = await _create(admin, fake_server_dir)
 
         response = await admin.delete(f"/api/v1/servers/{server['id']}")
 
-        assert response.status_code == 200
-        assert marker.exists(), "La suppression du panel ne doit jamais toucher aux fichiers"
+        assert response.status_code == 200, response.text
+        assert not fake_server_dir.exists()
         assert (await admin.get(f"/api/v1/servers/{server['id']}")).status_code == 404
+
+    async def test_its_backup_archives_go_with_it(
+        self, admin: ApiClient, fake_server_dir: Path
+    ) -> None:
+        """Sans le serveur, plus rien ne permettrait de les restaurer."""
+        (fake_server_dir / "world").mkdir()
+        (fake_server_dir / "world" / "level.dat").write_text("monde", encoding="utf-8")
+        server = await _create(admin, fake_server_dir)
+        started = await admin.post(f"/api/v1/servers/{server['id']}/backups")
+        assert started.status_code == 202, started.text
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + 30
+        backups_url = f"/api/v1/servers/{server['id']}/backups"
+        while loop.time() < deadline:
+            listing = (await admin.get(backups_url)).json()
+            if listing and listing[0]["status"] not in ("PENDING", "RUNNING"):
+                break
+            await asyncio.sleep(0.05)
+        assert listing[0]["status"] == "COMPLETED", listing
+        archives = fake_server_dir.parent / "data" / "backups"
+        assert any(path.is_file() for path in archives.rglob("*"))
+
+        assert (await admin.delete(f"/api/v1/servers/{server['id']}")).status_code == 200
+
+        assert not any(path.is_file() for path in archives.rglob("*"))
+
+    async def test_a_folder_overlapping_another_server_is_never_deleted(
+        self, admin: ApiClient, fake_server_dir: Path
+    ) -> None:
+        """Effacer ce dossier emporterait un autre serveur : tout est refusé, rien ne bouge."""
+        inner = fake_server_dir / "creatif"
+        inner.mkdir()
+        (inner / "level.dat").write_text("monde", encoding="utf-8")
+        outer = await _create(admin, fake_server_dir, name="survie")
+        await _create(admin, inner, name="creatif")
+
+        response = await admin.delete(f"/api/v1/servers/{outer['id']}")
+
+        assert response.status_code == 422, response.text
+        assert "creatif" in response.json()["cause"]
+        assert (inner / "level.dat").exists()
+        assert (await admin.get(f"/api/v1/servers/{outer['id']}")).status_code == 200
 
 
 class TestPermissions:

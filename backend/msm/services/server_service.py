@@ -43,6 +43,7 @@ from msm.runtime.server_runtime import ServerRuntimeConfig
 from msm.runtime.supervisor import Supervisor
 from msm.security.rbac import AccessContext
 from msm.services.hosting_service import HostingService
+from msm.services.server_files import plan_file_deletion
 
 logger = get_logger(__name__)
 
@@ -338,9 +339,17 @@ class ServerService:
         return server
 
     async def delete_server(
-        self, server: Server, *, actor: User, ip_address: str | None = None
-    ) -> None:
-        """Retire un serveur du panel. **Ne supprime aucun fichier sur le disque.**"""
+        self,
+        server: Server,
+        *,
+        actor: User,
+        ip_address: str | None = None,
+    ) -> str:
+        """Supprime un serveur : de MSM **et du disque** (dossier, archives de sauvegarde).
+
+        Renvoie le message à afficher. Tout est vérifié avant la moindre
+        modification : un refus laisse le serveur et ses fichiers intacts.
+        """
         runtime = self._supervisor.find(server.id)
         if runtime is not None and runtime.state.is_running:
             raise ConflictError(
@@ -350,8 +359,12 @@ class ServerService:
                     name=server.name,
                     state=runtime.state.value,
                 ),
-                remediation=tr("Stop the server before removing it from the panel."),
+                remediation=tr("Stop the server before deleting it."),
             )
+
+        deletion = await plan_file_deletion(
+            self._session, self._settings, server, await self._servers.list_all()
+        )
 
         name, server_id, directory = server.name, server.id, server.directory
         await self._supervisor.unregister(server_id)
@@ -359,18 +372,30 @@ class ServerService:
 
         self._audit.record(
             action=AuditAction.SERVER_DELETED,
-            summary=tr("Server “{name}” removed from the panel (files kept).", name=name),
+            summary=tr("Server “{name}” deleted with its files.", name=name),
             actor_id=actor.id,
             actor_username=actor.username,
             actor_role=actor.role.value,
             ip_address=ip_address,
             payload={"directory": directory},
         )
-        logger.info("server_deleted", server_id=server_id, server=name)
+        logger.info("server_deleted", server_id=server_id, server=name, directory=directory)
         self._supervisor.bus.publish(
             topics.system_topic(topics.SERVER_DELETED),
             {"server_id": server_id, "server": name, "actor": actor.username},
         )
+
+        failures = await asyncio.to_thread(deletion.execute)
+        if failures:
+            logger.warning("server_files_left", server=name, count=len(failures), first=failures[0])
+            return tr(
+                "“{name}” has been removed, but {count} files could not be deleted, "
+                "including {path}.",
+                name=name,
+                count=len(failures),
+                path=failures[0],
+            )
+        return tr("“{name}” and its files have been deleted.", name=name)
 
     # ------------------------------------------------------------------ #
     #  Synchronisation avec le runtime

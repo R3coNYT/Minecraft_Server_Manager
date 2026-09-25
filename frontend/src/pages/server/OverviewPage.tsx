@@ -27,8 +27,8 @@ function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
 }
 
 /**
- * Retrait du serveur. Visible de son propriétaire et des admins MSM, y compris
- * sur le serveur d'un autre compte. Les fichiers restent sur le disque.
+ * Suppression du serveur, de MSM et du disque. Visible de son propriétaire et
+ * des admins MSM, y compris sur le serveur d'un autre compte.
  */
 function RemoveServerCard({ server, running }: { server: Server; running: boolean }) {
   const navigate = useNavigate()
@@ -79,8 +79,11 @@ function RemoveServerCard({ server, running }: { server: Server; running: boolea
         title={t('overview.removeConfirmTitle', { name: server.name })}
         consequence={
           own
-            ? t('overview.removeConsequence')
-            : t('overview.removeConsequenceOther', { owner: server.owner_username })
+            ? t('overview.removeConsequence', { path: server.directory })
+            : t('overview.removeConsequenceOther', {
+                owner: server.owner_username,
+                path: server.directory,
+              })
         }
         confirmLabel={t('overview.remove')}
         requireTyping={server.name}

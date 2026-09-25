@@ -1,7 +1,6 @@
 """Traductions françaises : servers."""
 
 MESSAGES: dict[str, str] = {
-    "“{name}” has been removed from the panel; its files are untouched.": "« {name} » a été retiré du panel ; ses fichiers sont intacts.",
     "view servers": "consulter les serveurs",
     "view the dashboard": "consulter le tableau de bord",
     "Missing server name.": "Nom de serveur manquant.",
@@ -19,8 +18,6 @@ MESSAGES: dict[str, str] = {
     "Stop the server before changing its configuration.": "Arrêter le serveur avant de modifier sa configuration.",
     "Server “{name}” updated.": "Modification du serveur « {name} ».",
     "Cannot delete while running.": "Suppression impossible pendant l'exécution.",
-    "Stop the server before removing it from the panel.": "Arrêter le serveur avant de le retirer du panel.",
-    "Server “{name}” removed from the panel (files kept).": "Suppression du serveur « {name} » du panel (fichiers conservés).",
     "autostart": "démarrage automatique",
     "Missing server folder.": "Dossier du serveur manquant.",
     "No path was provided.": "Aucun chemin n'a été fourni.",
@@ -58,4 +55,13 @@ MESSAGES: dict[str, str] = {
     "No .jar file or start script found. The start method will have to be entered by hand.": "Aucun fichier .jar ni script de démarrage trouvé. Le mode de démarrage devra être saisi manuellement.",
     "No start method could be inferred automatically.": "Aucun mode de démarrage n'a pu être déduit automatiquement.",
     "{count} .jar files found: check that the suggested one is right.": "{count} fichiers .jar trouvés : vérifier que celui proposé est le bon.",
+    "Server “{name}” deleted with its files.": "Serveur « {name} » supprimé avec ses fichiers.",
+    "“{name}” has been removed, but {count} files could not be deleted, including {path}.": "« {name} » a été retiré, mais {count} fichiers n'ont pas pu être effacés, dont {path}.",
+    "“{name}” and its files have been deleted.": "« {name} » et ses fichiers ont été supprimés.",
+    "The server's files cannot be deleted.": "Les fichiers du serveur ne peuvent pas être effacés.",
+    "Give the server a folder of its own, then delete it again.": "Donnez au serveur un dossier à lui, puis supprimez-le de nouveau.",
+    "Stop the server before deleting it.": "Arrêtez le serveur avant de le supprimer.",
+    "{path} is a servers root, not a server folder.": "{path} est une racine de serveurs, pas le dossier d'un serveur.",
+    "{path} holds MSM's own files.": "{path} contient des fichiers de MSM lui-même.",
+    "{path} overlaps the folder of server “{name}”.": "{path} empiète sur le dossier du serveur « {name} ».",
 }

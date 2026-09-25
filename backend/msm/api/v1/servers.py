@@ -33,7 +33,6 @@ from msm.core.permissions import Permission, ServerRole
 from msm.db.models.server import Server
 from msm.db.models.user import User
 from msm.db.repositories import ServerMemberRepository
-from msm.i18n import tr
 from msm.runtime.stats import system_stats
 from msm.security.access import server_context
 from msm.security.rbac import AccessContext, build_server_context
@@ -268,7 +267,7 @@ async def update_server(
 
 @router.delete(
     "/{server_id}",
-    summary="Remove a server from the panel",
+    summary="Delete a server and its files",
     dependencies=[CsrfProtected],
 )
 async def delete_server(
@@ -279,16 +278,10 @@ async def delete_server(
     user: CurrentUser,
     ip: ClientIp,
 ) -> dict[str, str]:
-    """Retire le serveur du panel. **Aucun fichier n'est supprimé du disque.**"""
+    """Supprime le serveur, de MSM et du disque (dossier et archives de sauvegarde)."""
     server, _ = access
-    name = server.name
-    await service.delete_server(server, actor=user, ip_address=ip)
-    return {
-        "status": "deleted",
-        "detail": tr(
-            "“{name}” has been removed from the panel; its files are untouched.", name=name
-        ),
-    }
+    detail = await service.delete_server(server, actor=user, ip_address=ip)
+    return {"status": "deleted", "detail": detail}
 
 
 # --------------------------------------------------------------------------- #
