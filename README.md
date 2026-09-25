@@ -11,6 +11,9 @@ A self-hosted web panel to run **several Minecraft servers** from a single inter
 real-time console, players, mods and plugins, configuration files, events, backups,
 scheduled tasks — and two-way sync with a custom launcher's modpack.
 
+It can also be opened to other people: each account creates and runs its own servers,
+within limits you set, each server confined to its own folder.
+
 ![Dashboard](docs/screenshots/dashboard.png)
 
 > MSM 2.0 is a complete rewrite. Version 1 (a single-server Flask script) is still
@@ -26,7 +29,11 @@ scheduled tasks — and two-way sync with a custom launcher's modpack.
 | **Discord notifications** | Each server announces its crashes, starts, stops and backups in its own channel; a global channel announces server creation and deletion. |
 | **Real time** | WebSocket with sequence numbers and resume after a disconnect. No polling. |
 | **Survives restarts** | Restarting or updating MSM never disconnects players: running servers are re-adopted when the panel comes back. |
-| **Secure** | Mandatory authentication, per-server roles, audit log of every action, strict path confinement, no arbitrary shell commands. |
+| **Accounts** | Sign-up with a password or with Google (closed, by invitation or open — your choice), profile with avatar, admin panel to review, ban or reinstate accounts. |
+| **Per-account hosting** | Each account creates its own servers in its own folder, with a port from a reserved range and limits on servers, memory and disk. |
+| **Sharing** | The owner of a server shares it with other accounts, as a member (overview only) or as a server admin. |
+| **Isolation** | On Linux, the servers of user accounts run in their own systemd unit, under their own system account: only their folder is writable, the other servers and MSM are out of sight, and memory, CPU and tasks are capped. |
+| **Secure** | Mandatory authentication, roles, audit log of every action, strict path confinement, no arbitrary shell commands. |
 | **Portable** | Production on Linux (hardened systemd unit); development and deployment on Windows fully supported. CI runs on both. |
 | **Bilingual** | English by default, French in one click from **Settings → Language** — including the messages produced by the server (errors, console notices, audit log). |
 
@@ -71,6 +78,27 @@ restore, and scheduled backups, restarts or commands.
 
 ![Scheduled tasks](docs/screenshots/schedules.png)
 
+### Accounts and sharing
+
+Anyone can find the sign-up page from the login screen; whether they may create an
+account depends on the registration mode (closed, by invitation or open).
+
+![Login](docs/screenshots/login.png)
+
+Administrators review every account — role, state, last login — and open its sheet to
+see its servers, its former usernames, or to ban it.
+
+![Users](docs/screenshots/users.png)
+
+The owner of a server decides who else may see it or run it.
+
+![Members](docs/screenshots/members.png)
+
+Each account manages its own profile: username, avatar, language, e-mail, password
+and Google sign-in.
+
+![Profile](docs/screenshots/profile.png)
+
 ## Installation (Linux)
 
 MSM needs Python 3.11+, and Node.js/npm to build the web interface. Java is needed
@@ -89,12 +117,33 @@ sudo ./install.sh
 ```
 
 The installer creates a dedicated system user, a hardened systemd service that starts
-with the machine, the database and your first administrator account. The panel then
-listens on <http://127.0.0.1:8000> — put an HTTPS reverse proxy in front of it to reach
-it remotely. Options (install folder, servers root, port…): `./install.sh --help` and
-[docs/DEPLOY.md](docs/DEPLOY.md).
+with the machine, the database, and the isolation of the servers of user accounts. The
+panel then listens on <http://127.0.0.1:8000> — put an HTTPS reverse proxy in front of
+it to reach it remotely. Options (install folder, servers root, port…):
+`./install.sh --help` and [docs/DEPLOY.md](docs/DEPLOY.md).
 
 Keep the cloned folder: it is what updates are pulled into.
+
+### Creating the first administrator account
+
+At the end of the installation, the installer asks for the name of the first
+administrator account, then its password (typed without echo). Answer it, open the
+panel and sign in.
+
+If you skipped that question (or used `--skip-admin`), create the account afterwards:
+
+```bash
+sudo msm createadmin admin
+```
+
+Replace `admin` with the name you want; the password is asked for, twice. `msm` is
+MSM's command line, installed by `install.sh`: it runs as the service does, with its
+configuration. Options: `--email ADDRESS`, and `--role MODERATOR` or `--role USER` to
+create another kind of account. `sudo msm --help` lists the other commands.
+
+Other people then create their own account from the **Create one** link of the login
+page — once you allow it in **Settings → Registration** (closed by default, by
+invitation, or open to everyone).
 
 ## Updating
 
@@ -142,7 +191,7 @@ The detailed documentation is in French.
 - [x] **Phase 4** — events: immediate actions, recorded sequences, cancellable background runs
 - [x] **Phase 5** — administration: hot backups of worlds and configurations, restore, resource history
 - [x] **Phase 6** — extensions: scheduling, Discord notifications, version downloads, custom launcher integration
-- [ ] **Public opening** — sign-up (password or Google), per-user servers, sharing, admin panel ([plan](docs/PLAN_OUVERTURE_PUBLIC.md), in French)
+- [x] **Public opening** — sign-up (password or Google), per-user servers, sharing, admin panel, server isolation ([plan](docs/PLAN_OUVERTURE_PUBLIC.md), in French)
 - [ ] **Phase 7** — agents: manage servers hosted on other machines
 
 ## License

@@ -39,7 +39,7 @@ sudo ./install.sh --servers-root /srv/minecraft --port 8080
 5. compile l'interface si `npm` est disponible ;
 6. génère `/etc/msm/.env` avec une clé secrète aléatoire, en `640 root:msm` ;
 7. applique les migrations de base de données ;
-8. demande la création d'un compte administrateur ;
+8. demande la création d'un compte administrateur (voir « Premier compte administrateur ») ;
 9. installe et démarre l'unité systemd ;
 10. installe l'isolation des serveurs des comptes (voir plus bas), avec `acl`
     et `dbus` s'ils manquent.
@@ -58,11 +58,25 @@ systemctl status minecraft-server-manager
 journalctl -u minecraft-server-manager -f
 ```
 
-Créer un compte supplémentaire :
+### Premier compte administrateur
+
+`install.sh` le propose à la fin de l'installation. S'il a été sauté
+(`--skip-admin`, ou création échouée), ou pour un autre administrateur :
 
 ```bash
-sudo -u msm /opt/msm/backend/.venv/bin/python -m msm.cli createadmin flavien
+sudo msm createadmin flavien
 ```
+
+Le mot de passe est demandé sans écho. `--email` ajoute une adresse, et
+`--role USER` ou `--role MODERATOR` crée un compte d'un autre rôle.
+
+`msm` est installé par `install.sh` dans `/usr/local/bin` : c'est la ligne de
+commande de MSM, lancée comme le service (utilisateur `msm`, configuration de
+`/etc/msm/.env`). `sudo msm --help` liste les autres commandes.
+
+Les autres comptes s'inscrivent ensuite depuis le lien **Create an account**
+de la page de connexion, selon le mode choisi dans **Settings → Registration**
+(fermé, sur invitation ou ouvert).
 
 ## Exposition sur le réseau
 

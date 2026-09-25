@@ -130,6 +130,19 @@ class TestDeploymentAssets:
         """
         assert "KillMode=process" in self.UNIT.read_text(encoding="utf-8")
 
+    def test_msm_command_runs_like_the_service(self) -> None:
+        """`sudo msm createadmin` doit viser la vraie base : celle du .env du service.
+
+        Sans la configuration chargée, la ligne de commande retomberait sur une
+        base locale au dossier du code — un compte créé là n'existerait pas.
+        """
+        installer = self.INSTALLER.read_text(encoding="utf-8")
+
+        assert "cat > /usr/local/bin/msm" in installer
+        assert "runuser -u ${MSM_USER}" in installer
+        assert '_ "${ENV_FILE}"' in installer
+        assert "python -m msm.cli createadmin NAME" not in installer
+
     def test_installer_does_not_leak_the_password(self) -> None:
         """Le mot de passe ne doit apparaître ni en argument ni en variable."""
         installer = self.INSTALLER.read_text(encoding="utf-8")

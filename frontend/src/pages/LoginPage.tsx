@@ -100,24 +100,14 @@ export function LoginPage() {
           </form>
         </Card>
 
-        {registration.data?.mode === 'open' ? (
-          <p className="mt-4 text-center text-sm text-slate-500">
-            {t('login.noAccount')}{' '}
-            <Link to="/register" className="text-emerald-400 hover:text-emerald-300">
-              {t('login.createAccount')}
-            </Link>
-          </p>
-        ) : null}
-
-        {/* Indice pour l'administrateur qui installe MSM, inutile à un visiteur. */}
-        {registration.data && registration.data.mode !== 'open' ? (
-          <p className="mt-4 text-center text-xs text-slate-600">
-            {t('login.firstRun')}{' '}
-            <code className="rounded bg-slate-900 px-1.5 py-0.5 font-mono">
-              msm createadmin
-            </code>
-          </p>
-        ) : null}
+        {/* Toujours proposé : la page d'inscription explique elle-même si les
+            inscriptions sont fermées ou réservées aux invitations. */}
+        <p className="mt-4 text-center text-sm text-slate-500">
+          {t('login.noAccount')}{' '}
+          <Link to="/register" className="text-emerald-400 hover:text-emerald-300">
+            {t('login.createAccount')}
+          </Link>
+        </p>
       </div>
     </div>
   )

@@ -22,7 +22,6 @@ export const shell = section({
     "login.username": "Username",
     "login.password": "Password",
     "login.submit": "Sign in",
-    "login.firstRun": "First start? Create an account with",
   },
   fr: {
     "shell.realtimeActive": "Flux temps réel actif",
@@ -45,6 +44,5 @@ export const shell = section({
     "login.username": "Nom d'utilisateur",
     "login.password": "Mot de passe",
     "login.submit": "Se connecter",
-    "login.firstRun": "Premier démarrage ? Créer un compte avec",
   },
 })
