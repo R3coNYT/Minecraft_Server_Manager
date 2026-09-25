@@ -28,6 +28,7 @@ sudo ./install.sh --servers-root /srv/minecraft --port 8080
 | `--host` / `--port` | Adresse d'écoute | `127.0.0.1:8000` |
 | `--skip-frontend` | Ne pas compiler l'interface | — |
 | `--skip-admin` | Ne pas créer de compte | — |
+| `--no-isolation` | Ne pas confiner les serveurs des comptes (déconseillé dès que l'inscription est ouverte) | — |
 
 ### Ce que fait le script
 
@@ -39,7 +40,9 @@ sudo ./install.sh --servers-root /srv/minecraft --port 8080
 6. génère `/etc/msm/.env` avec une clé secrète aléatoire, en `640 root:msm` ;
 7. applique les migrations de base de données ;
 8. demande la création d'un compte administrateur ;
-9. installe et démarre l'unité systemd.
+9. installe et démarre l'unité systemd ;
+10. installe l'isolation des serveurs des comptes (voir plus bas), avec `acl`
+    et `dbus` s'ils manquent.
 
 Le mot de passe administrateur est saisi directement par la commande `createadmin`,
 sans écho : il ne transite ni par une variable du script, ni par une ligne de
@@ -120,6 +123,46 @@ sudo ufw allow 25565:25664/tcp
 Les dossiers des comptes sont créés sous la même page de réglages (par défaut,
 la première des racines autorisées), un dossier par compte, nommé d'après son
 identifiant immuable — un changement de pseudo ne déplace rien.
+
+## Isolation des serveurs des comptes
+
+Un mod ou un plugin est du code exécuté sur la machine. Les serveurs des
+comptes (pas ceux des administrateurs, qui tournent sous MSM comme avant) sont
+donc lancés chacun dans sa propre unité systemd, `msm-server-<id>.service` :
+
+- sous un compte système propre au compte MSM, `msm-<identifiant>`, créé au
+  premier démarrage, sans shell ni dossier personnel ;
+- avec son seul dossier en écriture ; le reste du système est en lecture
+  seule, les autres serveurs sont masqués, `/opt/msm`, `/etc/msm`,
+  `/var/lib/msm` et `/var/log/msm` inaccessibles, `/home` aussi ;
+- sans aucun privilège (`NoNewPrivileges`, aucune capacité, pas de setuid) ;
+- avec des plafonds dans le noyau : mémoire (`-Xmx` × 1,25 + 512 Mo, sans
+  swap), processeur (`MSM_ISOLATION_CPU_PERCENT`, 200 % d'un cœur par défaut)
+  et 4 096 tâches. Un serveur qui dépasse sa mémoire est tué par le noyau, pas
+  la machine ;
+- sans les variables d'environnement de MSM, qui portent ses secrets.
+
+MSM n'obtient pour cela **aucun privilège** : son unité garde
+`NoNewPrivileges` et toutes ses restrictions. Il envoie ses demandes à un
+petit helper root, `/usr/local/lib/msm/msm-sandbox`, par un socket réservé à
+son groupe (`/run/msm-sandbox.sock`, activé par `msm-sandbox.socket`). Le
+helper décide seul de ce qui compte : le compte système, le dossier (qui doit
+être sous une racine de `/etc/msm/sandbox.conf`) et les protections de l'unité.
+
+MSM garde l'accès complet aux fichiers du serveur (gestionnaire de fichiers,
+sauvegardes) par des ACL, posées à chaque démarrage.
+
+Vérifier sur la machine :
+
+```bash
+systemctl status msm-sandbox.socket
+systemctl list-units 'msm-server-*'
+```
+
+La page **Settings → Registration** avertit si l'isolation n'est pas active.
+Elle se règle dans `/etc/msm/.env` (`MSM_ISOLATION=systemd` ou `off`) ; si les
+racines des serveurs (`MSM_SERVER_ROOTS`) changent, relancez `install.sh` (ou
+`update.sh`) pour mettre `/etc/msm/sandbox.conf` à jour.
 
 ## Connexion avec Google
 
@@ -290,10 +333,10 @@ conserve configuration et base, mais ne fait ni sauvegarde ni retour arrière.
 ## Désinstallation
 
 ```bash
-sudo systemctl disable --now minecraft-server-manager
-sudo rm /etc/systemd/system/minecraft-server-manager.service
+sudo systemctl disable --now minecraft-server-manager msm-sandbox.socket
+sudo rm /etc/systemd/system/minecraft-server-manager.service         /etc/systemd/system/msm-sandbox.socket /etc/systemd/system/msm-sandbox@.service
 sudo systemctl daemon-reload
-sudo rm -rf /opt/msm
+sudo rm -rf /opt/msm /usr/local/lib/msm
 ```
 
 Les données (`/var/lib/msm`), la configuration (`/etc/msm`) et les serveurs

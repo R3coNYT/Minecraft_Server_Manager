@@ -58,6 +58,7 @@ import type {
   Quota,
   RegistrationInfo,
   RegistrationMode,
+  RegistrationSettings,
   ServerMember,
   ServerRole,
   UserDetail,
@@ -492,9 +493,9 @@ export const api = {
 
   /** Réglages de l'ouverture au public : inscriptions, hébergement des comptes. */
   platform: {
-    registration: () => request<{ mode: RegistrationMode }>('/settings/registration'),
+    registration: () => request<RegistrationSettings>('/settings/registration'),
     setRegistration: (mode: RegistrationMode) =>
-      request<{ mode: RegistrationMode }>('/settings/registration', {
+      request<RegistrationSettings>('/settings/registration', {
         method: 'PUT',
         body: { mode },
       }),

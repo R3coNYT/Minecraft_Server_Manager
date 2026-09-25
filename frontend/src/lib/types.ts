@@ -646,6 +646,12 @@ export interface ProvisioningJob {
 // --------------------------------------------------------------------------- //
 export type RegistrationMode = 'closed' | 'invite' | 'open'
 
+export interface RegistrationSettings {
+  mode: RegistrationMode
+  /** Les serveurs des comptes tournent-ils confinés (MSM_ISOLATION=systemd) ? */
+  isolation: boolean
+}
+
 export interface RegistrationInfo {
   mode: RegistrationMode
   /** La connexion avec Google est configurée. */

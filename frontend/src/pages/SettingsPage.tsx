@@ -205,6 +205,11 @@ function RegistrationCard() {
             ))}
           </Select>
         </Field>
+        {data && !data.isolation ? (
+          <p className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
+            {t('platform.isolationOff')}
+          </p>
+        ) : null}
       </div>
       <InvitationsList />
     </Card>

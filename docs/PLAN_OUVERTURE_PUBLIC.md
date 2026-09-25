@@ -23,7 +23,7 @@ propres serveurs Minecraft.
 | 3 | Création par utilisateur : dossiers, quotas, ports (backend) | terminée |
 | 4 | Interface : inscription, profil, dashboard user, membres, panel admin | terminée |
 | 5 | Connexion avec Google | terminée |
-| 6 | Isolation des serveurs, **préalable à l'ouverture publique** | à faire |
+| 6 | Isolation des serveurs, **préalable à l'ouverture publique** | terminée |
 | — | E-mails (vérification, mot de passe oublié) | quand MSM aura un domaine |
 
 Chaque étape est testée, commitée et poussée avant la suivante. L'inscription
@@ -388,9 +388,27 @@ Chaque serveur est lancé comme une **unité systemd transitoire**
 - avec un système de fichiers en lecture seule, hors de son propre dossier
   (`ProtectSystem`, `ReadWritePaths`).
 
-**Retenu : systemd.** MSM obtient le droit de lancer ces unités, et seulement celui-là, par une règle
-polkit ou sudoers installée par `install.sh`. Bonus : systemd suit lui-même les
-processus, ce qui fiabilise la réadoption après un redémarrage de MSM.
+**Retenu : systemd.** Bonus : systemd suit lui-même les processus, ce qui
+fiabilise la réadoption après un redémarrage de MSM.
+
+### Réalisation
+
+- Seuls les serveurs des comptes non administrateurs sont isolés, et seulement
+  sous Linux avec `MSM_ISOLATION=systemd` (écrit par `install.sh`).
+- **Ni sudo ni polkit** : sudo aurait obligé à retirer `NoNewPrivileges` (et
+  les protections qui l'impliquent) de l'unité de MSM. MSM parle plutôt à un
+  helper root activé par socket (`msm-sandbox.socket`, réservé au groupe de
+  MSM). Le helper valide tout lui-même : identifiants, dossier sous une racine
+  autorisée, compte `msm-<storage_id>`, propriétés de l'unité.
+- La connexion au socket devient la console du serveur (`systemd-run --pipe`).
+  Un petit relais Python la présente à MSM comme un processus ordinaire ; le
+  code de sortie du serveur est laissé par le helper dans `/run/msm-sandbox`.
+- Le PID suivi (statistiques, réadoption) est le `MainPID` de l'unité ; les
+  signaux passent par le helper, à toute l'unité.
+- Vérifié sur un vrai systemd (Debian trixie) : compte dédié, dossiers des
+  autres masqués, MSM illisible, `/etc` en lecture seule, secrets absents de
+  l'environnement, console dans les deux sens, arrêt, arrêt forcé, OOM,
+  réadoption après un redémarrage de MSM.
 
 L'alternative Docker (un conteneur par serveur) isole encore mieux, mais ajoute
 une dépendance lourde et complique les chemins et les mods. Elle est à écarter

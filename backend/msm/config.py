@@ -117,6 +117,18 @@ class Settings(BaseSettings):
     log_flush_interval_s: float = Field(default=0.1, gt=0)
     log_flush_max_lines: int = Field(default=200, ge=1)
 
+    # --- Isolation des serveurs des comptes --------------------------------
+    #: ``systemd`` : les serveurs des comptes (pas ceux des administrateurs)
+    #: tournent dans leur propre unité, sous un compte système à eux, confinés à
+    #: leur dossier (systemd/msm-sandbox). ``off`` : sous l'utilisateur de MSM.
+    isolation: Literal["off", "systemd"] = "off"
+    #: Socket du helper root, ouvert au seul groupe de MSM.
+    isolation_socket: Path = Path("/run/msm-sandbox.sock")
+    #: Où le helper laisse le code de sortie de chaque serveur.
+    isolation_status_dir: Path = Path("/run/msm-sandbox")
+    #: Plafond de processeur d'un serveur isolé, en % d'un cœur.
+    isolation_cpu_percent: int = Field(default=200, ge=10, le=100_000)
+
     # --- Uploads ----------------------------------------------------------
     upload_max_size_mb: int = Field(default=256, ge=1)
 

@@ -129,6 +129,9 @@ class EmailChangeRequest(BaseModel):
 
 class RegistrationSettings(BaseModel):
     mode: str
+    #: Les serveurs des comptes sont-ils confinés ? Lecture seule : c'est
+    #: install.sh qui l'installe (MSM_ISOLATION).
+    isolation: bool = False
 
 
 # --------------------------------------------------------------------------- #

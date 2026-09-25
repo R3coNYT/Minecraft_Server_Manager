@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+import sys
 import unicodedata
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from msm.bus import topics
 from msm.config import Settings
-from msm.core.permissions import Permission, sees_every_server
+from msm.core.permissions import Permission, Role, sees_every_server
 from msm.core.restart_policy import AutoRestartMode, RestartPolicy
 from msm.core.states import ServerState
 from msm.db.models.audit import AuditAction
@@ -36,6 +37,7 @@ from msm.logging_conf import get_logger
 from msm.minecraft import detector
 from msm.minecraft.capabilities import detect_capabilities
 from msm.minecraft.types import ServerType
+from msm.runtime.backends.sandbox import SandboxSpec, sandbox_memory_limit
 from msm.runtime.orphans import find_server_process
 from msm.runtime.server_runtime import ServerRuntimeConfig
 from msm.runtime.supervisor import Supervisor
@@ -408,6 +410,22 @@ class ServerService:
                 delay_s=settings.restart_delay_s,
                 max_consecutive_crashes=settings.max_consecutive_crashes,
             ),
+            isolation=self._isolation_for(server, settings),
+        )
+
+    def _isolation_for(self, server: Server, settings: ServerSettings) -> SandboxSpec | None:
+        """Confinement d'un serveur de compte ; ceux des administrateurs tournent sous MSM."""
+        owner = server.owner
+        if self._settings.isolation != "systemd" or sys.platform != "linux":
+            return None
+        if owner.role == Role.ADMIN:
+            return None
+        return SandboxSpec(
+            account=owner.storage_id,
+            memory_limit_mb=sandbox_memory_limit(settings.memory_max_mb),
+            cpu_percent=self._settings.isolation_cpu_percent,
+            socket_path=self._settings.isolation_socket,
+            status_dir=self._settings.isolation_status_dir,
         )
 
     async def resync(self, server: Server) -> None:

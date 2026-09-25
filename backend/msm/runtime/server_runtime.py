@@ -37,6 +37,7 @@ from msm.launchers import registry as launcher_registry
 from msm.logging_conf import get_logger
 from msm.minecraft import eula as eula_module
 from msm.runtime.backends import ProcessBackend, get_backend
+from msm.runtime.backends.sandbox import SandboxSpec, SystemdSandboxBackend
 from msm.runtime.log_pipeline import LogPipeline
 from msm.runtime.log_tailer import LogTailer, default_log_path
 from msm.runtime.orphans import find_server_process
@@ -74,6 +75,8 @@ class ServerRuntimeConfig:
     stats_interval_s: float = 2.0
     auto_accept_eula: bool = True
     restart_policy: RestartPolicy = field(default_factory=RestartPolicy)
+    #: Isolation systemd (serveurs des comptes) ; ``None`` : lancé par MSM lui-même.
+    isolation: SandboxSpec | None = None
 
 
 #: Préparation appelée juste avant de lancer le processus ; renvoie les
@@ -108,6 +111,8 @@ class ServerRuntime:
     ) -> None:
         self._config = config
         self._bus = bus or get_event_bus()
+        if backend is None and config.isolation is not None:
+            backend = SystemdSandboxBackend(config.id, config.isolation)
         self._backend = backend
         #: Préparation avant démarrage, fournie par le superviseur. Le runtime
         #: l'appelle sans savoir ce qu'elle fait — aujourd'hui, appliquer les

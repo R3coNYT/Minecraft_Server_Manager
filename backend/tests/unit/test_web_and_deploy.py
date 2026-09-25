@@ -136,3 +136,57 @@ class TestDeploymentAssets:
 
         assert "MSM_ADMIN_PASSWORD" not in installer
         assert "read -r -s -p" not in installer
+
+
+class TestSandboxAssets:
+    """Isolation des serveurs des comptes : le helper root et son socket."""
+
+    SYSTEMD = PROJECT_ROOT / "systemd"
+
+    def test_socket_is_reserved_to_msm_group(self) -> None:
+        content = (self.SYSTEMD / "msm-sandbox.socket").read_text(encoding="utf-8")
+
+        assert "SocketMode=0660" in content
+        assert "SocketGroup=__MSM_GROUP__" in content
+        assert "Accept=yes" in content
+
+    def test_installer_renders_the_socket_group(self) -> None:
+        installer = (PROJECT_ROOT / "install.sh").read_text(encoding="utf-8")
+
+        assert "s|__MSM_GROUP__|${MSM_GROUP}|g" in installer
+        assert "msm-sandbox.socket" in installer
+        assert "MSM_ISOLATION=" in installer
+
+    def test_request_unit_never_stops_the_server(self) -> None:
+        """Le serveur vit dans sa propre unité : la demande qui l'a lancé non plus."""
+        content = (self.SYSTEMD / "msm-sandbox@.service").read_text(encoding="utf-8")
+
+        assert "StandardInput=socket" in content
+        assert "KillMode=process" in content
+
+    def test_helper_confines_the_server(self) -> None:
+        helper = (self.SYSTEMD / "msm-sandbox").read_text(encoding="utf-8")
+
+        for directive in (
+            "NoNewPrivileges=yes",
+            "ProtectSystem=strict",
+            "CapabilityBoundingSet=",
+            "MemoryMax=",
+            "CPUQuota=",
+            "TasksMax=",
+            "TemporaryFileSystem=",
+            "InaccessiblePaths=",
+        ):
+            assert directive in helper, f"Protection manquante : {directive}"
+        # Le compte est toujours dérivé de l'identifiant validé, jamais fourni tel quel.
+        assert 'local user="msm-$account"' in helper
+        assert "'^[a-z0-9]{10}$'" in helper
+
+    def test_msm_itself_needs_no_privilege(self) -> None:
+        """Ni sudo ni setuid : l'unité de MSM garde NoNewPrivileges."""
+        installer = (PROJECT_ROOT / "install.sh").read_text(encoding="utf-8")
+
+        assert "sudoers" not in installer
+        assert "NoNewPrivileges=yes" in (
+            self.SYSTEMD / "minecraft-server-manager.service"
+        ).read_text(encoding="utf-8")

@@ -84,4 +84,6 @@ MESSAGES: dict[str, str] = {
     "Impossible state change: {current} → {target}.": "Transition d'état impossible : {current} → {target}.",
     "From the {current} state, only {allowed} can be reached.": "Depuis l'état {current}, seuls {allowed} sont atteignables.",
     "Wait for the current operation to finish before trying again.": "Attendre la fin de l'opération en cours avant de relancer l'action.",
+    "The isolation helper is unreachable ({path}): {error}": "Le helper d'isolation est injoignable ({path}) : {error}",
+    "An isolated instance of this server is already running (unit msm-server-{id}.service).": "Une instance isolée de ce serveur tourne déjà (unité msm-server-{id}.service).",
 }

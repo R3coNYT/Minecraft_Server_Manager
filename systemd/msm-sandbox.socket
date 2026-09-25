@@ -1,0 +1,16 @@
+[Unit]
+Description=MSM server sandbox (requests from the panel)
+Documentation=https://github.com/R3coNYT/Minecraft_Server_Manager
+
+[Socket]
+# Only MSM's group may connect: the helper behind it runs as root.
+ListenStream=/run/msm-sandbox.sock
+SocketUser=root
+SocketGroup=__MSM_GROUP__
+SocketMode=0660
+# One helper per request: a running server keeps its own connection.
+Accept=yes
+MaxConnections=512
+
+[Install]
+WantedBy=sockets.target

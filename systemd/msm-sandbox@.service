@@ -1,0 +1,15 @@
+[Unit]
+Description=MSM server sandbox request
+Documentation=https://github.com/R3coNYT/Minecraft_Server_Manager
+CollectMode=inactive-or-failed
+
+[Service]
+# Root on purpose: it creates the account of each server and starts it in its
+# own confined unit (msm-server-<id>.service). It trusts nothing it receives —
+# see the script for what it checks.
+ExecStart=/usr/local/lib/msm/msm-sandbox serve
+StandardInput=socket
+StandardOutput=socket
+StandardError=socket
+# The server lives in its own unit: stopping this request never stops it.
+KillMode=process

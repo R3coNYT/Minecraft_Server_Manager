@@ -1,0 +1,231 @@
+#!/usr/bin/env bash
+#
+# msm-sandbox — runs the Minecraft server of an MSM account inside a confined
+# systemd unit.
+#
+# Installed as root (/usr/local/lib/msm/msm-sandbox) by install-sandbox.sh, and
+# started by systemd for each connection to /run/msm-sandbox.sock
+# (msm-sandbox.socket, Accept=yes). Only MSM's group may connect. MSM itself
+# therefore needs no privilege at all: its own unit keeps NoNewPrivileges and
+# every other restriction.
+#
+# Everything that matters for safety is decided HERE, never by the caller:
+#
+#   * the system account the server runs as: always `msm-<storage id>`, created
+#     on first use, without a shell nor a home;
+#   * the folder: must lie under one of the servers roots of /etc/msm/sandbox.conf;
+#   * the unit properties: read-only system, only its own folder writable, the
+#     other servers and MSM invisible, no privilege, memory / CPU / task limits.
+#
+# The caller only chooses the server id, the account, the folder, the limits
+# (validated numbers) and the command, which then runs as that unprivileged
+# account.
+#
+# Protocol: the request is a list of NUL-terminated fields, ended by an empty
+# field — the arguments of one of these commands:
+#
+#   run --server ID --account SID --dir DIR --memory MB --cpu PCT
+#       [--env NAME=VALUE]... -- COMMAND [ARG]...
+#   stop --server ID [--force]
+#   pid --server ID
+#
+# For `run`, the connection then becomes the server's console: its standard
+# input, output and error. Its exit code is left in /run/msm-sandbox/ID.status.
+# The other commands answer one line and close.
+#
+# `msm-sandbox serve` reads the request from standard input (the socket); the
+# commands can also be run directly as root, for a diagnosis.
+set -euo pipefail
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+CONFIG=/etc/msm/sandbox.conf
+STATUS_DIR=/run/msm-sandbox
+
+die() { printf 'msm-sandbox: %s\n' "$*" >&2; exit 2; }
+
+[[ "$(id -u)" == 0 ]] || die "must run as root."
+
+# --- Configuration: root-owned, or refused --------------------------------------
+[[ -f "$CONFIG" ]] || die "$CONFIG is missing: run install.sh again."
+[[ "$(stat -c %u -- "$CONFIG")" == 0 ]] || die "$CONFIG must belong to root."
+[[ "$(stat -c %a -- "$CONFIG")" =~ ^[0-7][0-5][0-5]$ ]] || die "$CONFIG must not be writable by others."
+MSM_USER=""
+SERVER_ROOTS=""
+# shellcheck source=/dev/null
+source "$CONFIG"
+[[ "$MSM_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "invalid MSM_USER in $CONFIG."
+[[ -n "$SERVER_ROOTS" ]] || die "SERVER_ROOTS is empty in $CONFIG."
+
+# --- Validation --------------------------------------------------------------------
+check() { [[ "$2" =~ $3 ]] || die "invalid $1: '$2'."; }
+
+unit_of() { printf 'msm-server-%s.service' "$1"; }
+
+# The real folder, which must lie strictly under a servers root.
+checked_dir() {
+  local dir root real_root
+  local -a roots
+  dir="$(realpath -e -- "$1" 2>/dev/null)" || die "folder not found: '$1'."
+  [[ -d "$dir" ]] || die "not a folder: '$dir'."
+  IFS=':' read -r -a roots <<< "$SERVER_ROOTS"
+  for root in "${roots[@]}"; do
+    real_root="$(realpath -e -- "$root" 2>/dev/null)" || continue
+    if [[ "$dir" == "$real_root"/* ]]; then
+      printf '%s' "$dir"
+      return 0
+    fi
+  done
+  die "'$dir' is not under a servers root ($SERVER_ROOTS)."
+}
+
+# --- The account, and its rights on the folder ----------------------------------
+prepare() {
+  local user="$1" dir="$2"
+
+  if ! id -u "$user" >/dev/null 2>&1; then
+    useradd --system --no-create-home --home-dir /nonexistent \
+            --shell /usr/sbin/nologin --user-group "$user"
+  fi
+
+  # The account writes its folder; MSM keeps full access (files, backups).
+  # Default ACLs pass both on to whatever is created later. Applied at every
+  # start: a file whose mode was changed since (chmod) gets its rights back.
+  setfacl -R -m "u:${user}:rwX,u:${MSM_USER}:rwX" -- "$dir"
+  find "$dir" -type d -exec setfacl -m "d:u:${user}:rwX,d:u:${MSM_USER}:rwX" {} +
+  # Nobody else — another account's server in particular — gets in.
+  chmod o-rwx -- "$dir"
+}
+
+# --- run: the server, confined ------------------------------------------------------
+cmd_run() {
+  local server="" account="" dir="" memory="" cpu="" root
+  local -a env_opts=() hide=() roots
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --server) server="${2-}"; shift 2 ;;
+      --account) account="${2-}"; shift 2 ;;
+      --dir) dir="${2-}"; shift 2 ;;
+      --memory) memory="${2-}"; shift 2 ;;
+      --cpu) cpu="${2-}"; shift 2 ;;
+      --env)
+        check "variable" "${2-}" '^[A-Za-z_][A-Za-z0-9_]{0,63}=[^[:cntrl:]]{0,4096}$'
+        env_opts+=(-E "$2"); shift 2 ;;
+      --) shift; break ;;
+      *) die "unknown argument: '$1'." ;;
+    esac
+  done
+  check server "$server" '^[0-9]{1,9}$'
+  check account "$account" '^[a-z0-9]{10}$'
+  check memory "$memory" '^[0-9]{3,7}$'
+  check cpu "$cpu" '^[0-9]{1,5}$'
+  [[ $# -gt 0 ]] || die "no command to run."
+  dir="$(checked_dir "$dir")"
+  local user="msm-$account"
+  local unit status
+  unit="$(unit_of "$server")"
+  status="$STATUS_DIR/$server.status"
+
+  if [[ "$(systemctl show --property=MainPID --value -- "$unit")" != 0 ]]; then
+    die "$unit is already running."
+  fi
+
+  install -d -m 0755 "$STATUS_DIR"
+  rm -f -- "$status"
+  prepare "$user" "$dir"
+
+  # Every servers root is hidden behind an empty file system; only this server's
+  # folder is put back. The server sees neither the others nor MSM.
+  IFS=':' read -r -a roots <<< "$SERVER_ROOTS"
+  for root in "${roots[@]}"; do
+    root="$(realpath -e -- "$root" 2>/dev/null)" || continue
+    hide+=(-p "TemporaryFileSystem=${root}:ro")
+  done
+
+  local rc=0
+  systemd-run --quiet --pipe --wait --collect \
+    --unit="$unit" --description="MSM server $server" \
+    --uid="$user" --gid="$user" \
+    -p WorkingDirectory="$dir" \
+    -p MemoryMax="${memory}M" -p MemorySwapMax=0 \
+    -p CPUQuota="${cpu}%" -p TasksMax=4096 \
+    -p ProtectSystem=strict -p ProtectHome=yes -p PrivateTmp=yes -p PrivateDevices=yes \
+    "${hide[@]}" -p BindPaths="$dir" -p ReadWritePaths="$dir" \
+    -p InaccessiblePaths="-/etc/msm -/var/lib/msm -/var/log/msm -/opt/msm" \
+    -p NoNewPrivileges=yes -p RestrictSUIDSGID=yes -p LockPersonality=yes \
+    -p CapabilityBoundingSet= -p AmbientCapabilities= \
+    -p ProtectKernelTunables=yes -p ProtectKernelModules=yes -p ProtectKernelLogs=yes \
+    -p ProtectControlGroups=yes -p ProtectClock=yes -p ProtectHostname=yes \
+    -p RestrictNamespaces=yes -p RestrictRealtime=yes \
+    -p RestrictAddressFamilies="AF_INET AF_INET6 AF_UNIX" \
+    -p UMask=0007 -p KillMode=control-group -p TimeoutStopSec=90s \
+    -E HOME="$dir" "${env_opts[@]}" \
+    -- "$@" || rc=$?
+  printf '%s\n' "$rc" > "$status.tmp"
+  mv -f -- "$status.tmp" "$status"
+  return 0
+}
+
+# --- stop / pid ----------------------------------------------------------------------
+cmd_stop() {
+  local server="" signal="TERM"
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --server) server="${2-}"; shift 2 ;;
+      --force) signal="KILL"; shift ;;
+      *) die "unknown argument: '$1'." ;;
+    esac
+  done
+  check server "$server" '^[0-9]{1,9}$'
+  local unit
+  unit="$(unit_of "$server")"
+  if [[ "$(systemctl show --property=MainPID --value -- "$unit")" == 0 ]]; then
+    echo "gone"
+    return 0
+  fi
+  systemctl kill --signal="$signal" --kill-whom=all -- "$unit"
+  echo "ok"
+}
+
+cmd_pid() {
+  local server=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --server) server="${2-}"; shift 2 ;;
+      *) die "unknown argument: '$1'." ;;
+    esac
+  done
+  check server "$server" '^[0-9]{1,9}$'
+  systemctl show --property=MainPID --value -- "$(unit_of "$server")"
+}
+
+dispatch() {
+  local command="${1:-}"
+  [[ $# -gt 0 ]] && shift
+  case "$command" in
+    run) cmd_run "$@" ;;
+    stop) cmd_stop "$@" ;;
+    pid) cmd_pid "$@" ;;
+    *) die "unknown command: '$command'." ;;
+  esac
+}
+
+# --- serve: one request read from the socket ---------------------------------------
+serve() {
+  local field
+  local -a request=()
+  # Bash reads a socket one byte at a time: nothing past the request is
+  # consumed, the rest of the stream is the server's console.
+  while IFS= read -r -d '' -t 30 field; do
+    [[ -z "$field" ]] && { dispatch "${request[@]}"; return; }
+    [[ ${#field} -le 8192 ]] || die "field too long."
+    request+=("$field")
+    [[ ${#request[@]} -le 1024 ]] || die "too many fields."
+  done
+  die "incomplete request."
+}
+
+if [[ "${1:-}" == serve ]]; then
+  serve
+else
+  dispatch "$@"
+fi

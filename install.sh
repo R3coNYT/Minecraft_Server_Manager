@@ -28,6 +28,7 @@ BIND_PORT="8000"
 SKIP_FRONTEND=0
 SKIP_ADMIN=0
 FROM_UPDATE=0
+NO_ISOLATION=0
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -69,6 +70,8 @@ Options:
   --port PORT             Listening port             (default: ${BIND_PORT})
   --skip-frontend         Do not build the web interface
   --skip-admin            Do not create an administrator account
+  --no-isolation          Do not confine the servers of user accounts (not
+                          recommended once registration is open)
   --from-update           Mode used by update.sh (no questions asked)
   -h, --help              Show this help
 EOF
@@ -86,6 +89,7 @@ while [[ $# -gt 0 ]]; do
     --port)         BIND_PORT="$2"; shift 2 ;;
     --skip-frontend) SKIP_FRONTEND=1; shift ;;
     --skip-admin)   SKIP_ADMIN=1; shift ;;
+    --no-isolation) NO_ISOLATION=1; shift ;;
     # Called by update.sh: no questions, no final summary.
     --from-update)  FROM_UPDATE=1; SKIP_ADMIN=1; shift ;;
     -h|--help)      usage; exit 0 ;;
@@ -393,7 +397,85 @@ systemctl is-enabled --quiet "${SERVICE_NAME}" || fail \
 ok "Service installed and enabled at boot."
 
 # --------------------------------------------------------------------------- #
-#  12. Start
+#  12. Server isolation
+# --------------------------------------------------------------------------- #
+# The servers of user accounts run in their own systemd unit, as a system
+# account of their own, confined to their folder (systemd/msm-sandbox). MSM
+# asks for it through a socket reserved to its group: it needs no privilege.
+# MSM_ISOLATION in the .env decides; an existing value is never changed.
+step "Server isolation"
+
+SANDBOX_HELPER="/usr/local/lib/msm/msm-sandbox"
+ISOLATION="$(grep -m1 '^MSM_ISOLATION=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'"' ' || true)"
+
+sandbox_missing() {
+  local missing=()
+  command -v setfacl >/dev/null 2>&1 || missing+=(acl)
+  command -v systemd-run >/dev/null 2>&1 || missing+=(systemd)
+  command -v useradd >/dev/null 2>&1 || missing+=(passwd)
+  # `systemd-run --wait --pipe` follows the server's unit over the system bus.
+  command -v dbus-daemon >/dev/null 2>&1 || command -v dbus-broker >/dev/null 2>&1     || missing+=(dbus)
+  printf '%s' "${missing[*]}"
+}
+
+if [[ -z "$ISOLATION" ]]; then
+  if [[ "$NO_ISOLATION" -eq 1 ]]; then
+    ISOLATION="off"
+  else
+    ISOLATION="systemd"
+  fi
+  printf '\n# Servers of user accounts: confined by systemd (systemd), or run as MSM (off).\nMSM_ISOLATION=%s\n' \
+    "$ISOLATION" >> "$ENV_FILE"
+fi
+
+if [[ "$ISOLATION" == "systemd" ]]; then
+  MISSING="$(sandbox_missing)"
+  if [[ -n "$MISSING" ]] && command -v apt-get >/dev/null 2>&1; then
+    info "Installing: $MISSING"
+    # shellcheck disable=SC2086 # one package per word
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $MISSING >/dev/null 2>&1       || { apt-get update -qq >/dev/null 2>&1            && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $MISSING >/dev/null; }       || true
+    MISSING="$(sandbox_missing)"
+  fi
+fi
+
+if [[ "$ISOLATION" != "systemd" ]]; then
+  warn "Isolation disabled (MSM_ISOLATION=$ISOLATION): the servers of user accounts run"
+  warn "as MSM itself. Do not open registration like this."
+elif [[ -n "$MISSING" ]]; then
+  warn "Isolation unavailable: missing $MISSING. Install it, then run install.sh again."
+  warn "Until then, MSM refuses to start the servers of user accounts."
+else
+  # Read back from the .env: the roots may have been edited there by hand.
+  SANDBOX_ROOTS="$(grep -m1 '^MSM_SERVER_ROOTS=' "$ENV_FILE" | cut -d= -f2- | tr -d '"'"'"'' || true)"
+  SANDBOX_ROOTS="${SANDBOX_ROOTS:-$SERVERS_ROOT}"
+
+  # Installed just now, the bus may not be running yet.
+  systemctl start dbus.socket dbus.service >/dev/null 2>&1 || true
+
+  install -d -o root -g root -m 755 "$(dirname "$SANDBOX_HELPER")"
+  install -o root -g root -m 755 "$SOURCE_DIR/systemd/msm-sandbox" "$SANDBOX_HELPER"
+  printf '# Written by install.sh: read by %s, which runs as root.\nMSM_USER=%q\nSERVER_ROOTS=%q\n' \
+    "$SANDBOX_HELPER" "$MSM_USER" "$SANDBOX_ROOTS" > "$CONFIG_DIR/sandbox.conf"
+  chown root:root "$CONFIG_DIR/sandbox.conf"
+  chmod 644 "$CONFIG_DIR/sandbox.conf"
+
+  sed -e "s|__MSM_GROUP__|${MSM_GROUP}|g" "$SOURCE_DIR/systemd/msm-sandbox.socket" \
+    > /etc/systemd/system/msm-sandbox.socket
+  install -o root -g root -m 644 "$SOURCE_DIR/systemd/msm-sandbox@.service" \
+    /etc/systemd/system/msm-sandbox@.service
+  systemctl daemon-reload
+  systemctl enable --now msm-sandbox.socket >/dev/null 2>&1 || true
+  systemctl restart msm-sandbox.socket
+
+  systemctl is-active --quiet msm-sandbox.socket || fail \
+    "The isolation socket did not start." \
+    "systemd reports a failure for msm-sandbox.socket." \
+    "Check: journalctl -u msm-sandbox.socket -n 50 --no-pager — or install with --no-isolation."
+  ok "Servers of user accounts are confined (roots: $SANDBOX_ROOTS)."
+fi
+
+# --------------------------------------------------------------------------- #
+#  13. Start
 # --------------------------------------------------------------------------- #
 step "Starting"
 

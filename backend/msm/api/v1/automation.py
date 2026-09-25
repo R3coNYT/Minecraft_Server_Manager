@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import asdict
 from typing import Annotated
 
@@ -29,6 +30,7 @@ from msm.api.schemas import (
     VersionOut,
 )
 from msm.api.schemas.hosting import HostingSettingsModel, QuotaModel
+from msm.config import Settings
 from msm.core.permissions import Permission
 from msm.db.models.schedule import Schedule, ScheduleAction
 from msm.exceptions import ValidationError
@@ -224,7 +226,11 @@ async def registration_settings(
 ) -> RegistrationSettings:
     context.require(Permission.SETTINGS_MANAGE, action=tr("view the settings"))
     mode = await AccountService(session, settings).registration_mode()
-    return RegistrationSettings(mode=mode.value)
+    return RegistrationSettings(mode=mode.value, isolation=_isolated(settings))
+
+
+def _isolated(settings: Settings) -> bool:
+    return settings.isolation == "systemd" and sys.platform == "linux"
 
 
 @router.put(
@@ -252,7 +258,7 @@ async def update_registration(
     await AccountService(session, settings).set_registration_mode(
         mode, context=context, ip_address=ip
     )
-    return RegistrationSettings(mode=mode.value)
+    return RegistrationSettings(mode=mode.value, isolation=_isolated(settings))
 
 
 # --------------------------------------------------------------------------- #
