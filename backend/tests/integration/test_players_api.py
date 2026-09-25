@@ -91,7 +91,7 @@ class TestPlayerTracking:
         assert players is not None
         flavien = next(p for p in players if p["username"] == "Flavien")
         assert flavien["online"] is False
-        assert flavien["total_sessions"] >= 1
+        assert flavien["total_sessions"] == 1, "une arrivée annoncée deux fois compte une fois"
         assert flavien["first_seen"] is not None
 
         await admin.post(f"/api/v1/servers/{server['id']}/stop")

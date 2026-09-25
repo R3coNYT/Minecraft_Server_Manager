@@ -79,6 +79,31 @@ class TestEventDetection:
         leave = parse_line("[12:40:00] [Server thread/INFO]: Flavien left the game", seq=2)
         assert detect_events(leave)[0].kind is MinecraftEventKind.PLAYER_LEAVE
 
+    def test_technical_lines_mark_arrivals_and_departures(self) -> None:
+        """Jamais traduites : elles suffisent quand la console l'est (Youer, Mohist)."""
+        logged_in = parse_line(
+            "[12:31:15] [Server thread/INFO]: R3coN_YT[/90.103.232.13:56022] logged in "
+            "with entity id 106 at (-2647.8, 110.0, 351.7)",
+            seq=1,
+        )
+        event = detect_events(logged_in)[0]
+        assert event.kind is MinecraftEventKind.PLAYER_JOIN
+        assert event.username == "R3coN_YT"
+        assert event.address == "90.103.232.13:56022"
+
+        lost = parse_line(
+            "[12:40:00] [Server thread/INFO]: R3coN_YT lost connection: Server closed", seq=2
+        )
+        event = detect_events(lost)[0]
+        assert event.kind is MinecraftEventKind.PLAYER_LEAVE
+        assert event.username == "R3coN_YT"
+
+    def test_a_chat_message_is_never_a_departure(self) -> None:
+        line = parse_line(
+            "[12:31:15] [Server thread/INFO]: <Flavien> Steve lost connection: lol", seq=1
+        )
+        assert detect_events(line) == []
+
     def test_uuid_extraction(self) -> None:
         line = parse_line(
             "[12:31:14] [User Authenticator #1/INFO]: UUID of player Flavien is "

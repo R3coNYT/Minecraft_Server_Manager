@@ -14,6 +14,7 @@ from pathlib import Path
 import psutil
 import pytest
 
+from msm.bus import EventBus, topics
 from msm.core.restart_policy import AutoRestartMode, RestartPolicy
 from msm.core.states import ServerState
 from msm.exceptions import (
@@ -377,15 +378,32 @@ async def test_no_restart_when_stop_requested(make_runtime) -> None:
 # --------------------------------------------------------------------------- #
 #  Suivi des joueurs et statistiques
 # --------------------------------------------------------------------------- #
-async def test_player_join_and_leave_are_tracked(make_runtime) -> None:
-    runtime = make_runtime()
+@pytest.mark.parametrize("lang", ["en", "fr"])
+async def test_player_join_and_leave_are_tracked(make_runtime, bus: EventBus, lang: str) -> None:
+    """Chaque arrivée et chaque départ compte une fois, même console traduite (Youer).
+
+    Un serveur annonce une arrivée deux fois (« logged in », puis « joined the
+    game ») et un départ aussi (« lost connection », puis « left the game ») :
+    un seul événement doit en sortir, sinon les sessions compteraient double.
+    """
+    subscription = bus.subscribe(
+        topics.server_topic(1, topics.PLAYER_JOIN), topics.server_topic(1, topics.PLAYER_LEAVE)
+    )
+    runtime = make_runtime("--lang", lang, server_id=1)
     await _start_and_wait_online(runtime)
 
     await runtime.send_command("join Flavien", actor="test")
     assert await wait_for(lambda: "Flavien" in runtime.online_players)
+    assert runtime.online_player_map["Flavien"] == "069a79f4-44e9-4726-a5be-fca90e38aaf5"
 
     await runtime.send_command("leave Flavien", actor="test")
     assert await wait_for(lambda: "Flavien" not in runtime.online_players)
+    await asyncio.sleep(0.3)
+
+    kinds = []
+    while subscription.pending:
+        kinds.append((await subscription.get()).topic.rsplit(".", 1)[-1])
+    assert kinds == [topics.PLAYER_JOIN, topics.PLAYER_LEAVE]
 
     await runtime.stop(actor="test")
 

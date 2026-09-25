@@ -36,14 +36,21 @@ STOPPING_RE = re.compile(r"^Stopping (the )?server", re.IGNORECASE)
 #: Un pseudo Minecraft : 3 à 16 caractères alphanumériques ou `_`.
 USERNAME = r"[A-Za-z0-9_]{1,16}"
 
+#: « X joined the game » / « X left the game » : messages de jeu, **traduits** par
+#: les serveurs qui localisent leur console (Youer, Mohist : « X a rejoint la
+#: partie »). Les deux motifs suivants, eux, sont des journaux techniques jamais
+#: traduits : ils font foi quelle que soit la langue du serveur.
 JOIN_RE = re.compile(rf"^(?P<name>{USERNAME}) joined the game$")
 LEAVE_RE = re.compile(rf"^(?P<name>{USERNAME}) left the game$")
+#: « Flavien lost connection: Disconnected » — tout départ, quelle qu'en soit la raison.
+LOST_CONNECTION_RE = re.compile(rf"^(?P<name>{USERNAME}) lost connection: ")
 #: « UUID of player Flavien is 069a79f4-… » — seule source fiable d'UUID hors fichiers.
 UUID_RE = re.compile(
     rf"^UUID of player (?P<name>{USERNAME}) is "
     r"(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
 )
-#: « Flavien[/127.0.0.1:52344] logged in with entity id 42 at (…) »
+#: « Flavien[/127.0.0.1:52344] logged in with entity id 42 at (…) » — l'arrivée
+#: effective d'un joueur, écrite juste avant « joined the game ».
 LOGGED_IN_RE = re.compile(rf"^(?P<name>{USERNAME})\[/(?P<addr>[^\]]+)\] logged in")
 #: Réponse à la commande `list`. Deux formulations coexistent selon les versions :
 #: « There are 2 of a max of 20 players online: … » et « There are 2/20 players online: … ».
@@ -112,7 +119,6 @@ class MinecraftEventKind(str, Enum):
     PLAYER_JOIN = "player_join"
     PLAYER_LEAVE = "player_leave"
     PLAYER_UUID = "player_uuid"
-    PLAYER_ADDRESS = "player_address"
     PLAYER_LIST = "player_list"
     FATAL = "fatal"
 
@@ -150,9 +156,11 @@ def detect_events(line: LogLine) -> list[MinecraftEvent]:
     elif STOPPING_RE.match(text):
         events.append(MinecraftEvent(MinecraftEventKind.SERVER_STOPPING, line))
 
+    # Une arrivée ou un départ s'annonce souvent deux fois (journal technique,
+    # puis message de jeu) : le runtime ne compte chaque joueur qu'une fois.
     if (match := JOIN_RE.match(text)) is not None:
         events.append(MinecraftEvent(MinecraftEventKind.PLAYER_JOIN, line, username=match["name"]))
-    elif (match := LEAVE_RE.match(text)) is not None:
+    elif (match := LEAVE_RE.match(text) or LOST_CONNECTION_RE.match(text)) is not None:
         events.append(MinecraftEvent(MinecraftEventKind.PLAYER_LEAVE, line, username=match["name"]))
     elif (match := UUID_RE.match(text)) is not None:
         events.append(
@@ -166,7 +174,7 @@ def detect_events(line: LogLine) -> list[MinecraftEvent]:
     elif (match := LOGGED_IN_RE.match(text)) is not None:
         events.append(
             MinecraftEvent(
-                MinecraftEventKind.PLAYER_ADDRESS,
+                MinecraftEventKind.PLAYER_JOIN,
                 line,
                 username=match["name"],
                 address=match["addr"],

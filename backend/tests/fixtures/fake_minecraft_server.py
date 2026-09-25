@@ -21,6 +21,7 @@ Options de simulation :
 ``--spawn-child``       lancer un sous-processus enfant (simule ``run.sh`` → Java)
 ``--heartbeat S``       émettre une ligne de log toutes les S secondes
 ``--survive-eof``       continuer après fermeture de l'entrée standard
+``--lang fr``           messages de jeu traduits, comme Youer ou Mohist
 """
 
 from __future__ import annotations
@@ -63,6 +64,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--heartbeat", type=float, default=None)
     parser.add_argument("--survive-eof", action="store_true")
     parser.add_argument("--name", default="FakeServer")
+    #: Langue des messages de jeu, comme les serveurs qui traduisent leur console
+    #: (Youer, Mohist). Les journaux techniques restent en anglais.
+    parser.add_argument("--lang", choices=("en", "fr"), default="en")
     return parser.parse_args(argv)
 
 
@@ -149,9 +153,19 @@ def handle_command(command: str, args: argparse.Namespace) -> bool:
             "INFO",
             f"UUID of player {player} is 069a79f4-44e9-4726-a5be-fca90e38aaf5",
         )
-        emit("Server thread", "INFO", f"{player} joined the game")
+        # Comme un vrai serveur : le journal technique, puis le message de jeu.
+        emit(
+            "Server thread",
+            "INFO",
+            f"{player}[/127.0.0.1:52344] logged in with entity id 42 at (0.5, 64.0, 0.5)",
+        )
+        joined = "a rejoint la partie" if args.lang == "fr" else "joined the game"
+        emit("Server thread", "INFO", f"{player} {joined}")
     elif command.startswith("leave "):
-        emit("Server thread", "INFO", f"{command[6:].strip()} left the game")
+        player = command[6:].strip()
+        emit("Server thread", "INFO", f"{player} lost connection: Disconnected")
+        left = "a quitté la partie" if args.lang == "fr" else "left the game"
+        emit("Server thread", "INFO", f"{player} {left}")
     elif command == "save-off":
         if args.ignore_save:
             return False

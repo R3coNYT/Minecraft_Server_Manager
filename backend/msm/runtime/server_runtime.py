@@ -146,6 +146,9 @@ class ServerRuntime:
         self._restart_task: asyncio.Task[None] | None = None
 
         self._online_players: dict[str, str | None] = {}
+        #: Joueurs dont le départ vient d'être publié : un départ s'annonce
+        #: souvent deux fois, il ne doit compter qu'une.
+        self._recently_left: set[str] = set()
         #: UUID annoncés mais dont la connexion n'est pas encore confirmée.
         self._pending_uuids: dict[str, str] = {}
 
@@ -366,6 +369,7 @@ class ServerRuntime:
         self._started_at = datetime.now(UTC)
         self._stats_collector = StatsCollector(spawned.pid)
         self._online_players.clear()
+        self._recently_left.clear()
         self._pending_uuids.clear()
         # Le PID est publié dès maintenant, sans attendre « en ligne » : il est
         # enregistré en base, et c'est lui qui permet de réadopter le serveur si
@@ -541,6 +545,7 @@ class ServerRuntime:
         self._adopted = None
         self._stats = EMPTY_STATS
         self._online_players.clear()
+        self._recently_left.clear()
         self._pending_uuids.clear()
         if self._tailer is not None:
             await self._tailer.stop()
@@ -847,6 +852,7 @@ class ServerRuntime:
 
         self._stats = EMPTY_STATS
         self._online_players.clear()
+        self._recently_left.clear()
         self._pending_uuids.clear()
         self._publish_players()
 
@@ -935,6 +941,13 @@ class ServerRuntime:
                 # L'UUID a été annoncé quelques lignes plus tôt : on le récupère
                 # dans le vestibule plutôt que de le perdre.
                 uuid = self._pending_uuids.pop(event.username, None)
+                if event.username in self._online_players:
+                    # Même arrivée, annoncée une seconde fois (« logged in » puis
+                    # « joined the game ») : rien de neuf à publier.
+                    if uuid and not self._online_players[event.username]:
+                        self._online_players[event.username] = uuid
+                    return
+                self._recently_left.discard(event.username)
                 self._online_players[event.username] = uuid
                 self._bus.publish(
                     topics.server_topic(self.id, topics.PLAYER_JOIN),
@@ -943,7 +956,18 @@ class ServerRuntime:
                 self._publish_players()
 
             case MinecraftEventKind.PLAYER_LEAVE if event.username:
+                # Même départ annoncé une seconde fois (« lost connection » puis
+                # « left the game ») : déjà publié. Un joueur inconnu jamais vu
+                # partir — arrivé avant une réadoption — l'est bien.
+                if (
+                    event.username not in self._online_players
+                    and event.username in self._recently_left
+                ):
+                    return
                 uuid = self._online_players.pop(event.username, None)
+                self._recently_left.add(event.username)
+                if len(self._recently_left) > _MAX_PENDING_UUIDS:
+                    self._recently_left.clear()
                 self._bus.publish(
                     topics.server_topic(self.id, topics.PLAYER_LEAVE),
                     {"server_id": self.id, "username": event.username, "uuid": uuid},
