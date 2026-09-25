@@ -172,6 +172,34 @@ class TestCreation:
         assert server["settings"]["memory_max_mb"] == 4096
         assert server["settings"]["port"] == 25570
 
+    async def test_an_admin_keeping_the_suggested_folder_gets_their_account_folder(
+        self, admin: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        """Le dossier proposé est dans celui du compte, qui n'existe pas encore."""
+        suggested = (
+            await admin.get("/api/v1/provisioning/defaults", params={"name": "survival"})
+        ).json()["directory"]
+        assert not Path(suggested).parent.exists()
+
+        response = await admin.post(
+            "/api/v1/provisioning", json=_payload(Path(suggested), name="survival")
+        )
+
+        assert response.status_code == 202, response.text
+        job = await _wait_job(admin, response.json()["id"])
+        assert job["status"] == "COMPLETED", job
+        assert (Path(suggested) / "paper-1.21.1.jar").is_file()
+
+    async def test_another_missing_parent_is_still_refused(
+        self, admin: ApiClient, servers_root: Path, fake_network: dict[str, Any]
+    ) -> None:
+        directory = servers_root / "nulle-part" / "survie"
+
+        response = await admin.post("/api/v1/provisioning", json=_payload(directory))
+
+        assert response.status_code == 422, response.text
+        assert not directory.parent.exists()
+
     async def test_without_eula_consent_nothing_is_accepted(
         self, admin: ApiClient, servers_root: Path, fake_network: dict[str, Any]
     ) -> None:

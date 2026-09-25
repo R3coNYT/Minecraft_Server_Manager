@@ -190,12 +190,14 @@ class ProvisioningService:
         free_choice = context.has(Permission.SERVER_REGISTER)
         directory = request.directory if free_choice and request.directory else None
         if directory is None:
-            placed = await hosting.directory_for(
-                actor, request.name, taken=self._taken_directories()
+            directory = str(
+                await hosting.directory_for(actor, request.name, taken=self._taken_directories())
             )
-            # Le dossier du compte naît avec son premier serveur.
-            await asyncio.to_thread(placed.parent.mkdir, parents=True, exist_ok=True)
-            directory = str(placed)
+        # Le dossier du compte naît avec son premier serveur — y compris quand un
+        # admin garde le dossier proposé. Tout autre parent doit déjà exister.
+        home = await hosting.home_of(actor)
+        if Path(directory).expanduser().parent == home:
+            await asyncio.to_thread(home.mkdir, parents=True, exist_ok=True)
         port = request.port if free_choice and request.port else None
         if port is None:
             port = await hosting.allocate_port(reserved=self._reserved_ports())
