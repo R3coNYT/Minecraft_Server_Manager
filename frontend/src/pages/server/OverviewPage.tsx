@@ -1,16 +1,20 @@
 /** Aperçu d'un serveur : diagnostic, configuration de démarrage, capacités. */
 
-import type { ReactNode } from 'react'
-import { AlertTriangle, Wrench } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { AlertTriangle, Trash2, Wrench } from 'lucide-react'
 import { useServerContext } from './context'
 import { autoRestartLabel, capabilityLabel, formatMemory, formatRelative } from '@/lib/format'
 import { Badge, Card, CardHeader } from '@/components/ui/primitives'
+import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { ResourcePanel } from '@/components/metrics/ResourcePanel'
 import { VersionInstaller } from '@/components/servers/VersionInstaller'
-import { can } from '@/hooks/useApi'
+import { can, queryKeys } from '@/hooks/useApi'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useToasts } from '@/stores/toasts'
+import type { Server } from '@/lib/types'
 import { t, tn } from '@/i18n'
 
 function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
@@ -19,6 +23,73 @@ function DefinitionRow({ label, value }: { label: string; value: ReactNode }) {
       <dt className="shrink-0 text-slate-500">{label}</dt>
       <dd className="min-w-0 truncate text-right text-slate-200">{value}</dd>
     </div>
+  )
+}
+
+/**
+ * Retrait du serveur. Visible de son propriétaire et des admins MSM, y compris
+ * sur le serveur d'un autre compte. Les fichiers restent sur le disque.
+ */
+function RemoveServerCard({ server, running }: { server: Server; running: boolean }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const push = useToasts((state) => state.push)
+  const [open, setOpen] = useState(false)
+  const own = server.access === 'OWNER'
+
+  const remove = useMutation({
+    mutationFn: () => api.servers.remove(server.id),
+    onSuccess: (result) => {
+      setOpen(false)
+      push({
+        kind: 'success',
+        title: t('overview.removed', { name: server.name }),
+        detail: result.detail,
+      })
+      // Quitter la page d'abord : sinon ses requêtes repartiraient vers un
+      // serveur qui n'existe plus.
+      navigate('/', { replace: true })
+      queryClient.removeQueries({ queryKey: queryKeys.server(server.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.servers, exact: true })
+    },
+  })
+
+  return (
+    <Card className="border-red-950/80">
+      <CardHeader title={t('overview.removeTitle')} subtitle={t('overview.removeSubtitle')} />
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <p className="text-sm text-slate-400">
+          {running ? t('overview.removeRunning') : t('overview.removeHint')}
+        </p>
+        <Button
+          variant="danger"
+          icon={<Trash2 className="size-4" />}
+          disabled={running}
+          onClick={() => {
+            remove.reset()
+            setOpen(true)
+          }}
+        >
+          {t('overview.remove')}
+        </Button>
+      </div>
+      <ConfirmDialog
+        open={open}
+        danger
+        title={t('overview.removeConfirmTitle', { name: server.name })}
+        consequence={
+          own
+            ? t('overview.removeConsequence')
+            : t('overview.removeConsequenceOther', { owner: server.owner_username })
+        }
+        confirmLabel={t('overview.remove')}
+        requireTyping={server.name}
+        loading={remove.isPending}
+        error={remove.error}
+        onConfirm={() => remove.mutate()}
+        onClose={() => setOpen(false)}
+      />
+    </Card>
   )
 }
 
@@ -205,6 +276,13 @@ export function OverviewPage() {
             />
           </dl>
         </Card>
+
+        {can(server, 'server:delete') ? (
+          <RemoveServerCard
+            server={server}
+            running={Boolean(status && status.state !== 'OFFLINE' && status.state !== 'CRASHED')}
+          />
+        ) : null}
       </div>
     </div>
   )
